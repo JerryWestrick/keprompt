@@ -1,0 +1,19 @@
+.# Xai --> Test generate Json
+.llm "model": "grok-2-1212"
+.system
+We are updating json configuration files.
+Please gather as much information as possible in the first request.
+.user
+
+Using local functions make these 3 calls in a single request:
+    please read the file Prices/kestep_models.json using the readfile tool and
+    using wwwget function get these pages:
+     - https://mistral.ai/technology/#pricing
+     - https://www.anthropic.com/pricing#anthropic-api
+
+Then rewrite the file Prices/kestep_models.json keeping the formating
+but updating the available models and the new prices.
+.debug ["statements", "messages"]
+.exit
+
+

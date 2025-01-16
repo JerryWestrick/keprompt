@@ -1,0 +1,30 @@
+.# Use Anthropic --> parse ocr Bill Of Landing
+.llm "model": "gpt-4o"
+.system
+read the supplied png.  Analyze the image.  Extract the following information:
+- BOL, Carrier, Start, End, Shipper Name, Shipper Address, Consignee Name, Consignee Address, Product Name, Gross Gallons, Net Gallons, and Terminal Address
+fill a csv with the appropriate values.
+.user
+.image TES/Phoenix-Mesa_Transload/page-1.png
+Please extract the values and write them to a csv with "Field|Value" columns
+.assistant
+Here is the CSV:
+```
+Field|Value
+BOL|75
+Carrier|CHARLIE
+Start|2024-11-06 7:22
+End|
+Shipper Name|The Andersons Inc.
+Shipper Address|
+Consignee Name|Total Energy
+Consignee Address|
+Product Name|ULSD #2
+Gross Gallons|2420
+Net Gallons|2422
+Terminal Address|The Andersons, 131 South 57th Ave Phoenix, AZ 85043
+```
+.image TES/Phoenix-Mesa_Transload/page-2.png
+.user
+Now extract info from this one, and use writefile function to write the contents to file  TES/Phoenix-Mesa_Transload/page-2.csv
+.exec

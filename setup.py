@@ -1,8 +1,8 @@
 from setuptools import setup, find_packages
-
+from keprompt.version import __version__
 setup(
     name='keprompt',
-    version='0.1.0',
+    version=__version__,
     description='Knowledge Engineering of LLM Prompts ',
     long_description=open('README.md').read(),
     long_description_content_type='text/markdown',

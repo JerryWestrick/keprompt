@@ -1,0 +1,37 @@
+.# Use Anthropic --> parse ocr Bill Of Landing
+.llm "model": "grok-2-vision-1212"
+.system
+read the supplied png.  Analyze the image.  Extract the following information:
+- BOL, Carrier, Start, End, Shipper Name, Shipper Address, Consignee Name, Consignee Address, Product Name, Gross Gallons, Net Gallons, and Terminal Address
+fill a csv with the appropriate values.
+.user
+.image TES/Tucson-KM/page-1.png
+Please extract the values and write them to a csv with "Field|Value" columns
+.assistant
+Here is the CSV:
+```
+Field|Value
+BOL|604
+Carrier|George Muriithi
+Start|2024-11-10 7:11:31 AM
+End|2024-11-10 7:45:53 AM
+Shipper Name|Andersons Inc / 0001
+Shipper Address|10975 Benson Dr. STE 400
+Consignee Name|Andersons Inc / 0009
+Consignee Address|
+Product Name|Regular Unleaded
+Gross Gallons|6524
+Net Gallons|6488
+Product Name|Premium Unleaded
+Gross Gallons|2002
+Net Gallons|2001
+Terminal Address|Golden Gate Terminal LLc
+```
+.image TES/Tucson-KM/page-2.png
+.user
+Now extract info from this one, and use writefile function to write the contents to file TES/Tucson-KM/page-2.csv
+.exec
+.image TES/Tucson-KM/page-3.png
+.user
+Now extract info from this one, and use writefile function to write the contents to file TES/Tucson-KM/page-3.csv
+.exec

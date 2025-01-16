@@ -1,0 +1,879 @@
+{
+  "Anthropic": {
+    "model": "claude-3-5-sonnet-20241022",
+    "max_tokens": 1024,
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "image",
+            "source": {
+              "type": "base64",
+              "media_type": "image/png",
+              "data": "..."
+            }
+          },
+          {
+            "type": "text",
+            "text": "what letter is in the image?"
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "A"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "New image:"
+          },
+          {
+            "type": "image",
+            "source": {
+              "type": "base64",
+              "media_type": "image/png",
+              "data": "..."
+            }
+          },
+          {
+            "type": "text",
+            "text": "Write the letter found in this image to the file B.txt"
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "I'll help you write the letter \"B\" to a file named B.txt using the writefile function."
+          },
+          {
+            "type": "tool_use",
+            "id": "toolu_01PxdZWMT6yRcWwW55zYrnpv",
+            "name": "writefile",
+            "input": {
+              "filename": "B.txt",
+              "content": "B"
+            }
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "tool_result",
+            "tool_use_id": "toolu_01PxdZWMT6yRcWwW55zYrnpv",
+            "content": "Content written to file './B.txt'"
+          }
+        ]
+      }
+    ],
+    "tools": [
+      {
+        "name": "readfile",
+        "description": "Read the contents of a named file",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "filename": {
+              "type": "string",
+              "description": "The name of the file to read"
+            }
+          },
+          "required": [
+            "filename"
+          ]
+        }
+      },
+      {
+        "name": "wwwget",
+        "description": "Read a webpage url and return the contents",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string",
+              "description": "The url of the web page to read"
+            }
+          },
+          "required": [
+            "url"
+          ]
+        }
+      },
+      {
+        "name": "writefile",
+        "description": "Write the contents to a named file on the local file system",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "filename": {
+              "type": "string",
+              "description": "The name of the file to write"
+            },
+            "content": {
+              "type": "string",
+              "description": "The content to be written to the file"
+            }
+          },
+          "required": [
+            "filename",
+            "content"
+          ]
+        }
+      },
+      {
+        "name": "execcmd",
+        "description": "Execute a command on the local Linux-6.9.3-76060903-generic-x86_64-with-glibc2.35 system",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "cmd": {
+              "type": "string",
+              "description": "command to be executed"
+            }
+          },
+          "required": [
+            "cmd"
+          ]
+        }
+      },
+      {
+        "name": "askuser",
+        "description": "Get Clarification by Asking the user a question",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "question": {
+              "type": "string",
+              "description": "Question to ask the user"
+            }
+          },
+          "required": [
+            "question"
+          ]
+        }
+      }
+    ]
+  },
+  "Google": {
+    "contents": [
+      {
+        "role": "user",
+        "parts": [
+          {
+            "inline_data": {
+              "mime_type": "image/png",
+              "data": "..."
+            }
+          },
+          {
+            "text": "what letter is in the image?"
+          }
+        ]
+      },
+      {
+        "role": "model",
+        "parts": [
+          {
+            "text": "A"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "parts": [
+          {
+            "text": "New image:"
+          },
+          {
+            "inline_data": {
+              "mime_type": "image/png",
+              "data": "..."
+            }
+          },
+          {
+            "text": "Write the letter found in this image to the file B.txt"
+          }
+        ]
+      },
+      {
+        "role": "model",
+        "parts": [
+          {
+            "functionCall": {
+              "name": "writefile",
+              "args": {
+                "filename": "B.txt",
+                "content": "B"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "parts": [
+          {
+            "functionResponse": {
+              "name": "writefile",
+              "response": {
+                "text": "Content written to file './B.txt'"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "system_instruction": {
+      "parts": [
+        {
+          "text": "You are to provide short concise answers, preferably using just a single letter."
+        }
+      ]
+    },
+    "tools": [
+      {
+        "functionDeclarations": [
+          {
+            "name": "readfile",
+            "description": "Read the contents of a named file",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "filename": {
+                  "type": "string",
+                  "description": "The name of the file to read"
+                }
+              },
+              "required": [
+                "filename"
+              ]
+            }
+          },
+          {
+            "name": "wwwget",
+            "description": "Read a webpage url and return the contents",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "url": {
+                  "type": "string",
+                  "description": "The url of the web page to read"
+                }
+              },
+              "required": [
+                "url"
+              ]
+            }
+          },
+          {
+            "name": "writefile",
+            "description": "Write the contents to a named file on the local file system",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "filename": {
+                  "type": "string",
+                  "description": "The name of the file to write"
+                },
+                "content": {
+                  "type": "string",
+                  "description": "The content to be written to the file"
+                }
+              },
+              "required": [
+                "filename",
+                "content"
+              ]
+            }
+          },
+          {
+            "name": "execcmd",
+            "description": "Execute a command on the local Linux-6.9.3-76060903-generic-x86_64-with-glibc2.35 system",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "cmd": {
+                  "type": "string",
+                  "description": "command to be executed"
+                }
+              },
+              "required": [
+                "cmd"
+              ]
+            }
+          },
+          {
+            "name": "askuser",
+            "description": "Get Clarification by Asking the user a question",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "question": {
+                  "type": "string",
+                  "description": "Question to ask the user"
+                }
+              },
+              "required": [
+                "question"
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "MistralAI": {
+    "model": "pixtral-large-latest",
+    "messages": [
+      {
+        "role": "system",
+        "content": [
+          {
+            "type": "text",
+            "text": "You are to provide short concise answers, preferably using just a single letter."
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "image_url",
+            "image_url": "..."
+          },
+          {
+            "type": "text",
+            "text": "what letter is in the image?"
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "A"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "New image:"
+          },
+          {
+            "type": "image_url",
+            "image_url": "..."
+          },
+          {
+            "type": "text",
+            "text": "Write the letter found in this image to the file B.txt"
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "type": "function",
+            "id": "R3J9uL924",
+            "function": {
+              "name": "writefile",
+              "arguments": "{\"filename\": \"B.txt\", \"content\": \"B\"}"
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "writefile",
+        "tool_call_id": "R3J9uL924",
+        "content": "Content written to file './B.txt'"
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "readfile",
+          "description": "Read the contents of a named file",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "filename": {
+                "type": "string",
+                "description": "The name of the file to read"
+              }
+            },
+            "required": [
+              "filename"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "wwwget",
+          "description": "Read a webpage url and return the contents",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string",
+                "description": "The url of the web page to read"
+              }
+            },
+            "required": [
+              "url"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "writefile",
+          "description": "Write the contents to a named file on the local file system",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "filename": {
+                "type": "string",
+                "description": "The name of the file to write"
+              },
+              "content": {
+                "type": "string",
+                "description": "The content to be written to the file"
+              }
+            },
+            "required": [
+              "filename",
+              "content"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "execcmd",
+          "description": "Execute a command on the local Linux-6.9.3-76060903-generic-x86_64-with-glibc2.35 system",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "cmd": {
+                "type": "string",
+                "description": "command to be executed"
+              }
+            },
+            "required": [
+              "cmd"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "askuser",
+          "description": "Get Clarification by Asking the user a question",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "question": {
+                "type": "string",
+                "description": "Question to ask the user"
+              }
+            },
+            "required": [
+              "question"
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "OpenAI": {
+    "model": "gpt-4o",
+    "messages": [
+      {
+        "role": "system",
+        "content": [
+          {
+            "type": "text",
+            "text": "You are to provide short concise answers, preferably using just a single letter."
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "image_url",
+            "image_url": {
+              "url": "..."
+            }
+          },
+          {
+            "type": "text",
+            "text": "what letter is in the image?"
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "A"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "New image:"
+          },
+          {
+            "type": "image_url",
+            "image_url": {
+              "url": "..."
+            }
+          },
+          {
+            "type": "text",
+            "text": "Write the letter found in this image to the file B.txt"
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [],
+        "tool_calls": [
+          {
+            "id": "call_FOBB43GOZrYLBBFVEJTJyG4p",
+            "type": "function",
+            "function": {
+              "name": "writefile",
+              "arguments": "{\"filename\":\"B.txt\",\"content\":\"B\"}"
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "name": "writefile",
+        "tool_call_id": "call_FOBB43GOZrYLBBFVEJTJyG4p",
+        "content": [
+          {
+            "type": "text",
+            "text": "Content written to file './B.txt'"
+          }
+        ]
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "readfile",
+          "description": "Read the contents of a named file",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "filename": {
+                "type": "string",
+                "description": "The name of the file to read"
+              }
+            },
+            "required": [
+              "filename"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "wwwget",
+          "description": "Read a webpage url and return the contents",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string",
+                "description": "The url of the web page to read"
+              }
+            },
+            "required": [
+              "url"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "writefile",
+          "description": "Write the contents to a named file on the local file system",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "filename": {
+                "type": "string",
+                "description": "The name of the file to write"
+              },
+              "content": {
+                "type": "string",
+                "description": "The content to be written to the file"
+              }
+            },
+            "required": [
+              "filename",
+              "content"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "execcmd",
+          "description": "Execute a command on the local Linux-6.9.3-76060903-generic-x86_64-with-glibc2.35 system",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "cmd": {
+                "type": "string",
+                "description": "command to be executed"
+              }
+            },
+            "required": [
+              "cmd"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "askuser",
+          "description": "Get Clarification by Asking the user a question",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "question": {
+                "type": "string",
+                "description": "Question to ask the user"
+              }
+            },
+            "required": [
+              "question"
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "XAI": {
+    "model": "grok-2-vision-latest",
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are to provide short concise answers, preferably using just a single letter."
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "image_url",
+            "image_url": {
+              "url": "..."
+            }
+          },
+          {
+            "type": "text",
+            "text": "what letter is in the image?"
+          }
+        ],
+        "tool_calls": null
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "A"
+          }
+        ],
+        "tool_calls": []
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "New image:"
+          },
+          {
+            "type": "image_url",
+            "image_url": {
+              "url": "..."
+            }
+          },
+          {
+            "type": "text",
+            "text": "Write the letter found in this image to the file B.txt"
+          }
+        ],
+        "tool_calls": null
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "<has_function_call>I am writing the letter 'B' to the file B.txt."
+          }
+        ],
+        "tool_calls": [
+          {
+            "id": "call_12224308",
+            "function": {
+              "type": "function",
+              "name": "writefile",
+              "arguments": "{\"filename\":\"B.txt\",\"content\":\"B\"}"
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "tool_call_id": "call_12224308",
+        "content": "Content written to file './B.txt'"
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "readfile",
+          "description": "Read the contents of a named file",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "filename": {
+                "type": "string",
+                "description": "The name of the file to read"
+              }
+            },
+            "required": [
+              "filename"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "wwwget",
+          "description": "Read a webpage url and return the contents",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string",
+                "description": "The url of the web page to read"
+              }
+            },
+            "required": [
+              "url"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "writefile",
+          "description": "Write the contents to a named file on the local file system",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "filename": {
+                "type": "string",
+                "description": "The name of the file to write"
+              },
+              "content": {
+                "type": "string",
+                "description": "The content to be written to the file"
+              }
+            },
+            "required": [
+              "filename",
+              "content"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "execcmd",
+          "description": "Execute a command on the local Linux-6.9.3-76060903-generic-x86_64-with-glibc2.35 system",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "cmd": {
+                "type": "string",
+                "description": "command to be executed"
+              }
+            },
+            "required": [
+              "cmd"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "askuser",
+          "description": "Get Clarification by Asking the user a question",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "question": {
+                "type": "string",
+                "description": "Question to ask the user"
+              }
+            },
+            "required": [
+              "question"
+            ]
+          }
+        }
+      }
+    ],
+    "too_choice": "auto"
+  }
+}

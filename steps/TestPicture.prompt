@@ -1,0 +1,69 @@
+.# Test
+.llm {"model": "claude-3-5-sonnet-20240620", "context": 8192}
+.system
+We will be drawing Data Flow Diagrams in Yourdan/DeMarco format.
+I will include a description of the flows, and then a png of the expected  format.
+Study them.  Then when I give you a new description create a new png for me.
+.user
+Here an example description:
+Processes:
+P1: "Collate Needs of Ingredient"
+P2: "Order Supplies"
+P3: "Receive Delivery"
+P4: "Check For Discrepancies"
+P5: "Make Payments"
+P6: "Query Discrepancies"
+
+External Entities:
+E1: "Supplier"
+E2: "Inventory"
+
+Data Stores:
+D1: "Orders"
+D2: "Supplier Details"
+D3: "Ingredient Details"
+
+Data Flows:
+F1: "Weekly Increment Requirements" [D3 -> P1]
+F2: "Ingrediant Requirements" [P1 -> P2]
+F3: "Supply Order" [P2 -> E1]
+F4: "New Orders" [P2 -> D1]
+F5: "Supply Query" [P2 -> E1]
+F6: "Supply Query Response" [E1 -> P2]
+F7: "Delivery" [E1 -> P3]
+F8: "Checked Delivery" [P3 -> P4]
+F9: "Matched Orders" [P4 -> D1]
+F10: "New Orders" [D1 -> P4]
+F11: "Unmatched Orders" [P4 -> P6]
+F12: "Resolved Orders" [P6 - > D1]
+F13: "Discrepancy Query" [P6 -> E2]
+F14: "Discrepancy Response" [E2 -> P6]
+F15: "" [E2 -> P6]
+F16: "" [E2 -> P5]
+F17: "" [D2 -> P2]
+F18: "Received Orders" [D1 -> P5]
+and here the example png:
+.image steps/DFD Online Shop.png
+.user
+Please create the png Prices/Atm.png
+Title: Registration Drawing 1
+Processes:
+P1.1: "Check Registration Request"
+P1.2: "Confrim Registration"
+P1.3: "Issue Id Card"
+
+External Entities:
+E1: "Registrant"
+
+Data Stores:
+D1: "Customer DB"
+
+Data Flows:
+F1: "Registration Request" [E1 -> P1.1]
+F2: "Registration Details" [P1.1 -> P1.2]
+F3: "Registration Result" [P1.2 -> E1]
+F4: "Appeal Request" [E1 -> P1.2]
+F5: "Registrant Details" [P1.2 -> D1]
+F6: "Mail with ID Card" [P1.3 -> E1]
+F7: "Member Details" [P1.3 -> D1]
+.exec
