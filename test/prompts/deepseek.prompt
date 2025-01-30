@@ -1,0 +1,45 @@
+.# Test send image and function calls.
+.llm "model": "deepseek-chat"
+.# .llm "model": "deepseek-reasoner"
+.# .llm "model": "deepseek-r1-distill-llama-70b"
+.# .llm "model": "o1"
+.system
+Extract the following from the bill of lading image:
+
+Transportation Details:
+
+Bill of Lading Number
+Load Start/End Dates & Times (ISO 8601 format).
+Fix invalid time formats silently (e.g., "33:41" → "03:41").
+validate that the start time is before the end time and the total time is within 30 mins
+
+Products:
+
+For each product: Description, Gross Gallons, Net Gallons.
+Retain batch identifiers if present (e.g., "Batch 03-05").
+Validation:
+Include a validation key in the JSON if totals mismatch or data conflicts exist.
+Output Format:
+
+```json
+{
+  "transportation_details": { ... },
+  "products": [ ... ],
+  "validation": { "notes": "..." } // Optional, include only if discrepancies exist
+}
+```
+
+Rules:
+
+- Do not add external notes; embed all explanations in the JSON.
+- Prioritize direct extraction from the image, even if totals conflict.
+- Correct obvious typos (e.g., hours > 23) without asking..user
+
+
+**IMPORTANT**
+After writting json file, Tell user that JSON was written!!!
+.user
+here an the image page-1.png
+.image ../TES/Vegas-Pro/page-1.png
+extract json from image and write it to page-01.json:
+.exec

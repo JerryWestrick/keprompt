@@ -272,6 +272,7 @@ class AiMessage:
                         t.append(
                             {"id": p.id, "type": "function", "function": {"name": p.name, "arguments": p.arguments}})
 
+                    if not c: c = None
                     return {"role": "assistant", "content": c, "tool_calls": t}
 
                 if type(self.content[0]) == AiResult:
@@ -279,7 +280,7 @@ class AiMessage:
                         if type(p) is not AiResult:
                             raise ValueError(f"A function return with a part that in not a AiToolResult")
                         p = typing.cast(AiResult, p)
-                        c.append({"role": "tool", "name": p.name, "tool_call_id": p.id, "content": json.dumps(p.result)})
+                        c.append({"role": "tool", "tool_call_id": p.id, "content": json.dumps(p.result)})
                     return c
 
                 c = []
@@ -657,7 +658,7 @@ class AiPrompt:
                 }
                 json_data = json.dumps(data)
                 retval = {
-                    "url": "https://api.deepseek.com/chat/completions",
+                    "url": "https://api.deepseek.com/v1/chat/completions",
                     "headers": {"Content-Type": "application/json", "Authorization": f"Bearer {self.api_key}" },
                     "data": json_data,
                 }
