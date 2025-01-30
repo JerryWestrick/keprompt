@@ -63,9 +63,9 @@ def backup_file(filepath: str, backup_dir: Optional[str] = None, extension: Opti
 
 
 def get_cmd_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Kestep util test command line tool.")
+    parser = argparse.ArgumentParser(description="Keprompt util test command line tool.")
     parser.add_argument('-v', '--versioned_file', action='store_true', help='test the versioned_file() routine..')
-    parser.add_argument('-l', '--list', nargs='?', const='*', help='List Step file')
+    parser.add_argument('-l', '--list', nargs='?', const='*', help='List Prompt file')
 
     return parser.parse_args()
 

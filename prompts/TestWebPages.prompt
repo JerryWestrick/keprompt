@@ -1,0 +1,15 @@
+.# Test
+.llm {"model": "gpt-4o-mini"}
+.system
+You are a working on administrative services.
+evaluate provided documentation, and generate output as requested.
+.user
+with this webpage:
+.cmd www_get(url="https://mistral.ai/technology/#pricing")
+.cmd www_get(url="https://openai.com/api/pricing/")
+
+Here is the old Pricing:
+.include Prices/AI_API_Costs.py
+
+update the pricing and write it to Prices/AI_API_Costs.py
+.exec

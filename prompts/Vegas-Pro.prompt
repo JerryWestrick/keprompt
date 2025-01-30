@@ -1,0 +1,45 @@
+.# Use Anthropic --> parse ocr Bill Of Landing
+.llm "model": "<[model]>"
+.system
+read the supplied png.  Analyze the image.  Extract the following information:
+- BOL, Carrier, Start, End, Shipper Name, Shipper Address, Consignee Name, Consignee Address, Product Name, Gross Gallons, Net Gallons, and Terminal Address
+fill a csv with the appropriate values.
+.user
+.image TES/Vegas-Pro/page-1.png
+Please extract the values into a json object
+.assistant
+Here is the json:
+```json
+"BOL": "0758644",
+"Carrier": "ELITE FUELS TRANSPORTATION IN",
+"Start": "2024-10-08 13:17",
+"End": "2024-10-08 13:31",
+"Shipper Name": "MARATHON PETROLEUM COMPANY LP",
+"Shipper Address": "539 South Main Street Findlay, OH 45840",
+"Consignee Name": "CALIFORNIA FUEL SUPPLY INC-VARIOUS N",
+"Consignee Address": "VARIOUS NV",
+"Products": [
+  {"Product Name": "#2 Diesel MV 15 ppm (ULSD)", "Gross Gallons": "2800", "Net Gallons": "2757"},
+  {"Product Name": "#2 Diesel MV 15 ppm (ULSD)", "Gross Gallons": "4700", "Net Gallons": "4627"}
+],
+"Terminal Address": "Pro Petroleum Las Vegas 4985 North Sloan Lane Las Vegas",
+```
+.user
+.image TES/Vegas-Pro/page-2.png
+extract the json and write it to TES/Vegas-Pro/<[company]>/page-2.json.
+.exec
+.user
+new image:
+.image TES/Vegas-Pro/page-3.png
+extract the json and write it to TES/Vegas-Pro/<[company]>/page-3.json.
+.exec
+.user
+new image
+.image TES/Vegas-Pro/page-4.png
+extract the json and write it to TES/Vegas-Pro/<[company]>/page-4.json.
+.exec
+.user
+new image:
+.image TES/Vegas-Pro/page-5.png
+extract the json and write it to TES/Vegas-Pro/<[company]>/page-5.json.
+.exec

@@ -1,0 +1,43 @@
+.# Use Anthropic --> parse ocr Bill Of Landing
+.llm "model": "gpt-4o"
+.system
+read the supplied png.  Analyze the image.  Extract the following information:
+- BOL, Carrier, Start, End, Shipper Name, Shipper Address, Consignee Name, Consignee Address, Product Name, Gross Gallons, Net Gallons, and Terminal Address
+fill a csv with the appropriate values.
+.user
+.image TES/OKC-Magellan/page-1.png
+Please extract the values and write them to a csv with "Field|Value" columns into file TES/OKC-Magellan/page-1.csv
+.assistant
+Here is the CSV:
+```TES/OKC-Magellan/page-1.csv
+Field|Value
+BOL|3010998
+Carrier|DOC TRANSPORTATION
+Start|2024-11-30 10:04:34 AM
+End|2024-11-30 10:15:20 AM
+Shipper Name|VAL MKTG-DFW-IPE
+Shipper Address|ONE VALERO WAY, SAN ANTONIO, TX
+Consignee Name|CALIFORNIA FUEL SUPPLY
+Consignee Address|CA FUEL SUPPLY - UNBC - OK, VARIOS, OK
+Product Name|DYED ULTRA LOW SULFUR
+Gross Gallons|1201
+Net Gallons|1199
+Product Name|DYED ULTRA LOW SULFUR
+Gross Gallons|2406
+Net Gallons|2400
+Product Name|DYED ULTRA LOW SULFUR
+Gross Gallons|2600
+Net Gallons|2595
+Product Name|DYED ULTRA LOW SULFUR
+Gross Gallons|1000
+Net Gallons|998
+Terminal Address|251 N. Sunnylane Road Oklahoma City OK 73117
+```
+.image TES/OKC-Magellan/page-2.png
+.user
+Now extract info from this one, and use writefile function to write the contents to file TES/OKC-Magellan/page-2.csv
+.exec
+.image TES/OKC-Magellan/page-3.png
+.user
+Now extract info from this one, and use writefile function to write the contents to file TES/OKC-Magellan/page-3.csv
+.exec

@@ -1,0 +1,28 @@
+.# Use Anthropic --> parse ocr Bill Of Landing
+.llm "model": "claude-3-5-sonnet-20241022"
+.system
+read the supplied png.  Analyze the image.  Extract the required information, filling a csv with the appropriate values.
+.user
+.image TES/OKC-Magellan/page-1.png
+Please write pertinent info in csv format into file TES/OKC-Magellan/page-1.csv
+.assistant
+Here is the CSV with the requested values along with a confidence value of correctness:
+```TES/OKC-Magellan/page-1.csv
+Field|Value|Confidence
+BOL|1494690|95
+Carrier|VILLEGAS TANK|80
+Start|09/10/2024 4:07|90
+End|09/10/2024 4:33|90
+Shipper Name|MARATHON PETROLEUM CO LP|98
+Shipper Address|19100 RIDGEWOOD PARKWAY SAN ANTONIO TX 78259|98
+Consignee Name|MARATHON PETROLEUM CO LP|98
+Consignee Address|539 SOUTH MAIN STREET FINDLAY OH 45840|98
+Product Name|DYED EPA ULS DIESEL|98
+Gross Gallons|7500|85
+Net Gallons|7370|85
+Terminal Address|345 W Aten Rd Imperial CA 92251|85
+```
+.image TES/OKC-Magellan/page-2.png
+.user
+Now do this one to TES/OKC-Magellan/page-2OKC-.csv
+.exec

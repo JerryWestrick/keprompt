@@ -1,0 +1,33 @@
+.# Use Anthropic --> parse ocr Bill Of Landing
+.llm "model": "gpt-4o"
+.system
+read the supplied png.  Analyze the image.  Extract the following information:
+- BOL, Carrier, Start, End, Shipper Name, Shipper Address, Consignee Name, Consignee Address, Product Name, Gross Gallons, Net Gallons, and Terminal Address
+fill a csv with the appropriate values.
+.user
+.image TES/Vegas-KM/page-1.png
+Please extract the values and write them to a csv with "Field|Value" columns
+.assistant
+Here is the CSV:
+```TES/Vegas-KM/page-1.csv
+Field|Value
+BOL|0002862448
+Carrier|NAVAROO TANK LINES LLC
+Start|2024-10-03 12:03
+End|2024-10-03 12:19
+Shipper Name|KINDER MORGAN CALNEV
+Shipper Address|5049 NORTH SLOAN LANE LAS VEGAS, NV 89115
+Consignee Name|TOTAL ENERGY SOLUTIONS INC.
+Consignee Address|
+Product Name|COMPRO PREMIUM, 91 OCT W/ETH
+Gross Gallons|1800
+Net Gallons|1760
+Product Name|COMRGO REGULAR, 87 OCT W?ETH
+Gross Gallons|5950
+Net Gallons|5816
+Terminal Address|
+```
+.image TES/Vegas-KM/page-2.png
+.user
+Now extract info from this one and use writefile the contents to TES/Vegas-KM/page-2.csv
+.exec

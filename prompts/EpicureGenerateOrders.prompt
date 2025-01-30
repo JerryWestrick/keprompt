@@ -1,0 +1,54 @@
+.# Generate this weeks order in Json Format
+.llm "model": "grok-beta"
+.system
+Creat a json list of orders For this week.
+.user
+[12/11/24, 20:49:54] Patricia Cuadros: Son 5kg de albahaca y 1.250 de Eneldo
+[12/13/24, 08:46:11] Patricia Cuadros: 🔥🔥🔥🔥
+[12/13/24, 08:46:53] Patricia Cuadros: #1 CORRINE tienda sin envío
+250 Rocket
+[12/13/24, 08:51:58] Patricia Cuadros: #2 FLAMANTE
+500 Rocket
+[12/13/24, 11:06:19] Patricia Cuadros: #3 ROMELIA
+3 kg de Rocket
+ 30 brotes betabel
+[12/14/24, 11:39:14] Patricia Cuadros: #4 VILLA
+5  pzas de flor de pensamiento
+5 pzas de crisantemos
+5 pzas clavelinas
+[12/14/24, 12:06:58] Patricia Cuadros: #5 THO BAR
+LO MISMO
+.assistant
+[
+  {"number": 1, "client": "CORRINE", "comment": "tienda sin envio",   "mismo": false,
+    "items": [
+        {"quantity": 250, "unit": "", "item": "Rocket"}
+    ]
+  },
+  {"number": 2, "client": "FLAMANTE", "comment": "",  "mismo": false,
+    "items": [
+        {"quantity": 500, "unit": "", "item": "Rocket"},
+    ]
+  },
+  {"number": 3, "client": "Romelia", "comment": "",  "mismo": false,
+    "items": [
+        {"quantity": 3, "unit": "kg", "item": "Rocket"},
+        {"quantity": 30, "unit": "", "item": "brotes betabel"},
+    ]
+  },
+  {"number": 4, "client": "VILLA", "comment": "",  "mismo": false,
+    "items": [
+        {"quantity": 5, "unit": "pzas de", "item": "flor de pensamiento"},
+        {"quantity": 5, "unit": "pzas de", "item": "crisantemos"},
+        {"quantity": 5, "unit": "pzas de", "item": "clavelinas"},
+    ]
+  },
+  {"number": 5, "client": "THO BAR", "comment": "", "mismo": true,
+    "items": [
+    ]
+  }
+]
+.user
+Read this weeks order from the file 'epicure/this_weeks_order.txt'.
+write 'epicure/this_weeks_order.json'
+.exec

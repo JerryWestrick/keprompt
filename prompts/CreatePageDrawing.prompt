@@ -1,0 +1,41 @@
+.# Test
+.llm {"model": "claude-3-5-sonnet-20240620", "context": 8192}
+.system
+You are going to generate an SVG for a Bubble Diagram layout from 'System Analysis' by De Marco and Yourdon,
+sized to fit an A4 page.
+
+Ensure the following specifics:
+- The background should be white.
+- Processes should be represented by ovals (ellipses) with labels fitted inside.
+- External entities and data stores should be rectangles with labels inside.
+- Arrows should connect to the borders of ovals and rectangles.
+- Font size for all labels should be 7.5px.
+- The entire diagram should fit on an A4 page (approximately 210mm x 297mm).
+
+I've included an example output as "steps/DFD Online Shop.png" below
+.image steps/DFD Online Shop.png
+
+.user
+Following that example ,
+Draw the 'Prices/DFD.png' diagram with:
+
+Processes:
+P1: Data Entry
+P2: Data Validation
+P3: Data Processing
+
+External Entities:
+E1: Customer
+E2: Supplier Database
+
+Data Stores:
+DS1: Customer Records
+DS2: Product Inventory
+
+Data Flows:
+Customer Input → P1 → Customer Data → DS1
+DS1 → P2 → Validated Data → P3
+P3 → Processed Order → E2
+E2 → Product Info → P2
+
+.exec

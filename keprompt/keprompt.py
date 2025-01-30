@@ -1,31 +1,30 @@
 import argparse
 import glob
+import logging
 import os
 import re
 import sys
+
 import keyring
 from rich.console import Console
+from rich.logging import RichHandler
 from rich.prompt import Prompt
 from rich.table import Table
-import logging
-from rich.logging import RichHandler
+
+# from keprompt.keprompt_api_config import api_config
+from keprompt.keprompt_functions import DefinedToolsArray
+from keprompt.keprompt_vm import VM, print_prompt_code, models_config
 from keprompt.version import __version__
 
-from keprompt.keprompt_kestep import  KeStep, print_step_code, models_config
-from keprompt.keprompt_api_config import api_config
-from keprompt.keprompt_functions import DefinedToolsArray
-
-
-
 console = Console()
-
+console.size = console.size
 
 logging.getLogger().setLevel(logging.WARNING)
 
 FORMAT = "%(message)s"
-logging.basicConfig(level="NOTSET", format=FORMAT, datefmt="[%X]", handlers=[RichHandler()])
-
+logging.basicConfig(level="NOTSET", format=FORMAT, datefmt="[%X]", handlers=[RichHandler(console=console)])
 log = logging.getLogger(__file__)
+
 
 def print_functions():
     table = Table(title="Available Functions")
@@ -78,20 +77,20 @@ def print_models():
 
     console.print(table)
 
-def print_step_names(step_files: list[str]) -> None:
-    table = Table(title="Step Files")
+def print_prompt_names(prompt_files: list[str]) -> None:
 
-    table.add_column("Step", style="cyan", no_wrap=True)
+    table = Table(title="Prompt Files")
+    table.add_column("Prompt", style="cyan", no_wrap=True)
     table.add_column("Description", style="magenta")
 
-    for step_file in step_files:
+    for prompt_file in prompt_files:
         try:
-            with open(step_file, 'r') as file:
+            with open(prompt_file, 'r') as file:
                 first_line = file.readline().strip()[2:]  # Read first line
         except Exception as e:
             first_line = f"Error reading file: {str(e)}"
 
-        table.add_row(os.path.basename(step_file), first_line)
+        table.add_row(os.path.basename(prompt_file), first_line)
 
     console.print(table)
 
@@ -111,59 +110,60 @@ def create_dropdown(options, prompt_text="Select an option"):
         return options[int(choice) - 1]
 
 def get_new_api_key() -> None:
-    companies = list(api_config.keys())
-    companies.sort()
+
+    companies = sorted({models_config[model]["company"] for model in models_config.keys()})
     company = create_dropdown(companies, "AI Company?")
     api_key = console.input(f"[bold green]Please enter your [/][bold cyan]{company} API key: [/]")
-    keyring.set_password("kestep", username=company, password=api_key)
+    keyring.set_password("keprompt", username=company, password=api_key)
 
-def print_step_lines(step_files: list[str]) -> None:
+def print_prompt_lines(prompts_files: list[str]) -> None:
     table = Table(title="Prompt Code")
-    table.add_column("Step", style="cyan bold", no_wrap=True)
+    table.add_column("Prompt", style="cyan bold", no_wrap=True)
     table.add_column("Lno", style="blue bold", no_wrap=True)
     table.add_column("Prompt Line", style="dark_green bold")
 
-    for step_file in step_files:
-        # console.print(f"{step_file}")
+    for prompt_file in prompts_files:
+        # console.print(f"{prompt_file}")
         try:
-            title = os.path.basename(step_file)
-            with open(step_file, 'r') as file:
+            title = os.path.basename(prompt_file)
+            with open(prompt_file, 'r') as file:
                 lines = file.readlines()
                 for lno, line in enumerate(lines):
                     table.add_row(title, f"{lno:03}", line.strip())
                     title = ''
 
         except Exception as e:
-            console.print(f"[bold red]Error parsing file {step_file} : {str(e)}[/bold red]")
+            console.print(f"[bold red]Error parsing file {prompt_file} : {str(e)}[/bold red]")
             console.print_exception()
             sys.exit(1)
         table.add_row('───────────────', '───', '──────────────────────────────────────────────────────────────────────')
     console.print(table)
 
 def get_cmd_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Kestep command line tool.")
+    parser = argparse.ArgumentParser(description="Prompt Engineering Tool.")
     parser.add_argument('-v', '--version', action='store_true', help='Show version information and exit')
+    parser.add_argument('--param', nargs=2, action='append',metavar=('key', 'value'),help='Add key/value pairs')
     parser.add_argument('-m', '--models', action='store_true', help='List company models information and exit')
     parser.add_argument('-f', '--functions', action='store_true', help='List functions available to AI and exit')
-    parser.add_argument('-s', '--steps', nargs='?', const='*', help='List Steps')
-    parser.add_argument('-c', '--code', nargs='?', const='*', help='List code in Steps')
-    parser.add_argument('-l', '--list', nargs='?', const='*', help='List Step file')
-    parser.add_argument('-e', '--execute', nargs='?', const='*', help='Execute one or more Steps')
+    parser.add_argument('-p', '--prompts', nargs='?', const='*', help='List Prompts')
+    parser.add_argument('-c', '--code', nargs='?', const='*', help='List code in Prompts')
+    parser.add_argument('-l', '--list', nargs='?', const='*', help='List Prompt file')
+    parser.add_argument('-e', '--execute', nargs='?', const='*', help='Execute one or more Prompts')
     parser.add_argument('-k', '--key', action='store_true', help='Ask for (new) Company Key')
     parser.add_argument('-d', '--debug', action='store_true', help='Print message to LLM, for debugging purposes.')
     parser.add_argument('-r', '--remove', action='store_true', help='remove all .~nn~. files from sub directories')
 
     return parser.parse_args()
 
-def glob_step(step_name) -> list[str] :
-    step_pattern = os.path.join('steps/', f"{step_name}*.prompt")
-    return sorted(glob.glob(step_pattern))  # Sort the files
+def glob_prompt(prompt_name) -> list[str] :
+    prompt_pattern = os.path.join('prompts/', f"{prompt_name}*.prompt")
+    return sorted(glob.glob(prompt_pattern))  # Sort the files
 
 
 def main():
-    # Ensure 'steps' directory exists
-    if not os.path.exists('steps'):
-        os.makedirs('steps')
+    # Ensure 'prompts' directory exists
+    if not os.path.exists('prompts'):
+        os.makedirs('prompts')
 
     if not os.path.exists('logs'):
         os.makedirs('logs')
@@ -175,6 +175,12 @@ def main():
         # Print the version and exit
         console.print(f"[bold cyan]keprompt[/] [bold green]version[/] [bold magenta]{__version__}[/]")
         return
+
+    variables = {}
+    if args.param:
+        params = {k: v for k, v in args.param}
+        # console.print(params)  # print to verify
+        variables = params
 
     # Add in main() after args parsing:
     if args.remove:
@@ -204,44 +210,44 @@ def main():
     if args.key:
         get_new_api_key()
 
-    if args.steps:
-        step_files = glob_step(args.steps)
-        if debug: log.info(f"--list '{args.steps}' returned {len(step_files)} files: {step_files}")
+    if args.prompts:
+        prompt_files = glob_prompt(args.prompts)
+        if debug: log.info(f"--list '{args.propmts}' returned {len(prompt_files)} files: {prompt_files}")
 
-        if step_files:
-            print_step_names(step_files)
+        if prompt_files:
+            print_prompt_names(prompt_files)
         else:
             log.error(f"[bold red]No list files found for ({args.list})[/bold red]", extra={"markup": True})
         return
 
     if args.list:
-        step_files = glob_step(args.list)
-        if debug: log.info(f"--code '{args.list}' returned {len(step_files)} files: {step_files}")
+        prompt_files = glob_prompt(args.list)
+        if debug: log.info(f"--code '{args.list}' returned {len(prompt_files)} files: {prompt_files}")
 
-        if step_files:
-            print_step_lines(step_files)
+        if prompt_files:
+            print_prompt_lines(prompt_files)
         else:
             
-            log.error(f"[bold red]No step files found ({args.list})[/bold red]", extra={"markup": True})
+            log.error(f"[bold red]No prompt files found ({args.list})[/bold red]", extra={"markup": True})
         return
 
     if args.code:
-        step_files = glob_step(args.code)
-        if debug: log.info(f"--code '{args.code}' returned {len(step_files)} files: {step_files}")
+        prompt_files = glob_prompt(args.code)
+        if debug: log.info(f"--code '{args.code}' returned {len(prompt_files)} files: {prompt_files}")
 
-        if step_files:
-            print_step_code(step_files)
+        if prompt_files:
+            print_prompt_code(prompt_files)
         else:
-            log.error(f"[bold red]No step files found ({args.step})[/bold red]", extra={"markup": True})
+            log.error(f"[bold red]No Prompt files found ({args.prompts})[/bold red]", extra={"markup": True})
         return
 
     if args.execute:
-        step_files = glob_step(args.execute)
-        if debug: log.info(f"--execute '{args.list}' returned {len(step_files)} files: {step_files}")
+        prompt_files = glob_prompt(args.execute)
+        if debug: log.info(f"--execute '{args.list}' returned {len(prompt_files)} files: {prompt_files}")
 
-        if step_files:
-            for step_file in step_files:
-                step = KeStep(step_file, args.debug)
+        if prompt_files:
+            for prompt_file in prompt_files:
+                step = VM(prompt_file, args.debug, vdict=variables)
                 step.parse_prompt()
                 step.execute()
         else:
