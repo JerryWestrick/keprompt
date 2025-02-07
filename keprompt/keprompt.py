@@ -1,4 +1,5 @@
 import argparse
+import getpass
 import glob
 import logging
 import os
@@ -22,7 +23,15 @@ console.size = console.size
 logging.getLogger().setLevel(logging.WARNING)
 
 FORMAT = "%(message)s"
-logging.basicConfig(level="NOTSET", format=FORMAT, datefmt="[%X]", handlers=[RichHandler(console=console)])
+# logging.basicConfig(level="NOTSET", format=FORMAT, datefmt="[%X]", handlers=[RichHandler(console=console)])
+logging.basicConfig(
+    level=logging.WARNING,  # Set the default logging level
+    format=FORMAT,
+    datefmt="[%X]",
+    handlers=[
+        RichHandler(console=console, rich_tracebacks=True)
+    ]
+)
 log = logging.getLogger(__file__)
 
 
@@ -94,7 +103,7 @@ def print_prompt_names(prompt_files: list[str]) -> None:
 
     console.print(table)
 
-def create_dropdown(options, prompt_text="Select an option"):
+def create_dropdown(options: list[str], prompt_text: str = "Select an option") -> str:
     # Display numbered options
     for i, option in enumerate(options, 1):
         console.print(f"{i}. {option}", style="cyan")
@@ -113,7 +122,8 @@ def get_new_api_key() -> None:
 
     companies = sorted({models_config[model]["company"] for model in models_config.keys()})
     company = create_dropdown(companies, "AI Company?")
-    api_key = console.input(f"[bold green]Please enter your [/][bold cyan]{company} API key: [/]")
+    # api_key = console.input(f"[bold green]Please enter your [/][bold cyan]{company} API key: [/]")
+    api_key = getpass.getpass(f"Please enter your {company} API key: ")
     keyring.set_password("keprompt", username=company, password=api_key)
 
 def print_prompt_lines(prompts_files: list[str]) -> None:
@@ -155,10 +165,12 @@ def get_cmd_args() -> argparse.Namespace:
 
     return parser.parse_args()
 
-def glob_prompt(prompt_name) -> list[str] :
-    prompt_pattern = os.path.join('prompts/', f"{prompt_name}*.prompt")
-    return sorted(glob.glob(prompt_pattern))  # Sort the files
+from pathlib import Path
 
+
+def glob_prompt(prompt_name: str) -> list[Path]:
+    prompt_pattern = Path('prompts') / f"{prompt_name}*.prompt"
+    return sorted(Path('.').glob(str(prompt_pattern)))
 
 def main():
     # Ensure 'prompts' directory exists
@@ -211,42 +223,43 @@ def main():
         get_new_api_key()
 
     if args.prompts:
-        prompt_files = glob_prompt(args.prompts)
-        if debug: log.info(f"--list '{args.propmts}' returned {len(prompt_files)} files: {prompt_files}")
+        glob_files = glob_prompt(args.prompts)
+        if debug: log.info(f"--prompts '{args.prompts}' returned {len(glob_files)} files: {glob_files}")
 
-        if prompt_files:
-            print_prompt_names(prompt_files)
+        if glob_files:
+            print_prompt_names(glob_files)
         else:
-            log.error(f"[bold red]No list files found for ({args.list})[/bold red]", extra={"markup": True})
+            log.error(f"[bold red]No Prompt files found for ({args.list})[/bold red]", extra={"markup": True})
         return
 
     if args.list:
-        prompt_files = glob_prompt(args.list)
-        if debug: log.info(f"--code '{args.list}' returned {len(prompt_files)} files: {prompt_files}")
+        glob_files = glob_prompt(args.list)
+        if debug: log.info(f"--list '{args.list}' returned {len(glob_files)} files: {glob_files}")
 
-        if prompt_files:
-            print_prompt_lines(prompt_files)
+        if glob_files:
+            print_prompt_lines(glob_files)
         else:
             
-            log.error(f"[bold red]No prompt files found ({args.list})[/bold red]", extra={"markup": True})
+            log.error(f"[bold red]No Prompt files found ({args.list})[/bold red]", extra={"markup": True})
         return
 
     if args.code:
-        prompt_files = glob_prompt(args.code)
-        if debug: log.info(f"--code '{args.code}' returned {len(prompt_files)} files: {prompt_files}")
+        glob_files = glob_prompt(args.code)
+        if debug: log.info(f"--code '{args.code}' returned {len(glob_files)} files: {glob_files}")
 
-        if prompt_files:
-            print_prompt_code(prompt_files)
+        if glob_files:
+            print_prompt_code(glob_files)
         else:
             log.error(f"[bold red]No Prompt files found ({args.prompts})[/bold red]", extra={"markup": True})
         return
 
     if args.execute:
-        prompt_files = glob_prompt(args.execute)
-        if debug: log.info(f"--execute '{args.list}' returned {len(prompt_files)} files: {prompt_files}")
+        glob_files = glob_prompt(args.execute)
+        if debug: log.info(f"--execute '{args.list}' returned {len(glob_files)} files: {glob_files}")
 
-        if prompt_files:
-            for prompt_file in prompt_files:
+        if glob_files:
+            for prompt_file in glob_files:
+                console.print(params)  # print to verify
                 step = VM(prompt_file, args.debug, vdict=variables)
                 step.parse_prompt()
                 step.execute()

@@ -103,6 +103,7 @@ class VM:
         self.cost_out = 0
         self.total = 0
         self.api_key:str = ''
+        self.interaction_no: int = 0
 
 
         if debug:
@@ -408,6 +409,14 @@ class VM:
         with open(logfile_name, 'w') as file:
             file.write(json.dumps(self.prompt.to_json()))
 
+    def log_last_json(self, data:dict[str, any]):
+        base_name = os.path.splitext(os.path.basename(self.filename))[0]
+        logfile_name = backup_file(f"logs/{base_name}_last_msgs.json", backup_dir='logs', extension='.json')
+        with open(logfile_name, 'w') as file:
+            file.write(json.dumps(data,indent=2,sort_keys=True))
+
+
+
 class _PromptStatement:
 
     def __init__(self, vm: VM, msg_no: int, keyword: str, value: str):
@@ -591,30 +600,27 @@ class _Exec(_PromptStatement):
     def execute(self, vm: VM) -> None:
         """Execute a request to an LLM"""
         response: AiMessage | None = None
-        first_time = True
+
         vm.print(f"[bold white]{VERTICAL}[/][white]{self.msg_no:02}[/] [cyan]{self.keyword:<8}[/] ", end='')
 
         continue_conversation: bool = True
-        header = f"[bold white]{VERTICAL}[/]            "
+        header = f"[bold white]{VERTICAL}[/][white]{self.msg_no:02}[/] [cyan]{self.keyword:<8}[/] "
         label = ''
+        vm.interaction_no = 0
         while continue_conversation:
+            vm.interaction_no += 1
             continue_conversation = False
-            # if first_time:
-            #     first_time = False
-            #     label = f"[bold blue underline]Requesting {vm.company}::{vm.model_name}"
-            # else:
-            #     label = f"{header}[bold blue underline]Requesting {vm.company}::{vm.model_name}"
-            label = f"{header}[bold blue underline]Requesting {vm.company}::{vm.model_name}"
+            label = f"{header}[bold blue underline]Requesting {vm.company}::{vm.model_name}[/][white] Call {vm.interaction_no}:"
 
             vm.llm['model'] = vm.model_name
 
             # Create a thread to run the print_dot function in the background
             stop_event.clear()  # Clear Signal to stop the thread
-            dot_thread = DotThread()
+            # dot_thread = DotThread()
             start_time = time.time()
             elapsed_time = 0
             try:
-                dot_thread.start()  # Start the thread
+                # dot_thread.start()  # Start the thread
                 response: AiMessage = vm.prompt.ask(label=label)
             except Exception as err:
                 # vm.print(f"{VERTICAL} [white on red]Error during request: {str(err)}[/]\n\n")
@@ -623,11 +629,11 @@ class _Exec(_PromptStatement):
 
             finally:
                 elapsed_time = time.time() - start_time
-                dot_thread.stop()  # Signal the thread to stop
-                dot_thread.join()  # Wait for the thread to finish
+                # dot_thread.stop()  # Signal the thread to stop
+                # dot_thread.join()  # Wait for the thread to finish
 
             try:
-                # Got a good response from LLM, add it to Prompt
+                # Got a good response from LLM, add it to Prompexecutet
                 vm.prompt.messages.append(response)
 
                 vm.toks_in += vm.prompt.toks_in
@@ -637,7 +643,7 @@ class _Exec(_PromptStatement):
                 vm.total += vm.cost_in + vm.cost_out
 
                 pline = f" {elapsed_time:.2f} secs output tokens {vm.prompt.toks_out} at {vm.prompt.toks_out / elapsed_time:.2f} tps"
-                used_bytes = 13 + 11 + len(vm.company) + 2 + len(vm.model_name) + dot_thread.count + 1
+                used_bytes = 13 + 11 + len(vm.company) + 2 + len(vm.model_name) + 9
                 no_bytes_remaining = terminal_width - used_bytes
                 vm.print(f"{label}[/]{pline:<{no_bytes_remaining}}[bold white]{VERTICAL}[/]")
 
@@ -687,12 +693,14 @@ class _Exec(_PromptStatement):
                     continue_conversation = True
                     vm.prompt.add_message(vm=vm, role="result", content=call_returns)
 
-
             except Exception as e:
                 vm.print(f"[white on red]error while handling response:[/]")
                 vm.log_conversation()
                 vm.print_exception()
                 exit(9)
+
+            header = f"[bold white]{VERTICAL}[/]            "
+
 
         if vm.debug:
             vm.print(f"[bold blue]Response from {vm.company} API:[/bold blue]")

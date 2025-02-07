@@ -1,51 +1,45 @@
 import base64
 import json
 import mimetypes
-import pprint
-import typing
 from abc import ABC, abstractmethod
-from json import JSONDecodeError
-from typing import List
+from typing import List, Optional, Union
 
 import keyring
-import keyring.errors  # Ensure keyring.errors is explicitly imported for clarity
 import requests
 from rich.console import Console
 from rich.progress import Progress, TimeElapsedColumn
 
-from keprompt.keprompt_functions import DefinedToolsArray, GoogleToolsArray, AnthropicToolsArray
+from keprompt.keprompt_functions import (
+    DefinedToolsArray,
+    GoogleToolsArray,
+    AnthropicToolsArray,
+)
 
 # Global Variables
 console = Console()
-terminal_width = console.size.width
-companies_with_api_key = ["Anthropic", "Google", "MistralAI", "OpenAI", "XAI", "DeepSeek", "Groq"]
+TERMINAL_WIDTH = console.size.width
+COMPANIES_WITH_API_KEY = [
+    "Anthropic",
+    "Google",
+    "MistralAI",
+    "OpenAI",
+    "XAI",
+    "DeepSeek",
+    "Groq",
+]
 
-def get_api_key(company: str) -> str:
-    try:
-        api_key = keyring.get_password('keprompt', username=company)
-    except keyring.errors.PasswordDeleteError:
-        console.print(f"[bold red]Error accessing keyring ('keprompt', username={company})[/bold red]")
-        api_key = None
 
-    if api_key is None:
-        api_key = console.input(f"Please enter your {company} API key: ")
-        keyring.set_password("keprompt", username=company, password=api_key)
-
-    if not api_key:
-        console.print("[bold red]API key cannot be empty.[/bold red]")
-        raise ValueError("API key cannot be empty.")
-
-    return api_key
+class APIKeyError(Exception):
+    """Custom exception for API key related errors."""
 
 
 class AiMessagePart(ABC):
-
     def __init__(self, vm, part_type: str):
         self.type = part_type
-        self.vm=vm
+        self.vm = vm
 
     @abstractmethod
-    def to_json(selfmessages, company):
+    def to_json(self, company: str) -> dict:
         pass
 
 
@@ -54,90 +48,111 @@ class AiTextPart(AiMessagePart):
         super().__init__(vm=vm, part_type="text")
         self.text = text
 
-    def to_json(self, company: str):
+    def to_json(self, company: str) -> dict:
         text = self.vm.substitute(self.text)
-        if company == 'Google':
+        if company == "Google":
             return {"text": text}
-
         return {"type": "text", "text": text}
 
-    def __str__(self):
-        return f"Text(text={self.vm.substitute(self.text)}))"
+    def __str__(self) -> str:
+        return f"Text(text={self.vm.substitute(self.text)})"
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"Text(text={self.text!r})"
 
 
 class AiImagePart(AiMessagePart):
-
     def __init__(self, vm, filename: str):
         super().__init__(vm=vm, part_type="image_url")
-        temp = vm.substitute(filename)
-        self.filename = temp
+        self.filename = vm.substitute(filename)
 
-        """ Read a binary file from local disk and encode it as base64."""
-        with open(self.filename, 'rb') as file:
-            self.file_contents = base64.b64encode(file.read()).decode()
-        self.media_type, _ = mimetypes.guess_type(self.filename)
+        try:
+            with open(self.filename, "rb") as file:
+                self.file_contents = base64.b64encode(file.read()).decode()
+        except FileNotFoundError:
+            console.print(f"[bold red]File not found: {self.filename}[/bold red]")
+            raise
+        except IOError as e:
+            console.print(f"[bold red]IOError: {e}[/bold red]")
+            raise
 
-    def __str__(self):
+        self.media_type, _ = mimetypes.guess_type(self.filename) or ("application/octet-stream",)
+
+    def __str__(self) -> str:
         return f"Image(filename={self.filename}, media_type={self.media_type})"
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"Image(filename={self.filename!r}, media_type={self.media_type!r})"
 
-    def to_json(self, company: str):
-
-        if company == 'Anthropic':
-            return {"type": "image",
-                    "source": {"type": "base64", "media_type": self.media_type, "data": self.file_contents}}
-
-        if company == 'Google':
+    def to_json(self, company: str) -> dict:
+        base64_data = f"data:{self.media_type};base64,{self.file_contents}"
+        if company == "Anthropic":
+            return {
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": self.media_type,
+                    "data": self.file_contents,
+                },
+            }
+        elif company == "Google":
             return {"inline_data": {"mime_type": self.media_type, "data": self.file_contents}}
-
-        if company == 'MistralAI':
-            return {"type": "image_url", "image_url": f"data:{self.media_type};base64,{self.file_contents}"}
-
-        # others/default
-        return {"type": "image_url", "image_url": {"url": f"data:image/{self.media_type};base64,{self.file_contents}"}}
+        elif company == "MistralAI":
+            return {"type": "image_url", "image_url": base64_data}
+        # Default case
+        return {"type": "image_url", "image_url": {"url": base64_data}}
 
 
 class AiCall(AiMessagePart):
-    def __init__(self, vm, name: str, arguments: str, id: str | None = None):
+    def __init__(
+            self,
+            vm,
+            name: str,
+            arguments: str,
+            id: Optional[str] = None,
+    ):
         super().__init__(vm=vm, part_type="call")
         self.name = name
         self.id = id
         self.arguments = arguments
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"Call(name={self.name}, id={self.id}, arguments={self.arguments})"
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"Call(name={self.name!r}, id={self.id!r}, arguments={self.arguments!r})"
 
-    def to_json(self, company: str):
-
-        match company:
-            case 'Anthropic':
-                return {"type": "tool_use", "id": self.id, "name": self.name, "input": self.arguments}
-
-            case 'Google':
-                return {"functionCall": {"name": self.name, "args": self.arguments}}
-
-            case 'MistralAI':
-                return {"type": "function", "id": self.id, "function": {"name": self.name, "arguments": self.arguments}}
-
-            case 'OpenAI':
-                return {"type": "function", "name": self.name, "id": self.id, "arguments": self.arguments}
-
-            case 'DeepSeek':
-                return {"type": "function", "name": self.name, "id": self.id, "arguments": self.arguments}
-
-            case 'XAI':
-                return {'id': self.id, "function": {"type": "function", "name": self.name, "arguments": self.arguments}}
-
-            case _:
-                raise ValueError(f"Unknown Company Value: {company}")
+    def to_json(self, company: str) -> dict:
+        function_call = {"name": self.name, "arguments": self.arguments}
+        if company == "Anthropic":
+            return {
+                "type": "tool_use",
+                "id": self.id,
+                "name": self.name,
+                "input": self.arguments,
+            }
+        elif company == "Google":
+            return {"functionCall": function_call}
+        elif company in ["OpenAI", "DeepSeek"]:
+            return {
+                "type": "function",
+                "id": self.id,
+                "name": self.name,
+                "arguments": self.arguments,
+            }
+        elif company in ["MistralAI"]:
+            return {
+                "id": self.id,
+                "type": "function",
+                "function": function_call
+            }
+        elif company == "XAI":
+            return {
+                "id": self.id,
+                "function": {"type": "function", "name": self.name, "arguments": self.arguments},
+            }
+        else:
+            raise ValueError(f"Unknown Company Value: {company}")
 
 
 class AiResult(AiMessagePart):
@@ -147,232 +162,211 @@ class AiResult(AiMessagePart):
         self.id = id
         self.result = result
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"Result(name={self.name}, id={self.id}, content={self.result})"
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"ToolResult(name={self.name!r}, id={self.id!r}, content={self.result!r})"
 
-    def to_json(self, company: str):
-        match company:
-            case 'Anthropic':
-                return {"type": "tool_result", "tool_use_id": self.id, "content": self.result}
-
-            case 'Google':
-                return {"functionResponse": {"name": self.name, "response": {"text": self.result}}}
-
-            case 'MistralAI':
-                return {"role": "tool", "id": self.id, "name": self.name, "content": self.result}
-
-            case "XAI" | "DeepSeek" | "OpenAI":
-                return {"role": "tool", "tool_call_id": self.id, "content": self.result}
-
-            case _:
-                raise ValueError(f"Unknown Company Value: {company}")
+    def to_json(self, company: str) -> dict:
+        if company == "Anthropic":
+            return {"type": "tool_result", "tool_use_id": self.id, "content": self.result}
+        elif company == "Google":
+            return {
+                "functionResponse": {
+                    "name": self.name,
+                    "response": {"text": self.result},
+                }
+            }
+        elif company in ["MistralAI", "OpenAI", "DeepSeek", "XAI"]:
+            role = "tool" if company in ["MistralAI", "XAI", "DeepSeek", "OpenAI"] else "user"
+            return {"role": role, "tool_call_id": self.id, "content": self.result}
+        else:
+            raise ValueError(f"Unknown Company Value: {company}")
 
 
 class AiMessage:
-    def __init__(self, vm, role: str, content: list[AiMessagePart] = None, tool_calls: List[AiCall] = None):
-        if content is None: content = []
-        if tool_calls is None: tool_calls = []
+    def __init__(
+            self,
+            vm,
+            role: str,
+            content: Optional[List[AiMessagePart]] = None,
+            tool_calls: Optional[List[AiCall]] = None,
+    ):
         self.role = role
-        assert (content is not None)
-        assert (type(content) is list)
-        self.content: List[AiMessagePart] = content
-        self.tool_calls: List[AiCall] = tool_calls
+        self.content: List[AiMessagePart] = content or []
+        self.tool_calls: List[AiCall] = tool_calls or []
         self.vm = vm
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"Message(role={self.role}, content={self.content}, tool_calls={self.tool_calls})"
 
-    def __repr__(self):
-        r = f"Message(role={self.role!r}, content= [\n"
-        for part in self.content:
-            r += f"\t{str(part).replace('\n', '\\n')}\n"
-        r += "\t],"
-        r += f" tool_calls={self.tool_calls}))\n"
-        return r
+    def __repr__(self) -> str:
+        content_repr = ",\n\t".join(str(part) for part in self.content)
+        tool_calls_repr = ", ".join(str(call) for call in self.tool_calls)
+        return f"Message(role={self.role!r}, content=[\n\t{content_repr}\n\t], tool_calls=[{tool_calls_repr}])\n"
 
-    def to_json(self, company: str):
+    def to_json(self, company: str) -> Union[dict, List[dict]]:
+        if company == "Anthropic":
+            return self._to_json_anthropic()
+        elif company == "Google":
+            return self._to_json_google()
+        elif company == "MistralAI":
+            return self._to_json_mistralai()
+        elif company in ["OpenAI", "DeepSeek"]:
+            return self._to_json_openai_deepseek()
+        elif company == "Groq":
+            return self._to_json_groq()
+        elif company == "XAI":
+            return self._to_json_xai()
+        else:
+            raise ValueError(f"Unknown company: {company}")
 
-        c = []
-        t = []
-        match company:
-            case 'Anthropic':
-                if self.role == 'system' and type(self.content[0]) is AiTextPart:
-                    system_message: AiTextPart = typing.cast(AiTextPart, self.content[0])
-                    return {"role": self.role, "content": system_message.text}
+    def _to_json_anthropic(self) -> dict:
+        if self.role == "system" and isinstance(self.content[0], AiTextPart):
+            system_message = self.content[0]
+            return {"role": self.role, "content": system_message.text}
 
-                c = []
-                for p in self.content:
-                    c.append(p.to_json(company=company))
+        content_json = [part.to_json("Anthropic") for part in self.content]
 
-                if self.role == 'assistant' and self.tool_calls:
-                    c = []
-                    for p in self.content:
-                        c.append(p.to_json(company=company))
+        if self.role == "assistant" and self.tool_calls:
+            tool_calls_json = [
+                {
+                    "id": call.id,
+                    "type": "function",
+                    "function": {"name": call.name, "arguments": call.arguments},
+                }
+                for call in self.tool_calls
+            ]
+            return {"role": "assistant", "content": content_json, "tool_calls": tool_calls_json}
 
-                    for p in self.tool_calls:
-                        t.append(
-                            {"id": p.id, "type": "function",
-                             "function": {"name": p.name, "arguments": p.arguments}})
+        if self.role == "result":
+            return {"role": "user", "content": content_json}
 
-                    return {"role": "assistant", "content": c, "tool_calls": t}
+        return {"role": self.role, "content": content_json}
 
-                if self.role == 'result':
-                    return {"role": "user", "content": c}
+    def _to_json_google(self) -> dict:
+        role_mapping = {"assistant": "model", "result": "user"}
+        role = role_mapping.get(self.role, self.role)
+        content_json = [part.to_json("Google") for part in self.content]
+        return {"role": role, "parts": content_json}
 
-                return {"role": self.role, "content": c}
+    def _to_json_mistralai(self) -> dict:
+        if self.role == "assistant":
+            if self.tool_calls:
+                tool_calls_json = [call.to_json("MistralAI") for call in self.tool_calls]
+                return {"role": "assistant", "content": None, "tool_calls": tool_calls_json}
 
-            case "Google":
-                role = self.role
-                match role:
-                    case 'assistant':
-                        role = 'model'
-                    case 'result':
-                        role = 'user'
+            content_json = [{"type": "text", "text": cast_AiTextPart(part).text} for part in self.content]
+            return {"role": self.role, "content": content_json}
 
-                for p in self.content:
-                    c.append(p.to_json(company=company))
+        if self.role == "result":
+            result = cast_AiResult(self.content[0])
+            return {"role": "tool", "name": result.name, "tool_call_id": result.id, "content": result.result}
 
-                return {"role": role, "parts": c}
+        content_json = [part.to_json("MistralAI") for part in self.content]
+        return {"role": self.role, "content": content_json}
 
-            case "MistralAI":
-                match self.role:
-                    case 'assistant':
-                        if self.tool_calls:
-                            for p in self.tool_calls:
-                                t.append(p.to_json(company=company))
-                            return {"role": "assistant", "content": None, "tool_calls": t}
+    def _to_json_openai_deepseek(self) -> dict:
+        if self.role == "assistant" and self.tool_calls:
+            content_json = [part.to_json("OpenAI") for part in self.content]
+            tool_calls_json = [
+                {
+                    "id": call.id,
+                    "type": "function",
+                    "function": {"name": call.name, "arguments": call.arguments},
+                }
+                for call in self.tool_calls
+            ]
+            return {"role": "assistant", "content": content_json or None, "tool_calls": tool_calls_json}
 
-                        if self.content:
-                            for p in self.content:
-                                p = typing.cast(AiTextPart, p)
-                                c.append({"type": "text", "text": p.text})
-                            return {"role": self.role, "content": c}
+        if self.content[0] and isinstance(self.content[0], AiResult):
+            return [
+                {
+                    "role": "tool",
+                    "tool_call_id": cast_AiResult(part).id,
+                    "content": json.dumps(part.result),
+                }
+                for part in self.content
+            ]
 
-                    case 'result':
-                        p = self.content[0]
-                        p = typing.cast(AiResult, p)
-                        return {"role": "tool", "name": p.name, "tool_call_id": p.id, "content": p.result}
+        content_json = [part.to_json("OpenAI") for part in self.content]
+        return {"role": self.role, "content": content_json}
 
-                    case _:
-                        for p in self.content:
-                            c.append(p.to_json(company=company))
-                        return {"role": self.role, "content": c}
+    def _to_json_groq(self) -> dict:
+        if self.role == "assistant" and self.tool_calls:
+            content_json = [part.to_json("Groq") for part in self.content]
+            tool_calls_json = [call.to_json("Groq") for call in self.tool_calls]
+            return {"role": "assistant", "content": content_json, "tool_calls": tool_calls_json}
 
-            case "OpenAI" | "DeepSeek":
+        if isinstance(self.content[0], AiResult):
+            return [
+                {
+                    "role": "tool",
+                    "name": cast_AiResult(part).name,
+                    "tool_call_id": part.id,
+                    "content": json.dumps(part.result),
+                }
+                for part in self.content
+            ]
 
-                if self.role == 'assistant' and self.tool_calls:
-                    c = []
-                    for p in self.content:
-                        c.append(p.to_json(company=company))
+        if self.role == "system":
+            system_message = cast_AiTextPart(self.content[0])
+            return {"role": self.role, "content": system_message.text}
 
-                    for p in self.tool_calls:
-                        t.append(
-                            {"id": p.id, "type": "function", "function": {"name": p.name, "arguments": p.arguments}})
+        content_json = [part.to_json("Groq") for part in self.content]
+        return {"role": self.role, "content": content_json}
 
-                    if not c: c = None
-                    return {"role": "assistant", "content": c, "tool_calls": t}
+    def _to_json_xai(self) -> dict:
+        if self.role == "system":
+            system_message = cast_AiTextPart(self.content[0])
+            return {"role": self.role, "content": system_message.text}
 
-                if type(self.content[0]) == AiResult:
-                    for p in self.content:
-                        if type(p) is not AiResult:
-                            raise ValueError(f"A function return with a part that in not a AiToolResult")
-                        p = typing.cast(AiResult, p)
-                        c.append({"role": "tool", "tool_call_id": p.id, "content": json.dumps(p.result)})
-                    return c
+        if self.role == "assistant":
+            content_json = [part.to_json("XAI") for part in self.content]
+            tool_calls_json = [call.to_json("XAI") for call in self.tool_calls]
+            return {"role": "assistant", "content": content_json, "tool_calls": tool_calls_json}
 
-                c = []
-                for p in self.content:
-                    c.append(p.to_json(company=company))
-                return {"role": self.role, "content": c}
+        if self.role == "result":
+            result = cast_AiResult(self.content[0])
+            return {"role": "tool", "tool_call_id": result.id, "content": result.result}
 
-            case "Groq":
-
-                if self.role == 'assistant' and self.tool_calls:
-                    c = []
-                    for p in self.content:
-                        c.append(p.to_json(company=company))
-
-                    for p in self.tool_calls:
-                        t.append(
-                            {"id": p.id, "type": "function", "function": {"name": p.name, "arguments": p.arguments}})
-
-                    return {"role": "assistant", "content": c, "tool_calls": t}
-
-                if type(self.content[0]) == AiResult:
-                    for p in self.content:
-                        if type(p) is not AiResult:
-                            raise ValueError(f"A function return with a part that in not a AiToolResult")
-                        p = typing.cast(AiResult, p)
-                        c.append({"role": "tool", "name": p.name, "tool_call_id": p.id, "content": json.dumps(p.result)})
-                    return c
-
-                if self.role == 'system':
-                    system_message: AiTextPart = typing.cast(AiTextPart, self.content[0])
-                    return {"role": self.role, "content": system_message.text}
-
-                c = []
-                for p in self.content:
-                    c.append(p.to_json(company=company))
-
-                return {"role": self.role, "content": c}
-
-            case "XAI":
-                match self.role:
-                    case "system":
-                        # Assumes message is a AiTextPart, but that may not be true
-                        system_message: AiTextPart = typing.cast(AiTextPart, self.content[0])
-                        return {"role": self.role, "content": system_message.text}
-
-                    case "assistant":
-                        c = []
-                        if self.content:
-                            for p in self.content:
-                                c.append(p.to_json(company=company))
-
-                        if self.tool_calls:
-                            for p in self.tool_calls:
-                                t.append(p.to_json(company=company))
-
-                        return {"role": "assistant", "content": c, "tool_calls": t}
-
-                    case "result":
-                        tc: AiResult = typing.cast(AiResult, self.content[0])
-                        return {"role": "tool", "tool_call_id": tc.id, "content": tc.result}
-
-                    case _:
-                        if self.content:
-                            for p in self.content:
-                                c.append(p.to_json(company=company))
-                        return {"role": self.role, "content": c, "tool_calls": None}
+        content_json = [part.to_json("XAI") for part in self.content]
+        return {"role": self.role, "content": content_json, "tool_calls": None}
 
 
+def cast_AiTextPart(part: AiMessagePart) -> AiTextPart:
+    if not isinstance(part, AiTextPart):
+        raise TypeError("Expected AiTextPart")
+    return part
 
 
-# schema = None
-# if os.path.exists("TES/Vegas_pro/schema.json"):
-#     with open("TES/Vegas_pro/schema.json", "r") as schema_file:
-#         schema = json.load(schema_file)
-
+def cast_AiResult(part: AiMessagePart) -> AiResult:
+    if not isinstance(part, AiResult):
+        raise TypeError("Expected AiResult")
+    return part
 
 
 class AiPrompt:
     def __init__(self, vm):
-        self.messages = []
-        self.system_message = None
+        self.messages: List[AiMessage] = []
+        self.system_message: Optional[str] = None
         self.toks_in: int = 0
         self.toks_out: int = 0
-        self.company: str = ''
-        self.model: str = ''
-        self.api_key: str = ''
+        self.company: str = ""
+        self.model: str = ""
+        self.api_key: str = ""
         self.vm = vm
 
-    def add_message(self, vm, role: str, content: list[AiMessagePart] = None, tool_calls: List[AiCall] = None):
-
-        if content is None: content = []
-        if tool_calls is None: tool_calls = []
+    def add_message(
+            self,
+            vm,
+            role: str,
+            content: Optional[List[AiMessagePart]] = None,
+            tool_calls: Optional[List[AiCall]] = None,
+    ):
+        content = content or []
+        tool_calls = tool_calls or []
 
         if self.messages and self.messages[-1].role == role:
             self.messages[-1].content.extend(content)
@@ -380,313 +374,262 @@ class AiPrompt:
         else:
             self.messages.append(AiMessage(vm=self.vm, role=role, content=content, tool_calls=tool_calls))
 
-
-    def to_json(self) -> list[dict]:
-        """Generate Json-able Object for API company specific Request"""
-        json_msgs = []
+    def to_json(self) -> List[dict]:
+        """Generate JSON serializable object for API company-specific request."""
+        json_msgs: List[dict] = []
         for msg in self.messages:
-            x = msg.to_json(company=self.company)
-            if type(x) is list:
-                json_msgs.extend(x)
+            json_data = msg.to_json(company=self.company)
+            if isinstance(json_data, list):
+                json_msgs.extend(json_data)
             else:
-                json_msgs.append(x)
+                json_msgs.append(json_data)
 
-        # Anthropic use data['system'] instead of Message(role=system
-        if self.company in ['Anthropic']:
-            if json_msgs[0]['role'] == 'system':
-                msg = json_msgs.pop(0)
-                self.system_message = msg['content']
+        if self.company == "Anthropic" and json_msgs and json_msgs[0]["role"] == "system":
+            self.system_message = json_msgs.pop(0)["content"]
 
-        # Google use data['system'] instead of Message(role=system
-        if self.company in ['Google'] and json_msgs[0]['role'] == 'system':
-            msg = json_msgs.pop(0)
-            self.system_message = msg['parts'][0]['text']
+        if self.company == "Google" and json_msgs and json_msgs[0]["role"] == "system":
+            self.system_message = json_msgs.pop(0)["parts"][0]["text"]
 
         return json_msgs
 
-    def ask(self, label) -> AiMessage:
-        """make a prompt to self.company::self.model and process the result"""
-        if self.company in companies_with_api_key:
+    def ask(self, label: str) -> AiMessage:
+        """Make a prompt to self.company::self.model and process the result."""
+        if self.company in COMPANIES_WITH_API_KEY:
             self.api_key = get_api_key(company=self.company)
         else:
-            self.api_key = ''
+            self.api_key = ""
 
-        # Execute the request with the parameters generated by self.make_url_hdr()
         request_params = self.make_request_params()
 
         if self.vm.debug:
-            console.print(f"{'-' * 10}> Sending to API...")
+            console.print("[bold yellow]Sending to API...[/bold yellow]")
 
-            # console.print_json(json.dumps(request_params), indent=2)
-            console.print(f"<{'-' * 10} End Sending")
-
+        # self.log_api_json(request_params, )
         with Progress(
-                "[progress.description]{task.description}",  # Show description
-                TimeElapsedColumn(),  # Automatically show elapsed time
-                console=console, transient=True  # Use transient=True to avoid a new line at the end
+                "[progress.description]{task.description}",
+                TimeElapsedColumn(),
+                console=console,
+                transient=True,
         ) as progress:
             task = progress.add_task(label, total=None)
-            # Execute the HTTP request while the progress bar is running
             response = requests.post(**request_params)
-            progress.update(task, description=label)  # Finalize task
+            progress.update(task, description=label)
 
-        # response = requests.post(**request_params)
-
-        # Process an Error Response
         if response.status_code != 200:
             err_msg = f"API Request failed with status code {response.status_code}: {response.text}"
-            raise ValueError(err_msg)  # @Todo replace all valueError for my own errors.
+            d = json.loads(request_params['data'])
+            self.vm.log_last_json(d['messages'])
+            raise APIKeyError(err_msg)
 
-        # We got a good response...
         try:
             response_data = response.json()
-        except JSONDecodeError as err:
-            console.print(f"Error decoding json in response, {err.msg}")
-            console.print(f"{'-' * 10}> Err Receiving from API...")
-            console.print(f"Raw text Received: {response.text}")
-            console.print(f"<{'-' * 10} End Receiving")
+        except json.JSONDecodeError as err:
+            console.print(f"[bold red]Error decoding JSON: {err.msg}[/bold red]")
+            console.print(f"[bold red]Raw response: {response.text}[/bold red]")
             raise
 
-
-        # Debug Returned value
         if self.vm.debug:
-            console.print(f"{'-' * 10}> Receiving from API...")
-            part = json.loads(json.dumps(response_data))
-            self.clean_messages(part)
-            console.print_json(json.dumps(part), indent=2)
-            console.print(f"<{'-' * 10} End Receiving")
+            console.print("[bold green]Received from API:[/bold green]")
+            clean_data = self.clean_messages(response_data)
+            console.print_json(json.dumps(clean_data, indent=2))
 
-        # Gather response Info From returned Json into an AiMessage...
-        msg_parts: list[AiMessagePart] = []
+        return self._process_response(response_data)
 
-        match self.company:
-            case 'Anthropic':
-                self.toks_out += response_data['usage']["output_tokens"]
-                self.toks_in += response_data['usage']["input_tokens"]
-                if 'content' not in response_data:
-                    err_msg = "No content found in the response."
-                    raise ValueError(err_msg)
+    def _process_response(self, data: dict) -> AiMessage:
+        msg_parts: List[AiMessagePart] = []
+        company = self.company
 
-                role = response_data['role']
-                parts = response_data['content']
-                if type(parts) is str:
-                    parts = [parts]
+        if company == "Anthropic":
+            self.toks_out += data.get("usage", {}).get("output_tokens", 0)
+            self.toks_in += data.get("usage", {}).get("input_tokens", 0)
 
-                for msg in parts:
-                    if type(msg) is str:
-                        msg_parts.append(AiTextPart(vm=self.vm, text=msg))
-                    elif type(msg) is dict:
-                        if msg['type'] == 'text':
-                            msg_parts.append(AiTextPart(vm=self.vm, text=msg['text']))
-                        elif msg['type'] == 'tool_use':
-                            fc_id = msg['id']
-                            fc_name = msg['name']
-                            fc_args = msg['input']
-                            msg_parts.append(AiCall(vm=self.vm, name=fc_name, arguments=fc_args, id=fc_id))
+            role = data.get("role")
+            contents = data.get("content", [])
 
-                return AiMessage(vm=self.vm, role=role, content=msg_parts)
+            if isinstance(contents, str):
+                contents = [contents]
 
-            case 'Google':
-                self.toks_out += response_data['usageMetadata']["candidatesTokenCount"]
-                self.toks_in += response_data['usageMetadata']["promptTokenCount"]
-                if 'candidates' not in response_data or len(response_data['candidates']) <= 0:
-                    err_msg = "No content found in the response."
-                    raise ValueError(err_msg)
-
-                    # This is the message returned
-                llm_msg = response_data['candidates'][0]['content']
-                role = llm_msg['role']
-                parts = llm_msg['parts']
-
-                # Loop over all returned messages
-                for part in parts:
-                    part = typing.cast(dict, part)
-                    if "text" in part.keys():
-                        msg_parts.append(AiTextPart(vm=self.vm, text=part['text']))
-                    elif "functionCall" in part.keys():
+            for msg in contents:
+                if isinstance(msg, str):
+                    msg_parts.append(AiTextPart(vm=self.vm, text=msg))
+                elif isinstance(msg, dict):
+                    if msg.get("type") == "text":
+                        msg_parts.append(AiTextPart(vm=self.vm, text=msg.get("text", "")))
+                    elif msg.get("type") == "tool_use":
                         msg_parts.append(
-                            AiCall(vm=self.vm, name=part['functionCall']['name'], arguments=part['functionCall']['args']))
+                            AiCall(
+                                vm=self.vm,
+                                name=msg.get("name", ""),
+                                arguments=msg.get("input", ""),
+                                id=msg.get("id"),
+                            )
+                        )
+
+            return AiMessage(vm=self.vm, role=role, content=msg_parts)
+
+        elif company == "Google":
+            self.toks_out += data.get("usageMetadata", {}).get("candidatesTokenCount", 0)
+            self.toks_in += data.get("usageMetadata", {}).get("promptTokenCount", 0)
+
+            candidates = data.get("candidates", [])
+            if not candidates:
+                raise APIKeyError("No content found in the response.")
+
+            llm_msg = candidates[0].get("content", {})
+            role = llm_msg.get("role")
+            parts = llm_msg.get("parts", [])
+
+            for part in parts:
+                if "text" in part:
+                    msg_parts.append(AiTextPart(vm=self.vm, text=part["text"]))
+                elif "functionCall" in part:
+                    msg_parts.append(
+                        AiCall(
+                            vm=self.vm,
+                            name=part["functionCall"].get("name", ""),
+                            arguments=part["functionCall"].get("args", ""),
+                        )
+                    )
+                else:
+                    console.print(f"[red]Unexpected response type: {part.keys()}[/red]")
+                    raise APIKeyError("Unexpected response structure from Google.")
+
+            return AiMessage(vm=self.vm, role=role, content=msg_parts)
+
+        elif company in ["MistralAI", "OpenAI", "XAI", "DeepSeek"]:
+            self.toks_out += data.get("usage", {}).get("completion_tokens", 0)
+            self.toks_in += data.get("usage", {}).get("prompt_tokens", 0)
+
+            choices = data.get("choices", [])
+            if not choices:
+                raise APIKeyError("No content found in the response.")
+
+            llm_msg = choices[0].get("message", {})
+            role = llm_msg.get("role")
+            parts = llm_msg.get("content") or []
+
+            if not isinstance(parts, list):
+                parts = [parts]
+
+            for part in parts:
+                if isinstance(part, str) and part:
+                    msg_parts.append(AiTextPart(vm=self.vm, text=part))
+                elif isinstance(part, dict) and part.get("text"):
+                    msg_parts.append(AiTextPart(vm=self.vm, text=part["text"]))
+                else:
+                    console.print(f"[red]Unexpected response type: {type(part)}[/red]")
+                    raise APIKeyError("Unexpected response structure from the company.")
+
+            tool_calls = []
+            if "tool_calls" in llm_msg and llm_msg["tool_calls"]:
+                for fc in llm_msg["tool_calls"]:
+                    tool_calls.append(
+                        AiCall(
+                            vm=self.vm,
+                            name=fc["function"]["name"],
+                            arguments=fc["function"]["arguments"],
+                            id=fc["id"],
+                        )
+                    )
+
+            return AiMessage(vm=self.vm, role=role, content=msg_parts, tool_calls=tool_calls)
+
+        else:
+            raise APIKeyError(f"Unknown company: {company}")
+
+    def clean_messages(self, data: dict) -> dict:
+        sensitive_keys = {"url", "data", "image_url"}
+
+        def recursive_clean(d):
+            if isinstance(d, dict):
+                for k, v in d.items():
+                    if k in sensitive_keys and isinstance(v, str):
+                        d[k] = "..."
                     else:
-                        emsg = f"ERROR: unexpected response type from google {part.keys()} in response['choices'][0]['message']"
-                        console.print(f"[red]{emsg}[/]")
-                        pprint.pprint(part)
-                        raise ValueError(emsg)
+                        recursive_clean(v)
+            elif isinstance(d, list):
+                for item in d:
+                    recursive_clean(item)
 
-                return AiMessage(vm=self.vm, role=role, content=msg_parts)
-
-            case 'MistralAI' | 'OpenAI' | 'XAI' | 'DeepSeek':
-
-                self.toks_out += response_data['usage']["completion_tokens"]
-                self.toks_in += response_data['usage']["prompt_tokens"]
-
-                if 'choices' not in response_data or len(response_data['choices']) <= 0:
-                    err_msg = "No content found in the response."
-                    raise ValueError(err_msg)
-
-                # This is the message returned
-                llm_msg = response_data['choices'][0]['message']
-                role = llm_msg['role']
-                parts = llm_msg['content']
-                if parts is None:
-                    parts = []
-
-                if type(parts) is not list:
-                    parts = [parts]
-
-                # Loop over all returned messages
-                for part in parts:
-                    if type(part) is str:
-                        if part != '':
-                            msg_parts.append(AiTextPart(vm=self.vm, text=part))
-                    elif type(part) is dict:
-                        part = typing.cast(dict, part)
-                        if part['text'] != '':
-                            msg_parts.append(AiTextPart(vm=self.vm, text=part['text']))
-                    else:
-                        emsg = f"ERROR: unexpected response type from {self.company} {type(part)} in response['choices'][0]['message']"
-                        console.print(f"[red]{emsg}[/]")
-                        raise ValueError(emsg)
-
-                llm_tool_calls: list[dict] = []
-                tool_calls: list[AiCall] = []
-                if "tool_calls" in llm_msg:
-                    llm_tool_calls = llm_msg['tool_calls']
-
-                if llm_tool_calls:
-                    for fc in llm_tool_calls:
-                        fc_id = fc['id']
-                        fc_name = fc['function']['name']
-                        fc_args = fc['function']['arguments']
-                        tool_calls.append(AiCall(vm=self.vm, name=fc_name, arguments=fc_args, id=fc_id))
-
-                return AiMessage(vm=self.vm, role=role, content=msg_parts, tool_calls=tool_calls)
-
-            case _:
-                raise ValueError(f"Unknown company: {self.company}")
-
-    def clean_messages(self, data: dict):
-        for k, v in data.items():
-            if k in ["url", "data", "image_url"] and type(v) == str:
-                data[k] = '...'
-            elif type(v) == dict:
-                self.clean_messages(v)
-            elif type(v) == list:
-                for item in v:
-                    if type(item) == dict:
-                        self.clean_messages(item)
+        recursive_clean(data)
+        return data
 
     def make_request_params(self) -> dict:
-        retval: dict = {}
-        json_data: str = ''
+        data = {
+            "model": self.model,
+            "messages": self.to_json(),
+            "tools": DefinedToolsArray,
+        }
+        headers = {"Content-Type": "application/json"}
 
         match self.company:
             case "Anthropic":
-                data = {"model": self.model, "max_tokens": 1024, "messages": self.to_json(),
-                        "tools": AnthropicToolsArray}
-                json_data = json.dumps(data)
-                retval = {
-                    "url": "https://api.anthropic.com/v1/messages",
-                    "headers": {"x-api-key": self.api_key, "Content-Type": "application/json",
-                                "anthropic-version": "2023-06-01"},
-                    "data": json_data
-                }
-
+                data.update({"max_tokens": 1024})
+                data["tools"] = AnthropicToolsArray
+                url = "https://api.anthropic.com/v1/messages"
+                headers.update(
+                    {
+                        "x-api-key": self.api_key,
+                        "anthropic-version": "2023-06-01",
+                    }
+                )
             case "Google":
-                data = {"contents": self.to_json(),
+                data.update(
+                    {
+                        "contents": self.to_json(),
                         "system_instruction": {"parts": [{"text": self.system_message}]},
-                        "tools": [{"functionDeclarations": GoogleToolsArray}]
-                        }
-                json_data = json.dumps(data)
-                retval = {
-                    "url": f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent?key={self.api_key}",
-                    "headers": {"Content-Type": "application/json", },
-                    "data": json_data
-                }
-
+                        "tools": [{"functionDeclarations": GoogleToolsArray}],
+                    }
+                )
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent?key={self.api_key}"
             case "Groq":
-                data = {
-                    "model": self.model,
-                    "messages": self.to_json(),
-                    "tools": DefinedToolsArray,
-                    # "response_format": "application/json"
-                }
-                json_data = json.dumps(data)
-                retval = {
-                    "url": "https://api.groq.com/openai/v1/chat/completions",
-                    "headers": {"Content-Type": "application/json", "Authorization": f"Bearer {self.api_key}", },
-                    "data": json_data,
-                }
-
+                url = "https://api.groq.com/openai/v1/chat/completions"
+                headers.update({"Authorization": f"Bearer {self.api_key}"})
             case "MistralAI":
-                data = {"model": self.model,
-                        "messages": self.to_json(),
-                        "tools": DefinedToolsArray,
-                        }
-
-                json_data = json.dumps(data)
-
-                retval = {
-                    "url": f"https://api.mistral.ai/v1/chat/completions",
-                    "headers": {"Content-Type": "application/json", "Accept": "application/json",
-                                "Authorization": f"Bearer {self.api_key}"},
-                    "data": json_data,
-                }
-
-            case "Ollama":
-                pass
-
-            case "OpenAI" :
-                data = {
-                    "model": self.model,
-                    "messages": self.to_json(),
-                    "tools": DefinedToolsArray,
-                    # "response_format": "application/json"
-                }
-                json_data = json.dumps(data)
-                retval = {
-                    "url": "https://api.openai.com/v1/chat/completions",
-                    "headers": {"Content-Type": "application/json", "Authorization": f"Bearer {self.api_key}", },
-                    "data": json_data,
-                }
-
+                url = "https://api.mistral.ai/v1/chat/completions"
+                headers.update({"Authorization": f"Bearer {self.api_key}", "Accept": "application/json"})
+            case "OpenAI":
+                url = "https://api.openai.com/v1/chat/completions"
+                headers.update({"Authorization": f"Bearer {self.api_key}"})
             case "DeepSeek":
-                data = {
-                    "model": self.model,
-                    "messages": self.to_json(),
-                    "tools": DefinedToolsArray,
-                    "stream": False
-                }
-                json_data = json.dumps(data)
-                retval = {
-                    "url": "https://api.deepseek.com/v1/chat/completions",
-                    "headers": {"Content-Type": "application/json", "Authorization": f"Bearer {self.api_key}" },
-                    "data": json_data,
-                }
-
-
+                data.update({"stream": False})
+                url = "https://api.deepseek.com/v1/chat/completions"
+                headers.update({"Authorization": f"Bearer {self.api_key}"})
             case "XAI":
-                data = {"model": self.model,
-                        "messages": self.to_json(),
-                        "tools": DefinedToolsArray,
-                        "too_choice": "auto"
-                        }
-
-                json_data = json.dumps(data)
-
-                retval = {
-                    "url": "https://api.x.ai/v1/chat/completions",
-                    "headers": {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json", },
-                    "data": json_data,
-                }
-
+                data.update({"too_choice": "auto"})
+                url = "https://api.x.ai/v1/chat/completions"
+                headers.update({"Authorization": f"Bearer {self.api_key}"})
             case _:
-                raise ValueError(f"Unknown company: {self.company}")
+                raise APIKeyError(f"Unknown company: {self.company}")
+
+        json_data = json.dumps(data)
+
+        request_params = {
+            "url": url,
+            "headers": headers,
+            "data": json_data,
+        }
 
         if self.vm.debug:
-            console.print(f"{'-' * 10}> Send to API...")
-            t = json.loads(json_data)
-            self.clean_messages(t)
-            console.print_json(json.dumps(t, indent=2))
-            console.print(f"<{'-' * 10} End Send...")
+            console.print("[bold cyan]Sending the following request data:[/bold cyan]")
+            clean_data = self.clean_messages(data)
+            console.print_json(json.dumps(clean_data, indent=2))
 
-        return retval
+        return request_params
+
+
+def get_api_key(company: str) -> str:
+    try:
+        api_key = keyring.get_password("keprompt", username=company)
+    except keyring.errors.PasswordDeleteError:
+        console.print(f"[bold red]Error accessing keyring for company: {company}[/bold red]")
+        raise APIKeyError("Unable to access the keyring.")
+
+    if not api_key:
+        api_key = console.input(f"Please enter your {company} API key: ")
+        if not api_key:
+            console.print("[bold red]API key cannot be empty.[/bold red]")
+            raise APIKeyError("API key cannot be empty.")
+        keyring.set_password("keprompt", username=company, password=api_key)
+
+    return api_key
