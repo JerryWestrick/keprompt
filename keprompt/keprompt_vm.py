@@ -1,4 +1,3 @@
-
 import copy
 import glob
 import json
@@ -7,7 +6,8 @@ import os
 import sys
 import threading
 import time
-import typing
+from stat import ST_MTIME
+from typing import cast
 from time import sleep
 
 import keyring
@@ -26,11 +26,10 @@ console = Console()
 terminal_width = console.size.width
 
 FORMAT = "%(message)s"
-logging.basicConfig(level="NOTSET", format=FORMAT, datefmt="[%X]", handlers=[RichHandler(console=console, rich_tracebacks=True,)])
+logging.basicConfig(level="NOTSET", format=FORMAT, datefmt="[%X]",
+                    handlers=[RichHandler(console=console, rich_tracebacks=True, )])
 
 log = logging.getLogger(__file__)
-
-
 
 # My Version of a seperate configuration file.
 models_config: dict[str, any]
@@ -40,9 +39,9 @@ json_path = os.path.join(os.path.dirname(__file__), 'keprompt_models.json')
 with open(json_path, "r") as json_file:
     models_config = json.load(json_file)
 
-
 # Global Variables
 stop_event = threading.Event()  # Event to signal when to stop the thread
+
 
 # Global routines
 def print_prompt_code(prompt_files: list[str]) -> None:
@@ -70,7 +69,7 @@ def print_prompt_code(prompt_files: list[str]) -> None:
     console.print(table)
 
 
-class PromptSyntaxError(Exception):
+class StmtSyntaxError(Exception):
     pass
 
 
@@ -86,7 +85,7 @@ class VM:
         else:
             self.vdict = dict()
         self.llm: dict[str, any] = dict()
-        self.statements: list[_PromptStatement] = []
+        self.statements: list[StmtPrompt] = []
         # self.messages: list[KeMessage] = []
         self.prompt: AiPrompt = AiPrompt(self)
         self.header: dict[str, any] = {}
@@ -102,13 +101,11 @@ class VM:
         self.toks_out = 0
         self.cost_out = 0
         self.total = 0
-        self.api_key:str = ''
+        self.api_key: str = ''
         self.interaction_no: int = 0
-
 
         if debug:
             log.info(f'Instantiated VM(filename="{filename}",debug="{debug}")')
-
 
     def print(self, *args, **kwargs):
         """Print method to output to both console and file."""
@@ -176,7 +173,7 @@ class VM:
                         part_no = f"{colors[msg.role]}{pno:02}[/]"
                         for substring in str(part).split('\n'):
                             t = f"{colors[msg.role]}{substring}[/]"
-                            table.add_row(msg_no_str,role, part_no, t)
+                            table.add_row(msg_no_str, role, part_no, t)
                             msg_no_str = ""
                             role = ''
                             part_no = ''
@@ -248,7 +245,11 @@ class VM:
 
         return text
 
-    def parse_prompt(self)-> None:
+    def parse_prompt(self) -> None:
+        """Parse the prompt file and create a list of statements.
+            parse according to rules in docs/PromptLanguage.md
+        """
+
         if self.debug: log.info(f'parse_prompt()')
         lines: list[str]
 
@@ -256,90 +257,66 @@ class VM:
         with open(self.filename, 'r') as file:
             lines = file.readlines()
 
-        # Delete trailing blank lines
-        while lines[-1][0].strip() == '':
-            lines.pop()
-
-        # If Missing.. Add implied .exec at end of lines
-        if lines[-1][0:5] != '.exec':
-            lines.append('.exec')
-
-        # Storage for multiline cmds: .system .user .assistant
-        last_keyword = None
-        last_value = ''
+        # Delete all trailing blank lines
+        while lines[-1][0].strip() == '': lines.pop()
 
         for lno, line in enumerate(lines):
             try:
-                line = line.strip()
+                line = line.strip()  # remove trailing blanks
+                if not line: continue  # skip blank lines
 
-                # skip blank lines
-                if not line:
-                    continue
+                # Get Keyword and Value in all cases.
 
-                # Process all lines that do not start with .
-                if line[0] != '.':
-                    if not last_keyword:
-                        raise PromptSyntaxError(f"Parse Error {self.filename}:{lno}> Missing .system, .user or .assistant")
-
-                    last_value += f"{line}\n"
-                    continue
-
-                # Line starts with '.', now get keyword (Begining of line to first space, or end of line)
-                if ' ' in line:
-                    keyword, rest = line.split(' ', 1)
+                if line[0] != '.':  # No Dot in col 1
+                    keyword, value = '.text', line
                 else:
-                    keyword = line
-                    rest = ''
+                    # has '.' in col 1
+                    if ' ' in line:  # has space therefore has .keyword<space>value
+                        keyword, value = line.split(' ', 1)
+                    else:  # No space therefore only .keyword
+                        keyword, value = line, ''
 
-                # Process all lines that start with '.' but are not a keyword...
-                if keyword not in keywords:
-                    if not last_keyword:
-                        raise PromptSyntaxError(f"Parse Error {self.filename}:{lno}> Missing .system, .user or .assistant")
+                    if keyword not in keywords:  # last case have .keyword but it is not a valid keyword
+                        keyword, value = '.text', line
 
-                    last_value += f"{line}\n"
-                    continue
+                # okay concatenate .text
+                if lno and keyword == '.text':
+                    last = self.statements[-1]
+                    if last.keyword in ['.assistant', '.system', '.text', '.user']:
+                        last.value = f"{last.value}\n{value}".strip()
+                        continue
 
-                # We got us a valid dot keyword!!!
-                # Now we need to decide what to do with any last_value text we got stored up...
-                if last_value:
-                    # Okay Lets add it to msg list
-                    self.statements.append(make_statement(self, len(self.statements), last_keyword, last_value[:-1]))
-                    last_value = ''
-
-                # Does this represent the end of a Multi Line?
-                if keyword in ['.assistant', '.user', '.system']:
-                    last_keyword = keyword
-                    last_value = ''
-                    continue  # .user, .system, .assistant do not have info on the line...
-
-                # and now for the single line dot keywords
-                self.statements.append(make_statement(self, len(self.statements), keyword, rest))
+                self.statements.append(make_statement(self, len(self.statements), keyword=keyword, value=value))
 
             except Exception as e:
-                raise PromptSyntaxError(
+                raise StmtSyntaxError(
                     f"{VERTICAL} [red]Error parsing file {self.filename}:{lno} error: {str(e)}.[/]\n\n")
+
+        # Implicit .exec
+        if lines[-1][0:5] != '.exec':
+            self.statements.append(make_statement(self, len(self.statements), keyword='.exec', value=''))
 
         return
 
     def print_exception(self) -> None:
         """Print exception information to both console and file outputs."""
         self.console.print()
-        self.console.print_exception(show_locals=True,width=terminal_width)  # Print to terminal
+        self.console.print_exception(show_locals=True, width=terminal_width)  # Print to terminal
         if self.file_console:  # Ensure file is open
             self.file_console.print_exception()  # Print to file
 
     def load_llm(self, parms: dict[str, str]) -> None:
 
         if 'model' not in parms:
-            raise PromptSyntaxError(f".llm syntax error: model not defined")
+            raise StmtSyntaxError(f".llm syntax error: model not defined")
         self.model_name = parms['model']
 
         if self.model_name not in models_config:
-            raise PromptSyntaxError(f"keprompt_models.json error: model {self.model_name} is not defined")
+            raise StmtSyntaxError(f"keprompt_models.json error: model {self.model_name} is not defined")
         self.model = models_config[self.model_name]
 
         if 'company' not in self.model:
-            raise PromptSyntaxError(f"keprompt_models.json error: company not defined for model {self.model_name}")
+            raise StmtSyntaxError(f"keprompt_models.json error: company not defined for model {self.model_name}")
         self.company = self.model['company']
 
         # copy parms to vdict
@@ -350,6 +327,7 @@ class VM:
         self.vdict['model'] = self.model
 
     def execute(self) -> None:
+        """Execute the statements in the prompt file"""
         if self.debug: log.info(f'execute({self.filename} with {len(self.statements)} statements)')
 
         base_name = os.path.splitext(os.path.basename(self.filename))[0]
@@ -362,10 +340,6 @@ class VM:
             )
 
             for stmt_no, stmt in enumerate(self.statements):
-                if self.company == 'Anthropic' and stmt.keyword == '.system':
-                    self.system_value = stmt.value
-                    # continue
-
                 try:
                     stmt.execute(self)
                 except Exception as e:
@@ -378,13 +352,12 @@ class VM:
                 if stmt.keyword == '.exit':
                     break
 
-
             self.print(f"{BOTTOM_LEFT}{HORIZONTAL * (terminal_width - 2)}{BOTTOM_RIGHT}")
 
             self.file_console.file.close()  # Close file console at end
             logfile_name_html = backup_file(f"logs/{base_name}.svg", backup_dir='logs', extension='.svg')
             self.console.save_svg(logfile_name_html)
-            print(f"Wrote {logfile_name_html} to disk")
+            console.print(f"Wrote {logfile_name_html} to disk")
 
     def print_with_wrap(self, is_response: bool, line: str) -> None:
         line_len = terminal_width - 23
@@ -409,15 +382,14 @@ class VM:
         with open(logfile_name, 'w') as file:
             file.write(json.dumps(self.prompt.to_json()))
 
-    def log_last_json(self, data:dict[str, any]):
+    def log_last_json(self, data: dict[str, any]):
         base_name = os.path.splitext(os.path.basename(self.filename))[0]
         logfile_name = backup_file(f"logs/{base_name}_last_msgs.json", backup_dir='logs', extension='.json')
         with open(logfile_name, 'w') as file:
-            file.write(json.dumps(data,indent=2,sort_keys=True))
+            file.write(json.dumps(data, indent=2, sort_keys=True))
 
 
-
-class _PromptStatement:
+class StmtPrompt:
 
     def __init__(self, vm: VM, msg_no: int, keyword: str, value: str):
         self.msg_no = msg_no
@@ -450,7 +422,7 @@ class _PromptStatement:
         vm.print(self.console_str())
 
 
-class _Assistant(_PromptStatement):
+class StmtAssistant(StmtPrompt):
 
     def execute(self, vm: VM) -> None:
         if vm.debug:
@@ -460,10 +432,13 @@ class _Assistant(_PromptStatement):
             for vl in vls:
                 vm.print(f"[bold white]{VERTICAL}[/]            [green]{vl}[/]")
         vm.print(self.console_str())
-        vm.prompt.add_message(vm=vm,  role='assistant', content=[AiTextPart(vm=vm, text=self.value)])
+        if not self.value:
+            vm.prompt.add_message(vm=vm, role='assistant', content=[])
+        else:
+            vm.prompt.add_message(vm=vm, role='assistant', content=[AiTextPart(vm=vm, text=self.value)])
 
 
-class _Clear(_PromptStatement):
+class StmtClear(StmtPrompt):
 
     def execute(self, vm: VM) -> None:
         if vm.debug:
@@ -503,7 +478,7 @@ class _Clear(_PromptStatement):
                 vm.print(f"{VERTICAL} [white or red]Error deleting file {k}: {str(e)}[/]\n\n")
 
 
-class _Cmd(_PromptStatement):
+class StmtCmd(StmtPrompt):
 
     def execute(self, vm: VM) -> None:
         """Execute a command that was defined in a prompt file (.prompt)"""
@@ -537,11 +512,11 @@ class _Cmd(_PromptStatement):
         last_msg.content.append(AiTextPart(vm=vm, text=text))
 
 
-class _Comment(_PromptStatement):
+class StmtComment(StmtPrompt):
     pass
 
 
-class _Debug(_PromptStatement):
+class StmtDebug(StmtPrompt):
 
     def execute(self, vm: VM) -> None:
 
@@ -569,33 +544,110 @@ class _Debug(_PromptStatement):
         vm.debug_print(elements=parms)
 
 
-class DotThread(threading.Thread):
-    def __init__(self):
-        super(DotThread, self).__init__()
-        self.stop_event = threading.Event()
-        self.count = 0
-        self.is_running = False
+class StmtExec(StmtPrompt):
 
-    def run(self):
-        self.is_running = True
-        self.stop_event.clear()
-        self.count = 0
-        while not self.stop_event.is_set():
-            console.print('.', end='')
-            self.count += 1
-            sleep(1)
-        self.is_running = False
+    def execute2(self, vm: VM) -> None:
+        """Execute a request to an LLM"""
 
-    def start(self):
-        if not self.is_running:
-            super(DotThread, self).start()
+        response: AiMessage | None = None
 
-    def stop(self):
-        if self.is_running:
-            self.stop_event.set()
+        vm.print(f"[bold white]{VERTICAL}[/][white]{self.msg_no:02}[/] [cyan]{self.keyword:<8}[/] ", end='')
 
+        continue_conversation: bool = True
+        header = f"[bold white]{VERTICAL}[/][white]{self.msg_no:02}[/] [cyan]{self.keyword:<8}[/] "
+        label = ''
+        vm.interaction_no = 0
+        while continue_conversation:
+            vm.interaction_no += 1
+            continue_conversation = False
+            label = f"{header}[bold blue underline]Requesting {vm.company}::{vm.model_name}[/][white] Call {vm.interaction_no}:"
+            vm.llm['model'] = vm.model_name
+            start_time = time.time()
+            elapsed_time = 0
+            try:
+                response: AiMessage = vm.prompt.ask(label=label)
+            except Exception as err:
+                vm.print_exception()
+                sys.exit(9)
 
-class _Exec(_PromptStatement):
+            finally:
+                elapsed_time = time.time() - start_time
+
+            try:
+                # Got a good response from LLM, add it to Prompexecutet
+                vm.prompt.messages.append(response)
+
+                vm.toks_in += vm.prompt.toks_in
+                vm.cost_in += vm.toks_in * vm.model['input']
+                vm.toks_out += vm.prompt.toks_out
+                vm.cost_out += vm.toks_out * vm.model['output']
+                vm.total += vm.cost_in + vm.cost_out
+
+                pline = f" {elapsed_time:.2f} secs output tokens {vm.prompt.toks_out} at {vm.prompt.toks_out / elapsed_time:.2f} tps"
+                used_bytes = 13 + 11 + len(vm.company) + 2 + len(vm.model_name) + 9
+                no_bytes_remaining = terminal_width - used_bytes
+                vm.print(f"{label}[/]{pline:<{no_bytes_remaining}}[bold white]{VERTICAL}[/]")
+
+                continue_conversation = False
+
+                call_returns = []
+                llm_parts = []
+                if response.content:
+                    for c in response.content:
+                        llm_parts.append(c)
+
+                if response.tool_calls:
+                    for t in response.tool_calls:
+                        llm_parts.append(t)
+
+                for msg in llm_parts:
+                    # if msg.type == 'text':
+                    #     call_returns.append(AiTextPart(msg.text))
+
+                    match msg.type:
+                        case "call":
+                            tc: AiCall = cast(AiCall, msg)
+                            function_name = tc.name
+                            if type(tc.arguments) is str:
+                                function_args = json.loads(tc.arguments)
+                            else:
+                                function_args = tc.arguments
+                            function_id = tc.id
+
+                            vm.print_with_wrap(is_response=True, line=str(tc))
+                            ret = DefinedFunctions[function_name](**function_args)
+
+                            tr = AiResult(vm=vm, name=function_name, id=function_id, result=ret)
+                            vm.print_with_wrap(is_response=False, line=str(tr))
+
+                            call_returns.append(tr)
+                        case "text":
+                            tp = cast(AiTextPart, msg)
+                            vm.print_with_wrap(is_response=True, line=str(tp))
+
+                        case _:
+                            raise ValueError(f"Execution returned unexpected type {type(msg)}")
+
+                if call_returns:
+                    continue_conversation = True
+                    vm.prompt.add_message(vm=vm, role="result", content=call_returns)
+
+            except Exception as e:
+                vm.print(f"[white on red]error while handling response:[/]")
+                vm.log_conversation()
+                vm.print_exception()
+                exit(9)
+
+            header = f"[bold white]{VERTICAL}[/]            "
+
+        if vm.debug:
+            vm.print(f"[bold blue]Response from {vm.company} API:[/bold blue]")
+            vm.print(response)
+
+        pline = f"Tokens In={vm.toks_in}(${vm.cost_in:06.4f}), Out={vm.toks_out}(${vm.cost_out:06.4f}) Total=${vm.total:06.4f}"
+        vm.print(f"{header}{pline:<{terminal_width - 14}}[bold white]{VERTICAL}[/]")
+
+        vm.log_conversation()
 
     def execute(self, vm: VM) -> None:
         """Execute a request to an LLM"""
@@ -665,7 +717,7 @@ class _Exec(_PromptStatement):
 
                     match msg.type:
                         case "call":
-                            tc: AiCall = typing.cast(AiCall, msg)
+                            tc: AiCall = cast(AiCall, msg)
                             function_name = tc.name
                             if type(tc.arguments) is str:
                                 function_args = json.loads(tc.arguments)
@@ -681,13 +733,11 @@ class _Exec(_PromptStatement):
 
                             call_returns.append(tr)
                         case "text":
-                            tp = typing.cast(AiTextPart, msg)
-                            vm.print_with_wrap(is_response=True,line=str(tp))
-
+                            tp = cast(AiTextPart, msg)
+                            vm.print_with_wrap(is_response=True, line=str(tp))
 
                         case _:
                             raise ValueError(f"Execution returned unexpected type {type(msg)}")
-
 
                 if call_returns:
                     continue_conversation = True
@@ -701,7 +751,6 @@ class _Exec(_PromptStatement):
 
             header = f"[bold white]{VERTICAL}[/]            "
 
-
         if vm.debug:
             vm.print(f"[bold blue]Response from {vm.company} API:[/bold blue]")
             vm.print(response)
@@ -712,7 +761,13 @@ class _Exec(_PromptStatement):
         vm.log_conversation()
 
 
-class _Include(_PromptStatement):
+class StmtExit(StmtPrompt):
+
+    def execute(self, vm: VM) -> None:
+        vm.print(self.console_str())
+
+
+class StmtInclude(StmtPrompt):
     # Read a file and add its content to last_msg
 
     def execute(self, vm: VM) -> None:
@@ -723,7 +778,7 @@ class _Include(_PromptStatement):
         last_msg.content.append(AiTextPart(vm=vm, text=lines))
 
 
-class _Image(_PromptStatement):
+class StmtImage(StmtPrompt):
     # Read an Image file and add its content to last_msg
 
     def execute(self, vm: VM) -> None:
@@ -732,20 +787,19 @@ class _Image(_PromptStatement):
         vm.prompt.add_message(vm=vm, role="user", content=[AiImagePart(vm=self.vm, filename=filename)])
 
 
-class _Llm(_PromptStatement):
+class StmtLlm(StmtPrompt):
 
     def execute(self, vm: VM) -> None:
         vm.print(self.console_str())
         try:
             if vm.llm:
-                raise (PromptSyntaxError(f".llm syntax: only one .lls statement allowed in vm {vm.filename
+                raise (StmtSyntaxError(f".llm syntax: only one .lls statement allowed in vm {vm.filename
                 }"))
 
             if self.value[0] != '{':
                 self.value = "{" + self.value + "}"
 
             value = self.vm.substitute(self.value)
-
 
             try:
                 parms = json.loads(value)
@@ -755,11 +809,11 @@ class _Llm(_PromptStatement):
                 sys.exit(9)
 
             if not isinstance(parms, dict):
-                raise (PromptSyntaxError(
+                raise (StmtSyntaxError(
                     f".llm syntax: parameters expected dict, but got {type(parms).__name__}: {self.value}"))
 
             if 'model' not in parms:
-                raise (PromptSyntaxError(f".llm syntax:  'model' parameter is required but missing {self.value}"))
+                raise (StmtSyntaxError(f".llm syntax:  'model' parameter is required but missing {self.value}"))
 
             vm.load_llm(parms)
 
@@ -788,45 +842,56 @@ class _Llm(_PromptStatement):
         vm.prompt.model = vm.model_name
 
 
-class _System(_PromptStatement):
+class StmtSystem(StmtPrompt):
 
     def execute(self, vm: VM) -> None:
         vm.print(self.console_str())
-        vm.prompt.add_message(vm=vm, role='system', content=[AiTextPart(vm=vm,  text=self.value)])
+        if not self.value:
+            vm.prompt.add_message(vm=vm, role='assistant', content=[])
+        else:
+            vm.prompt.add_message(vm=vm, role='assistant', content=[AiTextPart(vm=vm, text=self.value)])
 
 
-class _User(_PromptStatement):
-
-    def execute(self, vm: VM) -> None:
-        vm.print(self.console_str())
-        vm.prompt.add_message(vm=vm, role='user', content=[AiTextPart(vm=vm, text=self.value)])
-
-
-class _Exit(_PromptStatement):
+class StmtText(StmtPrompt):
 
     def execute(self, vm: VM) -> None:
         vm.print(self.console_str())
+        if vm.prompt.messages[-1].role in ['assistant', 'system', 'user']:
+            vm.prompt.messages[-1].content.append(AiTextPart(vm=vm, text=self.value))
+        else:
+            vm.prompt.add_message(vm=vm, role='user', content=[AiTextPart(vm=vm, text=self.value)])
+
+
+class StmtUser(StmtPrompt):
+
+    def execute(self, vm: VM) -> None:
+        vm.print(self.console_str())
+        if not self.value:
+            vm.prompt.add_message(vm=vm, role='user', content=[])
+        else:
+            vm.prompt.add_message(vm=vm, role='user', content=[AiTextPart(vm=vm, text=self.value)])
 
 
 # Create a _PromptStatement subclass depending on keyword
-StatementTypes: dict[str, type(_PromptStatement)] = {
-    '.#': _Comment,
-    '.assistant': _Assistant,
-    '.clear': _Clear,
-    '.cmd': _Cmd,
-    '.debug': _Debug,
-    '.exec': _Exec,
-    '.image': _Image,
-    '.include': _Include,
-    '.system': _System,
-    '.user': _User,
-    '.llm': _Llm,
-    '.exit': _Exit,
+StatementTypes: dict[str, type(StmtPrompt)] = {
+    '.#': StmtComment,
+    '.assistant': StmtAssistant,
+    '.clear': StmtClear,
+    '.cmd': StmtCmd,
+    '.debug': StmtDebug,
+    '.exec': StmtExec,
+    '.exit': StmtExit,
+    '.image': StmtImage,
+    '.include': StmtInclude,
+    '.llm': StmtLlm,
+    '.system': StmtSystem,
+    '.text': StmtText,
+    '.user': StmtUser,
 }
 
 keywords = StatementTypes.keys()
 
 
-def make_statement(vm: VM, msg_no: int, keyword: str, value: str) -> _PromptStatement:
+def make_statement(vm: VM, msg_no: int, keyword: str, value: str) -> StmtPrompt:
     my_class = StatementTypes[keyword]
     return my_class(vm, msg_no, keyword, value)

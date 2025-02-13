@@ -169,7 +169,10 @@ from pathlib import Path
 
 
 def glob_prompt(prompt_name: str) -> list[Path]:
-    prompt_pattern = Path('prompts') / f"{prompt_name}*.prompt"
+    if '*' in prompt_name:
+        prompt_pattern = Path('prompts') / f"{prompt_name}.prompt"
+    else:
+        prompt_pattern = Path('prompts') / f"{prompt_name}*.prompt"
     return sorted(Path('.').glob(str(prompt_pattern)))
 
 def main():
@@ -259,7 +262,7 @@ def main():
 
         if glob_files:
             for prompt_file in glob_files:
-                console.print(params)  # print to verify
+                # console.print(params)  # print to verify
                 step = VM(prompt_file, args.debug, vdict=variables)
                 step.parse_prompt()
                 step.execute()
