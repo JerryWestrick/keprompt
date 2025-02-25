@@ -1,0 +1,25 @@
+[tool.poetry]
+name = "keprompt"
+version = "0.0.1"
+description = "A prompt engineering tool for large language models"
+authors = ["Your Name <your.email@example.com>"]
+readme = "README.md"
+packages = [{include = "keprompt"}]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+keyring = "^24.0.0"
+rich = "^13.0.0"
+requests = "^2.31.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.0.0"
+black = "^23.0.0"
+isort = "^5.12.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.scripts]
+keprompt = "keprompt.keprompt:main"
