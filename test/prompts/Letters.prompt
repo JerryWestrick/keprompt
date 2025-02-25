@@ -1,0 +1,19 @@
+.# Test send image and function calls.
+.# .llm "model": "claude-3-5-sonnet-20241022"
+.# .llm  "model": "gemini-2.0-flash-exp"
+.# .llm  "model": "pixtral-large-latest"
+.# .llm "model": "gpt-4o"
+.# .llm "model": "grok-2-vision-latest"
+.llm "model": "o1-mini"
+.system
+You are to provide short concise answers, preferably using just a single letter.
+.user
+.image Letter-A.png
+what letter is in the image?
+.assistant
+A
+.user
+New image:
+.image Letter-B.png
+Write the letter found in this image to the file B.txt
+.exec

@@ -1,0 +1,7 @@
+.# Test Different models usage: "--param model gpt-4o"
+.llm "model": "<<model>>"
+.system
+You are to provide short concise answers.
+.user
+Generate the python code implementing the game of snake, and write the code to the file snake.py using the provided writefile function.
+.exec
