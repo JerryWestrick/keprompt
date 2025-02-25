@@ -600,8 +600,7 @@ class StmtLlm(StmtPrompt):
         vm.print(self.console_str())
         try:
             if vm.llm:
-                raise (StmtSyntaxError(f".llm syntax: only one .lls statement allowed in vm {vm.filename
-                }"))
+                raise (StmtSyntaxError(f".llm syntax: only one .lls statement allowed in vm {vm.filename}"))
 
             if self.value[0] != '{':
                 self.value = "{" + self.value + "}"

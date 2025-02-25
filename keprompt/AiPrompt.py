@@ -148,7 +148,10 @@ class AiResult(AiMessagePart):
         return {"type": "tool_result", "tool_use_id": self.id, "content": self.result}
 
     def print_message(self) -> str:
-        return f"Rtn  {self.name}(id={self.id}, content:{self.result.replace('\n', '\\n')})"
+        replaced = self.result.replace('\n', '\\n')
+        if len(replaced) > MAX_LINE_LENGTH:
+            replaced = replaced[:MAX_LINE_LENGTH] + '...'
+        return f"Rtn  {self.name}(id={self.id}, content:{replaced})"
 
 
 class AiMessage:

@@ -1,3 +1,5 @@
+"""KePrompt package"""
+
 from .AiPrompt import AiPrompt
 from .AiAnthropic import AiAnthropic
 from .AiDeepSeek import AiDeepSeek

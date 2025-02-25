@@ -1,8 +1,8 @@
 [tool.poetry]
 name = "keprompt"
-version = "0.0.1"
+version = {attr = "keprompt.version.__version__"}
 description = "A prompt engineering tool for large language models"
-authors = ["Your Name <your.email@example.com>"]
+authors = ["Jerry Westrick <jerry@westrick.com>"]
 readme = "README.md"
 packages = [{include = "keprompt"}]
 
