@@ -1,8 +1,29 @@
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[project]
+name = "keprompt"
+version = "0.9.1"
+description = "A prompt engineering tool for large language models"
+readme = "README.md"
+authors = [
+    {name = "Jerry Westrick", email = "jerry@westrick.com"}
+]
+requires-python = ">=3.8"
+
+[project.scripts]
+keprompt = "keprompt.keprompt:main"
+
+#[project.dynamic]
+# If you want to use version from version.py, add it here
+# version
+
 [tool.poetry]
 name = "keprompt"
-version = {attr = "keprompt.version.__version__"}
+version = "0.0.1"
 description = "A prompt engineering tool for large language models"
-authors = ["Jerry Westrick <jerry@westrick.com>"]
+authors = ["Your Name <your.email@example.com>"]
 readme = "README.md"
 packages = [{include = "keprompt"}]
 
@@ -16,10 +37,6 @@ requests = "^2.31.0"
 pytest = "^7.0.0"
 black = "^23.0.0"
 isort = "^5.12.0"
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.scripts]
 keprompt = "keprompt.keprompt:main"

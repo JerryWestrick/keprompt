@@ -1,5 +1,5 @@
-.# Test Different models usage: "--param model gpt-4o"
-.llm "model": "<<model>>"
+.# Make snake program with gpt-4o
+.llm "model": "gpt-4o"
 .system
 You are to provide short concise answers.
 .user
