@@ -13,7 +13,7 @@ from rich.table import Table
 
 from .AiRegistry import AiRegistry
 from .keprompt_functions import DefinedToolsArray
-from .keprompt_vm import VM, print_prompt_code
+from .keprompt_vm import VM, print_prompt_code, print_statement_types
 from .version import __version__
 
 console = Console()
@@ -141,6 +141,7 @@ def get_cmd_args() -> argparse.Namespace:
     parser.add_argument('-v', '--version', action='store_true', help='Show version information and exit')
     parser.add_argument('--param', nargs=2, action='append',metavar=('key', 'value'),help='Add key/value pairs')
     parser.add_argument('-m', '--models', action='store_true', help='List company models information and exit')
+    parser.add_argument('-s', '--statements', action='store_true', help='List supported prompt statement types and exit')
     parser.add_argument('-f', '--functions', action='store_true', help='List functions available to AI and exit')
     parser.add_argument('-p', '--prompts', nargs='?', const='*', help='List Prompts')
     parser.add_argument('-c', '--code', nargs='?', const='*', help='List code in Prompts')
@@ -155,13 +156,16 @@ def get_cmd_args() -> argparse.Namespace:
 
 from pathlib import Path
 
-
-def glob_prompt(prompt_name: str) -> list[Path]:
+def prompt_pattern(prompt_name: str) -> str:
     if '*' in prompt_name:
         prompt_pattern = Path('prompts') / f"{prompt_name}.prompt"
     else:
         prompt_pattern = Path('prompts') / f"{prompt_name}*.prompt"
-    return sorted(Path('.').glob(str(prompt_pattern)))
+    return prompt_pattern
+
+def glob_prompt(prompt_name: str) -> list[Path]:
+    prompt_p = prompt_pattern(prompt_name)
+    return sorted(Path('.').glob(str(prompt_p)))
 
 def main():
     # Ensure 'prompts' directory exists
@@ -206,6 +210,18 @@ def main():
         print_models()
         return
 
+    if args.statements:
+        print_statement_types()
+        return
+
+    if args.statements:
+        # Print supported prompt language statement types and exit
+        console.print("[bold cyan]Supported Prompt Statement Types:[/]")
+        console.print("[green]- Input[/]")
+        console.print("[green]- Output[/]")
+        console.print("[green]- Decision[/]")
+        console.print("[green]- Loop[/]")
+
     if args.functions:
         # Print list of functions and exit
         print_functions()
@@ -221,7 +237,8 @@ def main():
         if glob_files:
             print_prompt_names(glob_files)
         else:
-            log.error(f"[bold red]No Prompt files found for ({args.list})[/bold red]", extra={"markup": True})
+            pname = prompt_pattern(args.prompts)
+            log.error(f"[bold red]No Prompt files found with {pname}[/bold red]", extra={"markup": True})
         return
 
     if args.list:
@@ -231,8 +248,8 @@ def main():
         if glob_files:
             print_prompt_lines(glob_files)
         else:
-            
-            log.error(f"[bold red]No Prompt files found ({args.list})[/bold red]", extra={"markup": True})
+            pname = prompt_pattern(args.list)
+            log.error(f"[bold red]No Prompt files found with {pname}[/bold red]", extra={"markup": True})
         return
 
     if args.code:
@@ -242,7 +259,8 @@ def main():
         if glob_files:
             print_prompt_code(glob_files)
         else:
-            log.error(f"[bold red]No Prompt files found ({args.prompts})[/bold red]", extra={"markup": True})
+            pname = prompt_pattern(args.code)
+            log.error(f"[bold red]No Prompt files found with {pname}[/bold red]", extra={"markup": True})
         return
 
     if args.execute:
@@ -256,8 +274,11 @@ def main():
                 step.parse_prompt()
                 step.execute()
         else:
-            log.error(f"[bold red]No execute files found for ({args.execute})[/bold red]", extra={"markup": True})
+            pname = prompt_pattern(args.execute)
+            log.error(f"[bold red]No Prompt files found with {pname}[/bold red]", extra={"markup": True})
         return
+
+
 
 
 if __name__ == "__main__":

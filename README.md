@@ -32,7 +32,16 @@ pip install keprompt
 # Install from source
 git clone https://github.com/yourusername/keprompt.git
 cd keprompt
-poetry install
+
+# Create and activate virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install for development
+pip install -e .
+
+# For development with additional tools
+pip install -r requirements-dev.txt
 ```
 
 ### Quick Start
@@ -307,3 +316,36 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ## License
 
 [MIT](LICENSE)
+
+
+# Todos, Errors, open points
+- Done: Crash if no .prompt found
+- Done: Was invalid api-key!
+- Done: Added cmd arg --statements...
+- 
+
+## Release Process
+
+To release a new version:
+
+1. Install build tools if needed:
+   ```bash
+   pip install build twine
+   ```
+
+2. Run the release script:
+   ```bash
+   ./release.py
+   ```
+   
+   This will:
+   - Check for uncommitted changes in Git
+   - Verify if the current version is correct
+   - Build distribution packages
+   - Upload to TestPyPI (optional)
+   - Upload to PyPI (if confirmed)
+
+3. Alternatively, manually:
+   - Update version in `keprompt/version.py`
+   - Build: `python -m build`
+   - Upload: `python -m twine upload dist/*`

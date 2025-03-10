@@ -1,42 +1,31 @@
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "keprompt"
-version = "0.9.1"
+dynamic = ["version"]
 description = "A prompt engineering tool for large language models"
 readme = "README.md"
 authors = [
     {name = "Jerry Westrick", email = "jerry@westrick.com"}
 ]
 requires-python = ">=3.8"
+dependencies = [
+    "keyring>=24.0.0",
+    "rich>=13.0.0",
+    "requests>=2.31.0"
+]
 
 [project.scripts]
 keprompt = "keprompt.keprompt:main"
 
-#[project.dynamic]
-# If you want to use version from version.py, add it here
-# version
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "black>=23.0.0",
+    "isort>=5.12.0"
+]
 
-[tool.poetry]
-name = "keprompt"
-version = "0.0.1"
-description = "A prompt engineering tool for large language models"
-authors = ["Your Name <your.email@example.com>"]
-readme = "README.md"
-packages = [{include = "keprompt"}]
-
-[tool.poetry.dependencies]
-python = "^3.8"
-keyring = "^24.0.0"
-rich = "^13.0.0"
-requests = "^2.31.0"
-
-[tool.poetry.group.dev.dependencies]
-pytest = "^7.0.0"
-black = "^23.0.0"
-isort = "^5.12.0"
-
-[tool.poetry.scripts]
-keprompt = "keprompt.keprompt:main"
+[tool.setuptools.dynamic]
+version = {attr = "keprompt.version.__version__"}

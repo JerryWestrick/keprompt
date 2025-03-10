@@ -421,6 +421,21 @@ class StmtPrompt:
 
 
 class StmtAssistant(StmtPrompt):
+    """
+    Handles the execution of an assistant-related statement in the VM.
+
+    This class represents a `.assistant` keyword statement from the prompt file. 
+    It adds a message with the role of 'assistant' to the AI prompt context. 
+    If no value is provided, an empty message is created for the assistant role.
+
+    Attributes:
+        msg_no (int): The message number in the execution sequence.
+        keyword (str): The keyword associated with the statement (e.g., '.assistant').
+        value (str): The value/content of the statement.
+
+    Methods:
+        execute(vm: VM): Executes the statement and updates the VM's prompt with an assistant's message.
+    """
 
     def execute(self, vm: VM) -> None:
         if vm.debug and 'Statements' in vm.debug:
@@ -437,6 +452,20 @@ class StmtAssistant(StmtPrompt):
 
 
 class StmtClear(StmtPrompt):
+    """
+    Handles the execution of a clear statement in the VM.
+
+    This class represents a `.clear` keyword statement which is used to delete
+    specific files or patterns of files from the system, as specified in the prompt file.
+
+    Attributes:
+        msg_no (int): The message number in the execution sequence.
+        keyword (str): The keyword associated with the statement (e.g., '.clear').
+        value (str): The value/content of the statement, expected to be a JSON-encoded list of file patterns.
+
+    Methods:
+        execute(vm: VM): Executes the `.clear` statement by deleting the specified files.
+    """
 
     def execute(self, vm: VM) -> None:
         if vm.debug and 'Statements' in vm.debug:
@@ -477,6 +506,23 @@ class StmtClear(StmtPrompt):
 
 
 class StmtCmd(StmtPrompt):
+    """
+    Handles the execution of a command defined in a prompt file.
+
+    This class represents a `.cmd` keyword statement in the prompt file. The statement 
+    specifies a function to be executed along with arguments. The `execute` method 
+    parses the command, validates it against the available functions in `DefinedFunctions`, 
+    executes the function, and appends the function's output to the AI prompt context.
+
+    Attributes:
+        msg_no (int): The message number in the execution sequence.
+        keyword (str): The keyword associated with the statement (e.g., '.cmd').
+        value (str): The command string containing the function name and arguments.
+
+    Methods:
+        execute(vm: VM): Parses, validates, executes the specified function, and integrates
+                         its output into the Virtual Machine's prompt context.
+    """
 
     def execute(self, vm: VM) -> None:
         """Execute a command that was defined in a prompt file (.prompt)"""
@@ -511,10 +557,39 @@ class StmtCmd(StmtPrompt):
 
 
 class StmtComment(StmtPrompt):
-    pass
+    """
+    Handles the execution of a comment in the prompt file.
+
+    This class represents a `.comment` or `.#` keyword statement in the prompt file. 
+    The statement is added for informational purposes and has no effect on the Virtual Machine's state.
+    """
+
+    def execute(self, vm: VM) -> None:
+        """
+        Executes the comment statement by printing it for informational display.
+        """
+        vm.print(self.console_str())
 
 
 class StmtDebug(StmtPrompt):
+    """
+    Handles the execution of a debug command in the prompt file.
+
+    This class represents a `.debug` keyword statement in the prompt file. It is used to inspect
+    the internal state of the Virtual Machine (VM) during runtime for debugging purposes.
+    The `.debug` command accepts a list of elements to display or inspects the entire state 
+    if 'all' is passed.
+
+    Attributes:
+        msg_no (int): The message number in the execution sequence.
+        keyword (str): The keyword associated with the statement (e.g., '.debug').
+        value (str): The value/content of the statement, specifying which elements of the VM's 
+                     state to debug.
+
+    Methods:
+        execute(vm: VM): Parses the debugging parameters, validates the input, and outputs the 
+                         requested state information of the VM through its debug_print method.
+    """
 
     def execute(self, vm: VM) -> None:
 
@@ -543,9 +618,33 @@ class StmtDebug(StmtPrompt):
 
 
 class StmtExec(StmtPrompt):
+    """
+    Handles the execution of an API call to a Language Learning Model (LLM).
+
+    This class represents a `.exec` statement, which is responsible for 
+    sending a constructed prompt to the configured LLM, processing the response, 
+    and logging the execution details to the system, both for output monitoring 
+    and for debugging purposes.
+
+    Attributes:
+        vm (VM): The virtual machine instance that contains the program's state.
+        msg_no (int): The statement number in the execution sequence.
+        keyword (str): The statement keyword (e.g., '.exec').
+        value (str): The statement's content or command.
+    """
 
     def execute(self, vm: VM) -> None:
-        """Execute a request to an LLM"""
+        """
+        Sends the current prompt context to the LLM, handles the response, and 
+        logs execution details such as timing and tokens usage.
+
+        Args:
+            vm (VM): The virtual machine context in which the statement is executed.
+
+        Returns:
+            None: The execution modifies the VM's state directly by adding the response to 
+                  the prompt context and logging the conversation data.
+        """
         header = f"[bold white]{VERTICAL}[/][white]{self.msg_no:02}[/] [cyan]{self.keyword:<8}[/]"
         # vm.print(header, end='')
 
@@ -569,13 +668,44 @@ class StmtExec(StmtPrompt):
 
 
 class StmtExit(StmtPrompt):
+    """
+    Handles the execution of the exit statement in the prompt file.
+
+    This class represents a `.exit` keyword statement used to terminate the prompt execution process. 
+    When executed, it halts the further processing of statements in the Virtual Machine (VM).
+
+    Attributes:
+        msg_no (int): The message number in the execution sequence.
+        keyword (str): The keyword associated with the statement (e.g., '.exit').
+        value (str): The value associated with the statement, which is generally unused for '.exit'.
+    
+    Methods:
+        execute(vm: VM): Terminates the statement processing by exiting from the Virtual Machine's execution context.
+    """
 
     def execute(self, vm: VM) -> None:
         vm.print(self.console_str())
 
 
 class StmtInclude(StmtPrompt):
-    # Read a file and add its content to last_msg
+    """
+    Handles the execution of an include statement in the prompt file.
+
+    This class represents the `.include` keyword statement, which loads the 
+    content from another file and appends it to the last message in the prompt. 
+    The statement supports dynamic filename substitution using variables in the 
+    Virtual Machine's variable dictionary.
+
+    Attributes:
+        vm (VM): The instance of the Virtual Machine holding execution state.
+        msg_no (int): The message number in the execution sequence.
+        keyword (str): The statement keyword (e.g., '.include').
+        value (str): The file name or path to be included, supporting substitution.
+
+    Methods:
+        execute(vm: VM): Resolves the filename, reads its content, and appends
+                         it as text to the last message in the prompt.
+    """
 
     def execute(self, vm: VM) -> None:
         filename = vm.substitute(self.value)
@@ -586,7 +716,21 @@ class StmtInclude(StmtPrompt):
 
 
 class StmtImage(StmtPrompt):
-    # Read an Image file and add its content to last_msg
+    """
+    Handles the execution of an image-related statement in the VM.
+
+    This class represents a `.image` keyword statement that adds an image
+    to the AI prompt context. It incorporates a provided image file into the
+    conversation as an input element.
+
+    Attributes:
+        msg_no (int): The message number in the execution sequence.
+        keyword (str): The keyword associated with the statement (e.g., '.image').
+        value (str): The value associated with the statement, typically the image file path.
+
+    Methods:
+        execute(vm: VM): Adds the specified image to the VM's prompt context for processing.
+    """
 
     def execute(self, vm: VM) -> None:
         vm.print(self.console_str())
@@ -595,6 +739,22 @@ class StmtImage(StmtPrompt):
 
 
 class StmtLlm(StmtPrompt):
+    """
+    Handles the execution of an LLM (Language Learning Model) setup in the Virtual Machine (VM).
+
+    This class represents a `.llm` keyword statement in the prompt file. 
+    It is responsible for configuring the LLM's model parameters, fetching the API key, 
+    and ensuring required settings are loaded into the VM for interaction with the defined LLM.
+
+    Attributes:
+        msg_no (int): The message number in the execution sequence.
+        keyword (str): The statement keyword (e.g., '.llm').
+        value (str): The parameters for the LLM's configuration, typically in JSON format.
+
+    Methods:
+        execute(vm: VM): Parses the parameters for the LLM, validates the configuration, 
+                         loads the model into the VM, and retrieves the necessary API key.
+    """
 
     def execute(self, vm: VM) -> None:
         vm.print(self.console_str())
@@ -649,6 +809,22 @@ class StmtLlm(StmtPrompt):
 
 
 class StmtSystem(StmtPrompt):
+    """
+    Handles the execution of a system message in the Virtual Machine (VM).
+
+    This class represents a `.system` keyword statement in the prompt file and
+    allows for adding a system role message into the AI conversation context.
+    A system role is used to provide instructions or contextual rules for the AI.
+
+    Attributes:
+        msg_no (int): The message number in the execution sequence.
+        keyword (str): The keyword associated with the statement (e.g., '.system').
+        value (str): The value/content of the statement, which is the system message.
+
+    Methods:
+        execute(vm: VM): Adds a system message to the VM's prompt context. If no 
+                         message is specified, an empty system message is added.
+    """
 
     def execute(self, vm: VM) -> None:
         vm.print(self.console_str())
@@ -659,6 +835,22 @@ class StmtSystem(StmtPrompt):
 
 
 class StmtText(StmtPrompt):
+    """
+    Handles the execution of a text statement in the Virtual Machine (VM).
+
+    This class represents a `.text` keyword statement in the prompt file. It is 
+    responsible for handling user-provided text and appending it as part of the 
+    conversation context.
+
+    Attributes:
+        msg_no (int): The message number in the execution sequence.
+        keyword (str): The keyword associated with the statement (e.g., '.text').
+        value (str): The value/content of the statement, representing the text input.
+
+    Methods:
+        execute(vm: VM): Adds the text to the last message in the VM's prompt context 
+                         or creates a new message if no prior context exists.
+    """
 
     def execute(self, vm: VM) -> None:
         vm.print(self.console_str())
@@ -669,6 +861,22 @@ class StmtText(StmtPrompt):
 
 
 class StmtUser(StmtPrompt):
+    """
+    Handles the execution of a user-related statement in the VM.
+
+    This class represents a `.user` keyword statement in the prompt file. It 
+    allows adding user role messages to the AI prompt context, creating or 
+    appending new messages as needed.
+
+    Attributes:
+        msg_no (int): The message number in the execution sequence.
+        keyword (str): The keyword associated with the statement (e.g., '.user').
+        value (str): The value/content of the statement, representing the user's input.
+
+    Methods:
+        execute(vm: VM): Adds the user's text input to the prompt context or 
+                         appends it as a new user message if no prior context exists.
+    """
 
     def execute(self, vm: VM) -> None:
         vm.print(self.console_str())
@@ -698,6 +906,17 @@ StatementTypes: dict[str, type(StmtPrompt)] = {
 keywords = StatementTypes.keys()
 
 
-def make_statement(vm: VM, msg_no: int, keyword: str, value: str) -> StmtPrompt:
-    my_class = StatementTypes[keyword]
-    return my_class(vm, msg_no, keyword, value)
+def print_statement_types():
+    from rich.table import Table
+    from rich.console import Console
+    console = Console()
+    table = Table(title="Supported Statement Types", show_header=True, header_style="bold cyan", width=terminal_width,)
+
+    table.add_column("Keyword", style="green")
+    table.add_column("Description", style="yellow")
+
+    for k, v in StatementTypes.items():
+        table.add_row(k, v.__doc__)
+        
+
+    console.print(table)

@@ -6,6 +6,7 @@ from typing import Any, Dict
 from rich.console import Console
 from rich.prompt import Prompt
 from rich.theme import Theme
+from rich.table import Table
 
 from .keprompt_util import backup_file
 
@@ -292,6 +293,7 @@ DefinedToolsArray = [
         }
     }
 ]
+
 
 # Mapping of function names to their implementations
 DefinedFunctions: Dict[str, Any] = {
