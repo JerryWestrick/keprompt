@@ -1,0 +1,9 @@
+include README.md
+include LICENSE
+include requirements.txt
+include requirements-dev.txt
+recursive-include keprompt *
+recursive-include prompts *.prompt
+recursive-exclude keprompt __pycache__
+recursive-exclude keprompt *.pyc
+recursive-exclude logs *
