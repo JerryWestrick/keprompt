@@ -905,6 +905,9 @@ StatementTypes: dict[str, type(StmtPrompt)] = {
 
 keywords = StatementTypes.keys()
 
+def make_statement(vm: VM, msg_no: int, keyword: str, value: str) -> StmtPrompt:
+    my_class = StatementTypes[keyword]
+    return my_class(vm, msg_no, keyword, value)
 
 def print_statement_types():
     from rich.table import Table
