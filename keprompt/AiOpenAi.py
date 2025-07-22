@@ -74,15 +74,27 @@ class AiOpenAi(AiCompany):
 # Register handler and models
 AiRegistry.register_handler(company_name="OpenAI", handler_class=AiOpenAi)
 
+# OpenAI model definitions and pricing
+# Official pricing source: https://openai.com/api/pricing/
+# Last updated: January 2025
 OpenAI_Models = {
-    "gpt-4o-mini": {"company": "OpenAI", "model": "gpt-4o-mini", "input": 0.00000015, "output": 0.0000006, "context": 128000},
-    "gpt-4o": {"company": "OpenAI", "model": "gpt-4o", "input": 0.000005, "output": 0.00002, "context": 128000},
-    "gpt-4o-2024-05-13": {"company": "OpenAI", "model": "gpt-4o-2024-05-13", "input": 0.000005, "output": 0.000015, "context": 128000},
-    "gpt-4o-mini-2024-07-18": {"company": "OpenAI", "model": "gpt-4o-mini-2024-07-18", "input": 0.00000015, "output": 0.0000006, "context": 128000},
-    "gpt-4o-2024-08-06": {"company": "OpenAI", "model": "gpt-4o-2024-08-06", "input": 0.000005, "output": 0.00002, "context": 128000},
-    "o1": {"company": "OpenAI", "model": "o1", "input": 0.000003, "output": 0.000012, "context": 128000},
-    "o1-mini": {"company": "OpenAI", "model": "o1-mini", "input": 0.0000006, "output": 0.0000024, "context": 128000},
-    "o3-mini": {"company": "OpenAI", "model": "o3-mini", "input": 0.0000011, "output": 0.0000044, "context": 128000}
+    # Latest GPT models
+    "gpt-4.1": {"company": "OpenAI", "model": "gpt-4.1", "input": 0.000002, "output": 0.000008, "context": 128000, "modality_in": "Text+Vision", "modality_out": "Text", "functions": "Yes", "description": "Smartest model for complex tasks", "cutoff": "See docs"},
+    "gpt-4.1-mini": {"company": "OpenAI", "model": "gpt-4.1-mini", "input": 0.0000004, "output": 0.0000016, "context": 128000, "modality_in": "Text+Vision", "modality_out": "Text", "functions": "Yes", "description": "Affordable model balancing speed and intelligence", "cutoff": "See docs"},
+    "gpt-4.1-nano": {"company": "OpenAI", "model": "gpt-4.1-nano", "input": 0.0000001, "output": 0.0000004, "context": 128000, "modality_in": "Text", "modality_out": "Text", "functions": "Yes", "description": "Fastest, most cost-effective model for low-latency tasks", "cutoff": "See docs"},
+    
+    # Reasoning models
+    "o3": {"company": "OpenAI", "model": "o3", "input": 0.000002, "output": 0.000008, "context": 128000, "modality_in": "Text", "modality_out": "Text", "functions": "Yes", "description": "Most powerful reasoning model with leading performance", "cutoff": "See docs"},
+    "o4-mini": {"company": "OpenAI", "model": "o4-mini", "input": 0.0000011, "output": 0.0000044, "context": 128000, "modality_in": "Text", "modality_out": "Text", "functions": "Yes", "description": "Faster, cost-efficient reasoning model", "cutoff": "See docs"},
+    
+    # Legacy GPT-4o models (still available)
+    "gpt-4o": {"company": "OpenAI", "model": "gpt-4o", "input": 0.000005, "output": 0.00002, "context": 128000, "modality_in": "Text+Vision", "modality_out": "Text", "functions": "Yes", "description": "Advanced multimodal model for complex tasks", "cutoff": "2023-10"},
+    "gpt-4o-mini": {"company": "OpenAI", "model": "gpt-4o-mini", "input": 0.0000006, "output": 0.0000024, "context": 128000, "modality_in": "Text+Vision", "modality_out": "Text", "functions": "Yes", "description": "Affordable multimodal model", "cutoff": "See docs"},
+    
+    # Legacy reasoning models (still available)
+    "o1": {"company": "OpenAI", "model": "o1", "input": 0.000003, "output": 0.000012, "context": 128000, "modality_in": "Text", "modality_out": "Text", "functions": "Limited", "description": "Reasoning model for complex problems", "cutoff": "See docs"},
+    "o1-mini": {"company": "OpenAI", "model": "o1-mini", "input": 0.0000006, "output": 0.0000024, "context": 128000, "modality_in": "Text", "modality_out": "Text", "functions": "Limited", "description": "Smaller reasoning model", "cutoff": "See docs"},
+    "o3-mini": {"company": "OpenAI", "model": "o3-mini", "input": 0.0000011, "output": 0.0000044, "context": 128000, "modality_in": "Text", "modality_out": "Text", "functions": "Yes", "description": "Compact reasoning model", "cutoff": "See docs"}
 }
 
 AiRegistry.register_models_from_dict(model_definitions=OpenAI_Models)

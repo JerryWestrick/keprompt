@@ -68,10 +68,20 @@ class AiXai(AiCompany):
 # Register handler and models
 AiRegistry.register_handler(company_name="XAI", handler_class=AiXai)
 
+# XAI model definitions and pricing
+# Official pricing source: https://x.ai/api
+# Last updated: January 2025
 XAI_Models = {
-    "grok-beta":            {"company": "XAI", "model": "grok-beta",            "input": 0.000005, "output": 0.000015, "context": 131072},
-    "grok-vision-beta":     {"company": "XAI", "model": "grok-vision-beta",     "input": 0.000005, "output": 0.000015, "context": 8192},
-    "grok-2-latest":        {"company": "XAI", "model": "grok-2-latest",        "input": 0.000002, "output": 0.000010, "context": 131072},
-    "grok-2-vision-latest": {"company": "XAI", "model": "grok-2-vision-latest", "input": 0.000002, "output": 0.000010, "context": 8192}}
+    # Latest Grok models
+    "grok-4": {"company": "XAI", "model": "grok-4", "input": 0.000003, "output": 0.000015, "context": 256000, "modality_in": "Text+Vision", "modality_out": "Text", "functions": "Yes", "description": "The world's best model", "cutoff": "See docs"},
+    "grok-3": {"company": "XAI", "model": "grok-3", "input": 0.000003, "output": 0.000015, "context": 131072, "modality_in": "Text+Vision", "modality_out": "Text", "functions": "Yes", "description": "Flagship enterprise model with advanced reasoning", "cutoff": "See docs"},
+    "grok-3-mini": {"company": "XAI", "model": "grok-3-mini", "input": 0.0000003, "output": 0.0000005, "context": 131072, "modality_in": "Text", "modality_out": "Text", "functions": "Yes", "description": "Lightweight reasoning model for cost-effective applications", "cutoff": "See docs"},
+    
+    # Legacy models (still available)
+    "grok-2-1212": {"company": "XAI", "model": "grok-2-1212", "input": 0.000002, "output": 0.000010, "context": 131072, "modality_in": "Text", "modality_out": "Text", "functions": "Yes", "description": "Updated Grok-2 model with improved performance", "cutoff": "See docs"},
+    "grok-2-vision-1212": {"company": "XAI", "model": "grok-2-vision-1212", "input": 0.000002, "output": 0.000010, "context": 131072, "modality_in": "Text+Vision", "modality_out": "Text", "functions": "Yes", "description": "Vision-capable Grok-2 model", "cutoff": "See docs"},
+    "grok-beta": {"company": "XAI", "model": "grok-beta", "input": 0.000005, "output": 0.000015, "context": 131072, "modality_in": "Text", "modality_out": "Text", "functions": "Yes", "description": "Beta version of Grok with experimental features", "cutoff": "See docs"},
+    "grok-vision-beta": {"company": "XAI", "model": "grok-vision-beta", "input": 0.000005, "output": 0.000015, "context": 8192, "modality_in": "Text+Vision", "modality_out": "Text", "functions": "Yes", "description": "Beta vision model with image understanding capabilities", "cutoff": "See docs"}
+}
 
 AiRegistry.register_models_from_dict(model_definitions=XAI_Models)

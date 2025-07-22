@@ -56,6 +56,11 @@ def print_models():
     table.add_column("Max Token", style="magenta", justify="right")
     table.add_column("$/mT In", style="green", justify="right")
     table.add_column("$/mT Out", style="green", justify="right")
+    table.add_column("Input", style="blue", no_wrap=True)
+    table.add_column("Output", style="blue", no_wrap=True)
+    table.add_column("Functions", style="yellow", no_wrap=True)
+    table.add_column("Cutoff", style="dim", no_wrap=True)
+    table.add_column("Description", style="white")
 
     # Sort by LLM name, then model.
     sortable_keys = [f"{AiRegistry.models[model_name].company}:{model_name}" for model_name in AiRegistry.models.keys()]
@@ -66,10 +71,32 @@ def print_models():
         company, model_name = k.split(':', maxsplit=1)
         model = AiRegistry.get_model(model_name)
         if company != last_company:
-            table.add_row(company,model_name,str(model.context),f"{model.input*1_000_000:06.4f}",f"{model.output*1_000_000:06.4f}")
+            table.add_row(
+                company,
+                model_name,
+                str(model.context),
+                f"{model.input*1_000_000:06.4f}",
+                f"{model.output*1_000_000:06.4f}",
+                model.modality_in,
+                model.modality_out,
+                model.functions,
+                model.cutoff,
+                model.description
+            )
             last_company = company
         else:
-            table.add_row("", model_name, str(model.context), f"{model.input*1_000_000:06.4f}",f"{model.output*1_000_000:06.4f}")
+            table.add_row(
+                "",
+                model_name,
+                str(model.context),
+                f"{model.input*1_000_000:06.4f}",
+                f"{model.output*1_000_000:06.4f}",
+                model.modality_in,
+                model.modality_out,
+                model.functions,
+                model.cutoff,
+                model.description
+            )
 
     console.print(table)
 

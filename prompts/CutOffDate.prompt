@@ -1,0 +1,7 @@
+.# Ask a model it's cut off date
+.llm "model": "gpt-4o"
+.user
+What is the cutoff date of the info that was used to train you?
+Please answer just the date as YYYY-MM.
+.exec
+

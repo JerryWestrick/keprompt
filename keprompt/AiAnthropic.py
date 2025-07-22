@@ -75,12 +75,22 @@ AnthropicToolsArray = [
     for tool in DefinedToolsArray
 ]
 
+# Anthropic model definitions and pricing
+# Official pricing source: https://www.anthropic.com/pricing
+# Last updated: January 2025
 Anthropic_Models = {
-  "claude-3-7-sonnet-latest": {"company": "Anthropic","model": "claude-3-7-sonnet-latest", "input": 0.000003,    "output": 0.000015,   "context": 8192},
-  "claude-3-5-sonnet-latest": {"company": "Anthropic","model": "claude-3-5-sonnet-latest", "input": 0.000003,    "output": 0.000015,   "context": 8192},
-  "claude-3-5-haiku-latest":  {"company": "Anthropic","model": "claude-3-5-haiku-latest" , "input": 0.00000015,  "output": 0.000004,   "context": 8192},
+    # Latest Claude 4 models
+    "claude-opus-4": {"company": "Anthropic", "model": "claude-opus-4", "input": 0.000015, "output": 0.000075, "context": 200000, "modality_in": "Text+Vision", "modality_out": "Text", "functions": "Yes", "description": "Most intelligent model for complex tasks", "cutoff": "See docs"},
+    "claude-sonnet-4": {"company": "Anthropic", "model": "claude-sonnet-4", "input": 0.000003, "output": 0.000015, "context": 200000, "modality_in": "Text+Vision", "modality_out": "Text", "functions": "Yes", "description": "Optimal balance of intelligence, cost, and speed", "cutoff": "See docs"},
+    
+    # Claude 3.5 models (still available)
+    "claude-haiku-3.5": {"company": "Anthropic", "model": "claude-haiku-3.5", "input": 0.0000008, "output": 0.000004, "context": 200000, "modality_in": "Text+Vision", "modality_out": "Text", "functions": "Yes", "description": "Fastest, most cost-effective model", "cutoff": "See docs"},
+    
+    # Legacy Claude 3 models (still available)
+    "claude-opus-3": {"company": "Anthropic", "model": "claude-opus-3", "input": 0.000015, "output": 0.000075, "context": 200000, "modality_in": "Text+Vision", "modality_out": "Text", "functions": "Yes", "description": "Legacy most intelligent model", "cutoff": "See docs"},
+    "claude-sonnet-3.7": {"company": "Anthropic", "model": "claude-sonnet-3.7", "input": 0.000003, "output": 0.000015, "context": 200000, "modality_in": "Text+Vision", "modality_out": "Text", "functions": "Yes", "description": "Legacy balanced model", "cutoff": "See docs"},
+    "claude-haiku-3": {"company": "Anthropic", "model": "claude-haiku-3", "input": 0.00000025, "output": 0.00000125, "context": 200000, "modality_in": "Text", "modality_out": "Text", "functions": "Yes", "description": "Legacy fastest model", "cutoff": "See docs"},
 }
 
 AiRegistry.register_handler(company_name="Anthropic", handler_class=AiAnthropic)
 AiRegistry.register_models_from_dict(model_definitions=Anthropic_Models)
-

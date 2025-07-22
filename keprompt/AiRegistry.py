@@ -10,6 +10,11 @@ class AiModel:
     input: float
     output: float
     context: int
+    modality_in: str = "Text"
+    modality_out: str = "Text"
+    functions: str = "Yes"
+    description: str = ""
+    cutoff: str = "2024-04"
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'AiModel':
@@ -54,4 +59,3 @@ class AiRegistry:
         if model_name not in cls.models:
             raise ValueError(f"Model {model_name} not found in configuration")
         return cls.models[model_name]
-

@@ -65,10 +65,27 @@ class AiGoogle(AiCompany):
 # Register handler and models
 AiRegistry.register_handler(company_name="Google", handler_class=AiGoogle)
 
+# Google model definitions and pricing
+# Official pricing source: https://ai.google.dev/pricing
+# Last updated: January 2025
 Google_Models = {
-    "gemini-2.0-flash-exp": {"company": "Google", "model": "gemini-2.0-flash-exp", "input": 0.000000, "output": 0.000000, "context": 8192},
-    "gemini-1.5-flash": {"company": "Google", "model": "gemini-1.5-flash", "input": 0.000000, "output": 0.000000, "context": 8192},
-    "gemini-1.5-flash-8b": {"company": "Google", "model": "gemini-1.5-flash-8b", "input": 0.000000, "output": 0.000000, "context": 8192}
+    # Latest Gemini 2.5 models
+    "gemini-2.5-pro": {"company": "Google", "model": "gemini-2.5-pro", "input": 0.00000125, "output": 0.00001, "context": 1000000, "modality_in": "Text+Vision+Audio", "modality_out": "Text", "functions": "Yes", "description": "State-of-the-art multipurpose model, excels at coding and complex reasoning", "cutoff": "See docs"},
+    "gemini-2.5-flash": {"company": "Google", "model": "gemini-2.5-flash", "input": 0.0000003, "output": 0.0000025, "context": 1000000, "modality_in": "Text+Vision+Audio", "modality_out": "Text", "functions": "Yes", "description": "First hybrid reasoning model with thinking budgets", "cutoff": "See docs"},
+    "gemini-2.5-flash-lite": {"company": "Google", "model": "gemini-2.5-flash-lite", "input": 0.0000001, "output": 0.0000004, "context": 1000000, "modality_in": "Text+Vision+Audio", "modality_out": "Text", "functions": "Yes", "description": "Smallest and most cost effective model, built for at scale usage", "cutoff": "See docs"},
+    
+    # Gemini 2.0 models
+    "gemini-2.0-flash": {"company": "Google", "model": "gemini-2.0-flash", "input": 0.0000001, "output": 0.0000004, "context": 1000000, "modality_in": "Text+Vision+Audio", "modality_out": "Text+Image", "functions": "Yes", "description": "Most balanced multimodal model, built for the era of Agents", "cutoff": "See docs"},
+    "gemini-2.0-flash-lite": {"company": "Google", "model": "gemini-2.0-flash-lite", "input": 0.000000075, "output": 0.0000003, "context": 1000000, "modality_in": "Text", "modality_out": "Text", "functions": "Yes", "description": "Smallest and most cost effective model", "cutoff": "See docs"},
+    
+    # Legacy Gemini 1.5 models (still available)
+    "gemini-1.5-pro": {"company": "Google", "model": "gemini-1.5-pro", "input": 0.00000125, "output": 0.000005, "context": 2000000, "modality_in": "Text+Vision", "modality_out": "Text", "functions": "Yes", "description": "Highest intelligence Gemini 1.5 series model", "cutoff": "See docs"},
+    "gemini-1.5-flash": {"company": "Google", "model": "gemini-1.5-flash", "input": 0.000000075, "output": 0.0000003, "context": 1000000, "modality_in": "Text+Vision", "modality_out": "Text", "functions": "Yes", "description": "Fastest multimodal model with great performance", "cutoff": "See docs"},
+    "gemini-1.5-flash-8b": {"company": "Google", "model": "gemini-1.5-flash-8b", "input": 0.0000000375, "output": 0.00000015, "context": 1000000, "modality_in": "Text+Vision", "modality_out": "Text", "functions": "Yes", "description": "Smallest model for lower intelligence use cases", "cutoff": "See docs"},
+    
+    # Open models
+    "gemma-3-27b": {"company": "Google", "model": "gemma-3-27b", "input": 0.000000, "output": 0.000000, "context": 8192, "modality_in": "Text", "modality_out": "Text", "functions": "No", "description": "Lightweight, state-of-the-art, open model", "cutoff": "See docs"},
+    "gemma-3n-e4b": {"company": "Google", "model": "gemma-3n-e4b", "input": 0.000000, "output": 0.000000, "context": 8192, "modality_in": "Text", "modality_out": "Text", "functions": "No", "description": "Open model built for efficient performance on everyday devices", "cutoff": "See docs"}
 }
 
 AiRegistry.register_models_from_dict(model_definitions=Google_Models)

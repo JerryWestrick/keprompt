@@ -87,9 +87,13 @@ class AiDeepSeek(AiCompany):
 # Register handler and models
 AiRegistry.register_handler(company_name="DeepSeek", handler_class=AiDeepSeek)
 
+# DeepSeek model definitions and pricing
+# Official pricing source: https://api-docs.deepseek.com/quick_start/pricing
+# Last updated: January 2025
 DeepSeek_Models = {
-    "deepseek-chat":        {"company": "DeepSeek","model": "deepseek-chat",    "input": 0.00000014,"output": 0.00000028,"context": 65536},
-    "deepseek-reasoner":    {"company": "DeepSeek","model": "deepseek-reasoner","input": 0.00000014,"output": 0.00000028,"context": 65536}
+    # Latest models with updated pricing (standard rates)
+    "deepseek-chat": {"company": "DeepSeek", "model": "deepseek-chat", "input": 0.00000027, "output": 0.0000011, "context": 64000, "modality_in": "Text", "modality_out": "Text", "functions": "Yes", "description": "High-performance model for general tasks with excellent reasoning capabilities", "cutoff": "See docs"},
+    "deepseek-reasoner": {"company": "DeepSeek", "model": "deepseek-reasoner", "input": 0.00000055, "output": 0.00000219, "context": 64000, "modality_in": "Text", "modality_out": "Text", "functions": "Yes", "description": "Advanced reasoning model with transparent thinking process", "cutoff": "See docs"}
 }
 
 AiRegistry.register_models_from_dict(model_definitions=DeepSeek_Models)
