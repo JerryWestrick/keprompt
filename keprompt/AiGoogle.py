@@ -81,11 +81,8 @@ Google_Models = {
     # Legacy Gemini 1.5 models (still available)
     "gemini-1.5-pro": {"company": "Google", "model": "gemini-1.5-pro", "input": 0.00000125, "output": 0.000005, "context": 2000000, "modality_in": "Text+Vision", "modality_out": "Text", "functions": "Yes", "description": "Highest intelligence Gemini 1.5 series model", "cutoff": "See docs"},
     "gemini-1.5-flash": {"company": "Google", "model": "gemini-1.5-flash", "input": 0.000000075, "output": 0.0000003, "context": 1000000, "modality_in": "Text+Vision", "modality_out": "Text", "functions": "Yes", "description": "Fastest multimodal model with great performance", "cutoff": "See docs"},
-    "gemini-1.5-flash-8b": {"company": "Google", "model": "gemini-1.5-flash-8b", "input": 0.0000000375, "output": 0.00000015, "context": 1000000, "modality_in": "Text+Vision", "modality_out": "Text", "functions": "Yes", "description": "Smallest model for lower intelligence use cases", "cutoff": "See docs"},
-    
-    # Open models
-    "gemma-3-27b": {"company": "Google", "model": "gemma-3-27b", "input": 0.000000, "output": 0.000000, "context": 8192, "modality_in": "Text", "modality_out": "Text", "functions": "No", "description": "Lightweight, state-of-the-art, open model", "cutoff": "See docs"},
-    "gemma-3n-e4b": {"company": "Google", "model": "gemma-3n-e4b", "input": 0.000000, "output": 0.000000, "context": 8192, "modality_in": "Text", "modality_out": "Text", "functions": "No", "description": "Open model built for efficient performance on everyday devices", "cutoff": "See docs"}
+    "gemini-1.5-flash-8b": {"company": "Google", "model": "gemini-1.5-flash-8b", "input": 0.0000000375, "output": 0.00000015, "context": 1000000, "modality_in": "Text+Vision", "modality_out": "Text", "functions": "Yes", "description": "Smallest model for lower intelligence use cases", "cutoff": "See docs"}
+
 }
 
 AiRegistry.register_models_from_dict(model_definitions=Google_Models)

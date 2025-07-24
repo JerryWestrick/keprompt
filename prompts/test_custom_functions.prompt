@@ -1,0 +1,5 @@
+.# Test custom functions with LLM
+.llm {"model": "gpt-4o-mini"}
+.system You are a helpful assistant. Use the available functions to help the user.
+.user Please use the hello function to greet me. My name is Jerry. Then use the add_numbers function to calculate 15 + 27.
+.exec

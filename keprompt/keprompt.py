@@ -178,6 +178,10 @@ def get_cmd_args() -> argparse.Namespace:
     parser.add_argument('-d', '--debug', nargs='+', choices=['Statements', 'Prompt', 'LLM', 'Functions', 'Messages'],
                         help='Select one or more types of debugging: Statements, Prompt, LLM, Functions, Messages.', default=[])
     parser.add_argument('-r', '--remove', action='store_true', help='remove all .~nn~. files from sub directories')
+    parser.add_argument('--init', action='store_true', help='Initialize prompts and functions directories')
+    parser.add_argument('--check-builtins', action='store_true', help='Check for built-in function updates')
+    parser.add_argument('--update-builtins', action='store_true', help='Update built-in functions')
+    parser.add_argument('--no-log', action='store_true', help='Disable logging to files (prevents conflicts in multithreaded execution)')
 
     return parser.parse_args()
 
@@ -254,6 +258,60 @@ def main():
         print_functions()
         return
 
+    if args.init:
+        # Initialize directories and built-in functions
+        from .function_loader import FunctionLoader
+        loader = FunctionLoader()
+        loader.ensure_functions_directory()
+        console.print("[bold green]Initialization complete![/bold green]")
+        return
+
+    if args.check_builtins:
+        # Check for built-in function updates
+        from .function_loader import FunctionLoader
+        import subprocess
+        
+        loader = FunctionLoader()
+        builtin_path = loader.functions_dir / loader.builtin_name
+        
+        if not builtin_path.exists():
+            console.print("[bold red]Built-in functions not found. Run 'keprompt --init' first.[/bold red]")
+            return
+            
+        try:
+            result = subprocess.run([str(builtin_path), "--version"], capture_output=True, text=True)
+            if result.returncode == 0:
+                console.print(f"[bold cyan]Current built-ins version:[/bold cyan] {result.stdout.strip()}")
+                console.print("[bold green]Built-ins are up to date.[/bold green]")
+            else:
+                console.print("[bold yellow]Could not determine built-ins version.[/bold yellow]")
+        except Exception as e:
+            console.print(f"[bold red]Error checking built-ins version: {e}[/bold red]")
+        return
+
+    if args.update_builtins:
+        # Update built-in functions
+        from .function_loader import FunctionLoader
+        import shutil
+        
+        loader = FunctionLoader()
+        builtin_path = loader.functions_dir / loader.builtin_name
+        
+        if not loader.functions_dir.exists():
+            console.print("[bold red]Functions directory not found. Run 'keprompt --init' first.[/bold red]")
+            return
+            
+        # Create backup
+        if builtin_path.exists():
+            backup_path = builtin_path.with_suffix('.backup')
+            shutil.copy2(builtin_path, backup_path)
+            console.print(f"[bold yellow]Backed up current built-ins to {backup_path}[/bold yellow]")
+            
+        # Install new built-ins
+        loader._install_builtin_functions()
+        console.print("[bold green]Built-in functions updated successfully![/bold green]")
+        return
+
     if args.key:
         get_new_api_key()
 
@@ -297,7 +355,7 @@ def main():
         if glob_files:
             for prompt_file in glob_files:
                 # console.print(params)  # print to verify
-                step = VM(prompt_file, args.debug, vdict=variables)
+                step = VM(prompt_file, args.debug, vdict=variables, no_log=args.no_log)
                 step.parse_prompt()
                 step.execute()
         else:

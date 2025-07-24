@@ -15,6 +15,7 @@ class AiModel:
     functions: str = "Yes"
     description: str = ""
     cutoff: str = "2024-04"
+    link: str = ""
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'AiModel':

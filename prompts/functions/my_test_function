@@ -1,0 +1,92 @@
+#!/usr/bin/env python3
+import json
+import sys
+
+def get_schema():
+    return [
+        {
+            "name": "hello",
+            "description": "Say hello to someone",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Name of the person to greet"
+                    }
+                },
+                "required": ["name"],
+                "additionalProperties": False
+            }
+        },
+        {
+            "name": "add_numbers",
+            "description": "Add two numbers together",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "a": {
+                        "type": "number",
+                        "description": "First number"
+                    },
+                    "b": {
+                        "type": "number", 
+                        "description": "Second number"
+                    }
+                },
+                "required": ["a", "b"],
+                "additionalProperties": False
+            }
+        }
+    ]
+
+def hello(name: str) -> str:
+    return f"Hello, {name}! This is a custom function."
+
+def add_numbers(a: float, b: float) -> str:
+    result = a + b
+    return f"The sum of {a} and {b} is {result}"
+
+def main():
+    if len(sys.argv) > 1:
+        if sys.argv[1] == "--list-functions":
+            print(json.dumps(get_schema()))
+            return
+        elif sys.argv[1] == "--version":
+            print("my_test_function version 1.0")
+            return
+        
+        # Function execution
+        function_name = sys.argv[1]
+        
+        try:
+            # Read JSON arguments from stdin
+            json_input = sys.stdin.read().strip()
+            if json_input:
+                arguments = json.loads(json_input)
+            else:
+                arguments = {}
+                
+            # Execute the function
+            if function_name == "hello":
+                result = hello(**arguments)
+            elif function_name == "add_numbers":
+                result = add_numbers(**arguments)
+            else:
+                print(f"Error: Unknown function '{function_name}'", file=sys.stderr)
+                sys.exit(1)
+                
+            print(result)
+            
+        except json.JSONDecodeError as e:
+            print(f"Error: Invalid JSON input: {e}", file=sys.stderr)
+            sys.exit(1)
+        except Exception as e:
+            print(f"Error: {e}", file=sys.stderr)
+            sys.exit(1)
+    else:
+        print("Usage: my_test_function [--list-functions|--version|function_name]", file=sys.stderr)
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()

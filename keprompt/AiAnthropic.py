@@ -79,17 +79,71 @@ AnthropicToolsArray = [
 # Official pricing source: https://www.anthropic.com/pricing
 # Last updated: January 2025
 Anthropic_Models = {
-    # Latest Claude 4 models
-    "claude-opus-4": {"company": "Anthropic", "model": "claude-opus-4", "input": 0.000015, "output": 0.000075, "context": 200000, "modality_in": "Text+Vision", "modality_out": "Text", "functions": "Yes", "description": "Most intelligent model for complex tasks", "cutoff": "See docs"},
-    "claude-sonnet-4": {"company": "Anthropic", "model": "claude-sonnet-4", "input": 0.000003, "output": 0.000015, "context": 200000, "modality_in": "Text+Vision", "modality_out": "Text", "functions": "Yes", "description": "Optimal balance of intelligence, cost, and speed", "cutoff": "See docs"},
-    
-    # Claude 3.5 models (still available)
-    "claude-haiku-3.5": {"company": "Anthropic", "model": "claude-haiku-3.5", "input": 0.0000008, "output": 0.000004, "context": 200000, "modality_in": "Text+Vision", "modality_out": "Text", "functions": "Yes", "description": "Fastest, most cost-effective model", "cutoff": "See docs"},
-    
-    # Legacy Claude 3 models (still available)
-    "claude-opus-3": {"company": "Anthropic", "model": "claude-opus-3", "input": 0.000015, "output": 0.000075, "context": 200000, "modality_in": "Text+Vision", "modality_out": "Text", "functions": "Yes", "description": "Legacy most intelligent model", "cutoff": "See docs"},
-    "claude-sonnet-3.7": {"company": "Anthropic", "model": "claude-sonnet-3.7", "input": 0.000003, "output": 0.000015, "context": 200000, "modality_in": "Text+Vision", "modality_out": "Text", "functions": "Yes", "description": "Legacy balanced model", "cutoff": "See docs"},
-    "claude-haiku-3": {"company": "Anthropic", "model": "claude-haiku-3", "input": 0.00000025, "output": 0.00000125, "context": 200000, "modality_in": "Text", "modality_out": "Text", "functions": "Yes", "description": "Legacy fastest model", "cutoff": "See docs"},
+    "claude-3-5-haiku-latest": {
+        "company": "Anthropic",
+        "model": "Claude 3.5 Haiku",
+        "input": 0.00000025,  # $0.25 / MTok
+        "output": 0.00000125,  # $1.25 / MTok
+        "context": 200000,
+        "modality_in": "Text+Vision",
+        "modality_out": "Text",
+        "functions": "Yes",
+        "description": "Claude 3.5 Haiku is Anthropic’s fastest and most cost-effective model, optimized for rapid responses and efficiency. It excels in tasks like knowledge retrieval, sales automation, and lightweight chatbots, balancing intelligence with low latency.",
+        "cutoff": "2024-10",  # End of October 2024
+        "link": "https://docs.anthropic.com/en/docs/about-claude/models/overview"
+    },
+    "claude-3-5-sonnet-latest": {
+        "company": "Anthropic",
+        "model": "Claude 3.5 Sonnet",
+        "input": 0.000003,  # $3 / MTok
+        "output": 0.000015,  # $15 / MTok
+        "context": 200000,
+        "modality_in": "Text+Vision",
+        "modality_out": "Text",
+        "functions": "Yes",
+        "description": "Claude 3.5 Sonnet balances intelligence, speed, and cost, offering strong performance in coding, agentic tasks, and visual data extraction. It’s ideal for complex workflows, tool use, and applications requiring advanced reasoning.",
+        "cutoff": "2024-10",  # End of October 2024
+        "link": "https://docs.anthropic.com/en/docs/about-claude/models/overview"
+    },
+    "claude-3-7-sonnet-latest": {
+        "company": "Anthropic",
+        "model": "Claude 3.7 Sonnet",
+        "input": 0.000003,  # $3 / MTok
+        "output": 0.000015,  # $15 / MTok
+        "context": 200000,
+        "modality_in": "Text+Vision",
+        "modality_out": "Text",
+        "functions": "Yes",
+        "description": "Claude 3.7 Sonnet is Anthropic’s most intelligent model, a hybrid reasoning model excelling in coding, content generation, and data analysis. It offers both rapid responses and extended thinking for complex problem-solving.",
+        "cutoff": "2024-10",  # End of October 2024
+        "link": "https://docs.anthropic.com/en/docs/about-claude/models/overview"
+    },
+    "claude-opus-4-0": {
+        "company": "Anthropic",
+        "model": "Claude 4 Opus",
+        "input":  0.000015,  # $15 / MTok
+        "output": 0.000075,  # $75 / MTok
+        "context": 200000,
+        "modality_in": "Text+Vision",
+        "modality_out": "Text",
+        "functions": "Yes",
+        "description": "Claude 4 Opus is Anthropic’s most powerful model, excelling in advanced coding, complex reasoning, and long-horizon tasks. It’s ideal for enterprise applications and AI agents requiring sustained performance and high accuracy.",
+        "cutoff": "2024-11",  # November 2024
+        "link": "https://docs.anthropic.com/en/docs/about-claude/models/overview"
+    },
+    "claude-sonnet-4-0": {
+        "company": "Anthropic",
+        "model": "Claude 4 Sonnet",
+        "input": 0.000003,  # $3 / MTok
+        "output": 0.000015,  # $15 / MTok
+        "context": 200000,
+        "modality_in": "Text+Vision",
+        "modality_out": "Text",
+        "functions": "Yes",
+        "description": "Claude 4 Sonnet offers superior coding and reasoning capabilities, improving on Claude 3.7 Sonnet. It’s ideal for high-volume use cases, user-facing assistants, and tasks requiring precise instruction-following and adaptive tool use.",
+        "cutoff": "2024-11",  # November 2024
+        "link": "https://docs.anthropic.com/en/docs/about-claude/models/overview"
+    }
 }
 
 AiRegistry.register_handler(company_name="Anthropic", handler_class=AiAnthropic)

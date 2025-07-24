@@ -9,6 +9,7 @@ from rich.theme import Theme
 from rich.table import Table
 
 from .keprompt_util import backup_file
+from .function_loader import FunctionLoader
 
 console = Console()
 
@@ -174,133 +175,48 @@ def execcmd(cmd: str) -> str:
         return f"Unexpected error: {str(e)}"
 
 
-# Determine the operating system descriptor
-os_descriptor = platform.platform()
+# Global function loader instance
+_function_loader = None
+_function_data = None
 
-# Define available tools
-DefinedToolsArray = [
-    {   'type': 'function',
-        'function': {
-            "name": "readfile",
-            "description": "Read the contents of a named file",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "filename": {
-                        "type": "string",
-                        "description": "The name of the file to read",
-                    },
-                },
-                "required": ["filename"],
-                "additionalProperties": False
-            },
-        }
-    },
-    {
-        'type': 'function',
-        'function': {
-            "name": "wwwget",
-            "description": "Read a webpage URL and return the contents",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "url": {
-                        "type": "string",
-                        "description": "The URL of the web page to read",
-                    },
-                },
-                "required": ["url"],
-                "additionalProperties": False
-            },
-        }
-    },
-    {   'type': 'function',
-        'function': {
-            "name": "writefile",
-            "description": "Write the contents to a named file on the local file system",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "filename": {
-                        "type": "string",
-                        "description": "The name of the file to write",
-                    },
-                    "content": {
-                        "type": "string",
-                        "description": "The content to be written to the file",
-                    },
-                },
-                "required": ["filename", "content"],
-                "additionalProperties": False
-            },
-        }
-    },
-    {
-        'type': 'function',
-        'function': {
-            "name": "execcmd",
-            "description": f"Execute a command on the local {os_descriptor} system",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "cmd": {
-                        "type": "string",
-                        "description": "Command to be executed",
-                    },
-                },
-                "required": ["cmd"],
-                "additionalProperties": False
-            },
-        }
-    },
-    {   'type': 'function',
-        'function': {
-            "name": "askuser",
-            "description": "Get clarification by asking the user a question",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "question": {
-                        "type": "string",
-                        "description": "Question to ask the user",
-                    },
-                },
-                "required": ["question"],
-                "additionalProperties": False
-            },
-        }
-    },
+def get_function_loader():
+    """Get or create the global function loader instance."""
+    global _function_loader
+    if _function_loader is None:
+        _function_loader = FunctionLoader()
+    return _function_loader
 
-    {   'type': 'function',
-         'function': {
-             "name": "write_base64_file",
-             "description": "Decode base64 content and write the decoded data to a named file on the local file system",
-             "parameters": {
-                 "type": "object",
-                 "properties": {
-                     "filename": {
-                         "type": "string",
-                         "description": "The name of the file to write",
-                     },
-                    "base64_str": {
-                        "type": "string",
-                        "description": "The base64 encoded content to be decoded and written to the file",
-                    },
-                 },
-                 "required": ["filename", "base64_str"],
-                 "additionalProperties": False
-                },
-        }
-    }
-]
+def load_external_functions():
+    """Load external functions and return tools array and function map."""
+    global _function_data
+    if _function_data is None:
+        loader = get_function_loader()
+        _function_data = loader.load_functions()
+    return _function_data
 
+def execute_external_function(function_name: str, arguments: Dict[str, Any]) -> str:
+    """Execute an external function."""
+    function_data = load_external_functions()
+    function_map = function_data["function_map"]
+    
+    loader = get_function_loader()
+    return loader.execute_function(function_name, arguments, function_map)
 
-# Mapping of function names to their implementations
-DefinedFunctions: Dict[str, Any] = {
-    "readfile": readfile,
-    "wwwget": wwwget,
-    "writefile": writefile,
-    "execcmd": execcmd,
-    "askuser": askuser,
-    "write_base64_file": write_base64_file
-}
+# Load external functions
+_external_function_data = load_external_functions()
+
+# Use external function definitions
+DefinedToolsArray = _external_function_data["tools_array"]
+
+# Create function mapping that uses external execution
+def create_external_function_wrapper(func_name: str):
+    """Create a wrapper function that calls external executable."""
+    def wrapper(**kwargs):
+        return execute_external_function(func_name, kwargs)
+    return wrapper
+
+# Build DefinedFunctions dictionary from external functions
+DefinedFunctions: Dict[str, Any] = {}
+for tool in DefinedToolsArray:
+    func_name = tool["function"]["name"]
+    DefinedFunctions[func_name] = create_external_function_wrapper(func_name)

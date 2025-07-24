@@ -79,9 +79,7 @@ XAI_Models = {
     
     # Legacy models (still available)
     "grok-2-1212": {"company": "XAI", "model": "grok-2-1212", "input": 0.000002, "output": 0.000010, "context": 131072, "modality_in": "Text", "modality_out": "Text", "functions": "Yes", "description": "Updated Grok-2 model with improved performance", "cutoff": "See docs"},
-    "grok-2-vision-1212": {"company": "XAI", "model": "grok-2-vision-1212", "input": 0.000002, "output": 0.000010, "context": 131072, "modality_in": "Text+Vision", "modality_out": "Text", "functions": "Yes", "description": "Vision-capable Grok-2 model", "cutoff": "See docs"},
-    "grok-beta": {"company": "XAI", "model": "grok-beta", "input": 0.000005, "output": 0.000015, "context": 131072, "modality_in": "Text", "modality_out": "Text", "functions": "Yes", "description": "Beta version of Grok with experimental features", "cutoff": "See docs"},
-    "grok-vision-beta": {"company": "XAI", "model": "grok-vision-beta", "input": 0.000005, "output": 0.000015, "context": 8192, "modality_in": "Text+Vision", "modality_out": "Text", "functions": "Yes", "description": "Beta vision model with image understanding capabilities", "cutoff": "See docs"}
+    "grok-2-vision-1212": {"company": "XAI", "model": "grok-2-vision-1212", "input": 0.000002, "output": 0.000010, "context": 131072, "modality_in": "Text+Vision", "modality_out": "Text", "functions": "Yes", "description": "Vision-capable Grok-2 model", "cutoff": "See docs"}
 }
 
 AiRegistry.register_models_from_dict(model_definitions=XAI_Models)

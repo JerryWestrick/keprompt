@@ -75,34 +75,27 @@ AiRegistry.register_handler(company_name="MistralAI", handler_class=AiMistral)
 # Official pricing source: https://mistral.ai/pricing
 # Last updated: January 2025
 Mistral_Models = {
-    # Latest Premier models
-    "mistral-medium-3": {"company": "MistralAI", "model": "mistral-medium-3", "input": 0.0000004, "output": 0.000002, "context": 128000, "modality_in": "Text", "modality_out": "Text", "functions": "Yes", "description": "State-of-the-art performance. Simplified enterprise deployments. Cost-efficient", "cutoff": "See docs"},
-    "magistral-medium": {"company": "MistralAI", "model": "magistral-medium", "input": 0.000002, "output": 0.000005, "context": 128000, "modality_in": "Text", "modality_out": "Text", "functions": "Yes", "description": "Thinking model excelling in domain-specific, transparent, and multilingual reasoning", "cutoff": "See docs"},
-    "mistral-large": {"company": "MistralAI", "model": "mistral-large", "input": 0.000002, "output": 0.000006, "context": 128000, "modality_in": "Text", "modality_out": "Text", "functions": "Yes", "description": "Top-tier reasoning for high-complexity tasks and sophisticated problems", "cutoff": "See docs"},
-    "devstral-medium": {"company": "MistralAI", "model": "devstral-medium", "input": 0.0000004, "output": 0.000002, "context": 128000, "modality_in": "Text", "modality_out": "Text", "functions": "Yes", "description": "Enhanced model for advanced coding agents", "cutoff": "See docs"},
-    
-    # Open models
-    "mistral-small-3.2": {"company": "MistralAI", "model": "mistral-small-3.2", "input": 0.0000001, "output": 0.0000003, "context": 128000, "modality_in": "Text+Vision", "modality_out": "Text", "functions": "Yes", "description": "SOTA. Multimodal. Multilingual. Apache 2.0", "cutoff": "See docs"},
-    "magistral-small": {"company": "MistralAI", "model": "magistral-small", "input": 0.0000005, "output": 0.0000015, "context": 128000, "modality_in": "Text", "modality_out": "Text", "functions": "Yes", "description": "Thinking model excelling in domain-specific reasoning", "cutoff": "See docs"},
-    "codestral": {"company": "MistralAI", "model": "codestral", "input": 0.0000003, "output": 0.0000009, "context": 32000, "modality_in": "Text", "modality_out": "Text", "functions": "Yes", "description": "Lightweight, fast, and proficient in over 80 programming languages", "cutoff": "See docs"},
-    "devstral-small": {"company": "MistralAI", "model": "devstral-small", "input": 0.0000001, "output": 0.0000003, "context": 128000, "modality_in": "Text", "modality_out": "Text", "functions": "Yes", "description": "The best open-source model for coding agents", "cutoff": "See docs"},
-    "voxtral-small": {"company": "MistralAI", "model": "voxtral-small", "input": 0.0000001, "output": 0.0000003, "context": 128000, "modality_in": "Text+Audio", "modality_out": "Text", "functions": "Yes", "description": "State-of-the-art performance on speech and audio understanding", "cutoff": "See docs"},
-    "voxtral-mini": {"company": "MistralAI", "model": "voxtral-mini", "input": 0.00000004, "output": 0.00000004, "context": 128000, "modality_in": "Text+Audio", "modality_out": "Text", "functions": "Yes", "description": "Low-latency speech recognition for edge and devices", "cutoff": "See docs"},
-    
-    # Vision models
-    "pixtral-large": {"company": "MistralAI", "model": "pixtral-large", "input": 0.000002, "output": 0.000006, "context": 128000, "modality_in": "Text+Vision", "modality_out": "Text", "functions": "Yes", "description": "Vision-capable large model with frontier reasoning capabilities", "cutoff": "See docs"},
-    "pixtral-12b": {"company": "MistralAI", "model": "pixtral-12b", "input": 0.00000015, "output": 0.00000015, "context": 128000, "modality_in": "Text+Vision", "modality_out": "Text", "functions": "Yes", "description": "Vision-capable small model", "cutoff": "See docs"},
-    
-    # Other models
-    "mistral-nemo": {"company": "MistralAI", "model": "mistral-nemo", "input": 0.00000015, "output": 0.00000015, "context": 128000, "modality_in": "Text", "modality_out": "Text", "functions": "Yes", "description": "State-of-the-art Mistral model trained specifically for code tasks", "cutoff": "See docs"},
-    "mistral-saba": {"company": "MistralAI", "model": "mistral-saba", "input": 0.0000002, "output": 0.0000006, "context": 32000, "modality_in": "Text", "modality_out": "Text", "functions": "Yes", "description": "Custom-trained model to serve specific geographies, markets, and customers", "cutoff": "See docs"},
-    
-    # Legacy models (still available)
-    "ministral-8b-24.10": {"company": "MistralAI", "model": "ministral-8b-24.10", "input": 0.0000001, "output": 0.000001, "context": 128000, "modality_in": "Text", "modality_out": "Text", "functions": "Yes", "description": "Powerful model for on-device use cases", "cutoff": "See docs"},
-    "ministral-3b-24.10": {"company": "MistralAI", "model": "ministral-3b-24.10", "input": 0.00000004, "output": 0.00000004, "context": 128000, "modality_in": "Text", "modality_out": "Text", "functions": "Yes", "description": "Most efficient edge model", "cutoff": "See docs"},
-    "mistral-7b": {"company": "MistralAI", "model": "mistral-7b", "input": 0.00000025, "output": 0.00000025, "context": 32000, "modality_in": "Text", "modality_out": "Text", "functions": "Yes", "description": "A 7B transformer model, fast-deployed and easily customisable", "cutoff": "See docs"},
-    "mixtral-8x7b": {"company": "MistralAI", "model": "mixtral-8x7b", "input": 0.0000007, "output": 0.0000007, "context": 32000, "modality_in": "Text", "modality_out": "Text", "functions": "Yes", "description": "A 7B sparse Mixture-of-Experts (SMoE). Uses 12.9B active parameters out of 45B total", "cutoff": "See docs"},
-    "mixtral-8x22b": {"company": "MistralAI", "model": "mixtral-8x22b", "input": 0.000002, "output": 0.000006, "context": 64000, "modality_in": "Text", "modality_out": "Text", "functions": "Yes", "description": "A 22B sparse Mixture-of-Experts (SMoE). Uses only 39B active parameters out of 141B", "cutoff": "See docs"}
+ "mistral-medium-latest":      {"company": "MistralAI", "model": "mistral-medium-latest",     "input": 0.4 / 1000000, "output": 2 / 1000000, "context": 128000, "modality_in": "Text", "modality_out": "Text", "functions": "Yes", "description": "", "cutoff": "See Docs"},
+ "magistral-medium-latest":    {"company": "MistralAI", "model": "magistral-medium-latest",   "input": 2   / 1000000, "output": 5 / 1000000, "context": 128000, "modality_in": "Text", "modality_out": "Text", "functions": "Yes", "description": "", "cutoff": "See Docs"},
+ "mistral-large-latest":       {"company": "MistralAI", "model": "mistral-large-latest",      "input": 2   / 1000000, "output": 6 / 1000000, "context": 128000, "modality_in": "Text", "modality_out": "Text", "functions": "Yes", "description": "", "cutoff": "See Docs"},
+ "devstral-medium-latest":     {"company": "MistralAI", "model": "devstral-medium-latest",    "input": 0.4 / 1000000, "output": 2 / 1000000, "context": 128000, "modality_in": "Text", "modality_out": "Text", "functions": "Yes", "description": "", "cutoff": "See Docs"},
+ "codestral-latest":           {"company": "MistralAI", "model": "codestral-latest",          "input": 0.3 / 1000000, "output": 0.9 / 1000000, "context": 128000, "modality_in": "Text", "modality_out": "Text", "functions": "Yes", "description": "", "cutoff": "See Docs"},
+ "mistral-ocr-latest":         {"company": "MistralAI", "model": "mistral-ocr-latest",        "input": 1 / 1000, "output": 3 / 1000, "context": 128000, "modality_in": "Text", "modality_out": "Text", "functions": "Yes", "description": "", "cutoff": "See Docs"},
+ "voxtral-mini-latest":        {"company": "MistralAI", "model": "voxtral-mini-latest",       "input": 0.002, "output": 0.0, "context": 128000, "modality_in": "Text", "modality_out": "Text", "functions": "Yes", "description": "", "cutoff": "See Docs"},
+ 
+# Open Models
+ "mistral-small-latest":       {"company": "MistralAI", "model": "mistral-small-latest",      "input": 0.1 / 1000000, "output": 0.3 / 1000000, "context": 128000, "modality_in": "Text", "modality_out": "Text", "functions": "Yes", "description": "", "cutoff": "See Docs"},
+ "magistral-small-latest":     {"company": "MistralAI", "model": "magistral-small-latest",    "input": 0.5 / 1000000, "output": 1.5 / 1000000, "context": 128000, "modality_in": "Text", "modality_out": "Text", "functions": "Yes", "description": "", "cutoff": "See Docs"},
+ "devstral-small-latest":      {"company": "MistralAI", "model": "devstral-small-latest",     "input": 0.1 / 1000000, "output": 0.3 / 1000000, "context": 128000, "modality_in": "Text", "modality_out": "Text", "functions": "Yes", "description": "", "cutoff": "See Docs"},
+ "voxtral-small-latest":       {"company": "MistralAI", "model": "voxtral-small-latest",      "input": 0.000000004, "output": 0.0000001, "context": 128000, "modality_in": "Text", "modality_out": "Text", "functions": "Yes", "description": "", "cutoff": "See Docs"},
+
+
+# Unknown Models
+#  "ministral-3b-latest":        {"company": "MistralAI", "model": "ministral-3b-latest",       "input": 0.000000004, "output": 0.0000001, "context": 128000, "modality_in": "Text", "modality_out": "Text", "functions": "Yes", "description": "", "cutoff": "See Docs"},
+#  "ministral-8b-latest":        {"company": "MistralAI", "model": "ministral-8b-latest",       "input": 0.000000004, "output": 0.0000001, "context": 128000, "modality_in": "Text", "modality_out": "Text", "functions": "Yes", "description": "", "cutoff": "See Docs"},
+#  "mistral-saba-latest":        {"company": "MistralAI", "model": "mistral-saba-latest",       "input": 0.000000004, "output": 0.0000001, "context": 128000, "modality_in": "Text", "modality_out": "Text", "functions": "Yes", "description": "", "cutoff": "See Docs"},
+#  "open-mistral-nemo":          {"company": "MistralAI", "model": "open-mistral-nemo",         "input": 0.000000004, "output": 0.0000001, "context": 128000, "modality_in": "Text", "modality_out": "Text", "functions": "Yes", "description": "", "cutoff": "See Docs"},
+#  "pixtral-large-latest":       {"company": "MistralAI", "model": "pixtral-large-latest",      "input": 0.000000004, "output": 0.0000001, "context": 128000, "modality_in": "Text", "modality_out": "Text", "functions": "Yes", "description": "", "cutoff": "See Docs"},
 }
 
 AiRegistry.register_models_from_dict(model_definitions=Mistral_Models)

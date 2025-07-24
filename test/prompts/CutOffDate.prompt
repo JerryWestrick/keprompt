@@ -1,0 +1,11 @@
+.# Ask a model it's cut off date
+.llm "model": "<<llm>>"
+.system
+The result is going to be processed automatically, therefore just answer:
+
+YYYY-MM
+
+.user
+What is the cutoff date of your training info?
+.exec
+

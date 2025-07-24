@@ -1,0 +1,7 @@
+.# Ask a model Hi to test if it is callable
+.llm "model": "<<llm>>"
+.system
+You are a cheerful assistant willing to help.
+.user
+Hi!
+.exec

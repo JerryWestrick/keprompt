@@ -62,9 +62,10 @@ END_SUB = '>>'
 class VM:
     """Class to hold Prompt Virtual Machine execution state"""
 
-    def __init__(self, filename: str, debug: List[str], vdict: dict[str, any] = None):
+    def __init__(self, filename: str, debug: List[str], vdict: dict[str, any] = None, no_log: bool = False):
         self.filename = filename
         self.debug = debug
+        self.no_log = no_log
         self.ip: int = 0
         if vdict:
             self.vdict = vdict
@@ -91,7 +92,7 @@ class VM:
         self.interaction_no: int = 0
 
         if debug:
-            log.info(f'Instantiated VM(filename="{filename}",debug="{debug}")')
+            log.info(f'Instantiated VM(filename="{filename}",debug="{debug}",no_log="{no_log}")')
 
     def print(self, *args, **kwargs):
         """Print method to output to both console and file."""
@@ -316,11 +317,8 @@ class VM:
         """Execute the statements in the prompt file"""
         if self.debug and 'Prompt' in self.debug: log.info(f'execute({self.filename} with {len(self.statements)} statements)')
 
-        base_name = os.path.splitext(os.path.basename(self.filename))[0]
-        logfile_name = backup_file(f"logs/{base_name}.log", backup_dir='logs', extension='.log')
-        with open(logfile_name, 'w') as file:
-            self.file_console = Console(file=file, record=True)  # Open file for writing
-
+        if self.no_log:
+            # No logging mode - only print to console
             self.print(
                 f"[bold white]{TOP_LEFT}{HORIZONTAL * 2}[/][bold white]{os.path.basename(self.filename):{HORIZONTAL}<{terminal_width - 4}}{TOP_RIGHT}[/]"
             )
@@ -337,11 +335,34 @@ class VM:
                     break
 
             self.print(f"{BOTTOM_LEFT}{HORIZONTAL * (terminal_width - 2)}{BOTTOM_RIGHT}")
+        else:
+            # Normal logging mode - log to files
+            base_name = os.path.splitext(os.path.basename(self.filename))[0]
+            logfile_name = backup_file(f"logs/{base_name}.log", backup_dir='logs', extension='.log')
+            with open(logfile_name, 'w') as file:
+                self.file_console = Console(file=file, record=True)  # Open file for writing
 
-            self.file_console.file.close()  # Close file console at end
-            logfile_name_html = backup_file(f"logs/{base_name}.svg", backup_dir='logs', extension='.svg')
-            self.console.save_svg(logfile_name_html)
-            console.print(f"Wrote {logfile_name_html} to disk")
+                self.print(
+                    f"[bold white]{TOP_LEFT}{HORIZONTAL * 2}[/][bold white]{os.path.basename(self.filename):{HORIZONTAL}<{terminal_width - 4}}{TOP_RIGHT}[/]"
+                )
+
+                for stmt_no, stmt in enumerate(self.statements):
+                    try:
+                        stmt.execute(self)
+                    except Exception as e:
+                        self.print(f"[bold red]Error executing statement above : {str(e)}\n\n")
+                        self.print_exception()
+                        sys.exit(9)
+
+                    if stmt.keyword == '.exit':
+                        break
+
+                self.print(f"{BOTTOM_LEFT}{HORIZONTAL * (terminal_width - 2)}{BOTTOM_RIGHT}")
+
+                self.file_console.file.close()  # Close file console at end
+                logfile_name_html = backup_file(f"logs/{base_name}.svg", backup_dir='logs', extension='.svg')
+                self.console.save_svg(logfile_name_html)
+                console.print(f"Wrote {logfile_name_html} to disk")
 
     def print_with_wrap(self, is_response: bool, line: str) -> None:
         line_len = terminal_width - 23
@@ -361,12 +382,16 @@ class VM:
         self.print(f"{hdr}[/]:{print_line}[bold white]{VERTICAL}[/]")
 
     def log_conversation(self):
+        if self.no_log:
+            return  # Skip logging when no_log is enabled
         base_name = os.path.splitext(os.path.basename(self.filename))[0]
         logfile_name = backup_file(f"logs/{base_name}_messages.json", backup_dir='logs', extension='.json')
         with open(logfile_name, 'w') as file:
             file.write(json.dumps(self.prompt.to_json()))
 
     def log_last_json(self, data: dict[str, any]):
+        if self.no_log:
+            return  # Skip logging when no_log is enabled
         base_name = os.path.splitext(os.path.basename(self.filename))[0]
         logfile_name = backup_file(f"logs/{base_name}_last_msgs.json", backup_dir='logs', extension='.json')
         with open(logfile_name, 'w') as file:

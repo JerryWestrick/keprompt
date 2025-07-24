@@ -1,0 +1,37 @@
+You are goin to have to paste this prompt into Grok-3
+as it don't work from keprompt
+
+.# Generate the Anthropic API LLM definitions
+.llm "model": "grok-3"
+.system
+You are part of an automated processing system.
+Generate the requested files.
+.user
+I will include the web page https://docs.anthropic.com/en/docs/about-claude/models/overview
+atr the end... From it:
+
+for each LLM listed in "Model aliases": create a python dictionary with entries like:
+
+"claude-3-5-haiku-latest": {
+        "company": "Anthropic",
+        "model": "Claude Haiku 3.5",
+        "input": 0.000008,    # $0.80 / MTok
+        "output": 0.000004, # $4 / MTok
+        "context": 200000,
+        "modality_in": "Text+Vision",
+        "modality_out": "Text",125
+        "functions": "Yes",
+        "description": "Claude 3 Haiku is Anthropic’s fastest and most compact model, optimized for speed and cost-effectiveness. It’s ideal for applications requiring quick responses, such as lightweight chatbots or simple data processing tasks.",
+        "cutoff": "2024-03",  # April 2024
+        "link": "https://docs.anthropic.com/en/docs/about-claude/models/overview"
+    },
+
+Use Info From following sections:
+- Model aliases
+- Model comparison table
+- Model pricing
+
+Write entire dictionary to Anthropic_models.py
+
+
+
