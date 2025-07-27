@@ -133,6 +133,7 @@ keprompt [-h] [-v] [--param key value] [-m] [-f] [-p [PROMPTS]] [-c [CODE]] [-l 
 | `--init` | Initialize prompts and functions directories |
 | `--check-builtins` | Check for built-in function updates |
 | `--update-builtins` | Update built-in functions |
+| `--output-only` | Output only the final LLM response text (for programmatic usage) |
 
 ## Prompt Language
 
@@ -570,6 +571,35 @@ keprompt -e "test*"
 # List all prompts with "gpt" in the name
 keprompt -p "*gpt*"
 ```
+
+### Programmatic Usage
+
+For batch processing and automation, use the `--output-only` flag to get clean LLM output suitable for scripts:
+
+```bash
+# Get only the LLM response text (no UI, logging, or metadata)
+keprompt -e my_prompt --output-only
+
+# Capture output in a variable
+result=$(keprompt -e my_prompt --output-only)
+echo "LLM said: $result"
+
+# Use in pipelines
+keprompt -e analyze_data --output-only | grep "important"
+
+# Process multiple prompts
+for prompt in prompts/*.prompt; do
+    echo "Processing $prompt..."
+    keprompt -e "$(basename "$prompt" .prompt)" --output-only > "results/$(basename "$prompt" .prompt).txt"
+done
+```
+
+**Key features of `--output-only` mode:**
+- Outputs only the final LLM response text to stdout
+- Suppresses all UI elements, progress indicators, and formatting
+- Disables logging to files
+- Errors are sent to stderr (won't contaminate stdout)
+- Perfect for shell scripts, automation, and batch processing
 
 ## Contributing
 

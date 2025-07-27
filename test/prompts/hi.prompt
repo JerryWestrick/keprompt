@@ -3,5 +3,8 @@
 .system
 You are a cheerful assistant willing to help.
 .user
-Hi!
+.set AI Chat <<llm>>
+Hi <<AI>>!
 .exec
+.print <<last_response>>
+.exit

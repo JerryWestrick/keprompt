@@ -228,8 +228,11 @@ class AiPrompt:
 
         return json_msgs
 
-    def ask(self, label: str) -> AiMessage:
+    def ask(self, label: str, call_id: str = None) -> AiMessage:
         """Make a prompt to self.company::self.model and process the result."""
+
+        # Store call_id for AiCompany to access
+        self._current_call_id = call_id
 
         # if 'LLM' in self.vm.debug:
         #     console.print("[bold yellow]Sending to API...[/bold yellow]")

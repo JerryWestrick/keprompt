@@ -54,14 +54,33 @@ class AiCompany(abc.ABC):
         responses = []
         call_count = 0
 
-        self.prompt.vm.print(f"{label} [bold blue]Calling {self.prompt.company}::{self.prompt.model}[/bold blue]")
+        # Get call_id from the prompt.ask call (passed from StmtExec)
+        call_id = getattr(self.prompt, '_current_call_id', None)
+        
+        # Log the LLM call using structured logging
+        call_msg = f"Calling {self.prompt.company}::{self.prompt.model}"
+        self.prompt.vm.logger.log_llm_call(call_msg, call_id)
+        
+        # Format the statement line with the API call info for execution log
+        import re
+        # Clean up the label to extract statement number
+        clean_label = re.sub(r'\[.*?\]', '', label)  # Remove Rich markup
+        stmt_parts = clean_label.strip().split()
+        if len(stmt_parts) >= 2:
+            stmt_no = stmt_parts[0].replace('│', '')
+            keyword = stmt_parts[1]
+            # Use the logger's print_statement method to format consistently
+            line_len = self.prompt.vm.logger.terminal_width - 14
+            header = f"[bold white]{VERTICAL}[/][white]{stmt_no}[/] [cyan]{keyword:<8}[/] "
+            call_line = f"{call_msg:<{line_len}}[bold white]{VERTICAL}[/]"
+            self.prompt.vm.logger.log_execution(f"{header}[green]{call_line}[/]")
 
         while do_again:
             call_count += 1
             do_again = False
 
-            if 'Messages' in self.prompt.vm.debug:
-                self.prompt.print_messages(f"Sent to {self.prompt.model}")
+            # Log messages if in debug/log mode
+            self.prompt.vm.logger.log_llm_call(f"Sent messages to {self.prompt.model}", call_id)
 
             company_messages = self.to_company_messages(self.prompt.messages)
             request = self.prepare_request(company_messages)
@@ -85,8 +104,8 @@ class AiCompany(abc.ABC):
                 self.prompt.messages.append(tool_msg)
                 responses.append(tool_msg)
 
-        if 'Messages' in self.prompt.vm.debug:
-            self.prompt.print_messages(f"Received from {self.prompt.model}")
+        # Log received messages if in debug/log mode
+        self.prompt.vm.logger.log_llm_call(f"Received messages from {self.prompt.model}", call_id)
 
         return responses
 
@@ -101,32 +120,33 @@ class AiCompany(abc.ABC):
             if not isinstance(part, AiCall): continue
 
             try:
-                if 'Functions' in self.prompt.vm.debug:
-                    self.prompt.vm.print(f"[bold green]Executing function: {part.name} with args: {part.arguments}[/]")
+                # Log function execution using structured logging
+                self.prompt.vm.logger.log_function_call(part.name, part.arguments, "executing")
 
                 result = DefinedFunctions[part.name](**part.arguments)
 
-                if 'Functions' in self.prompt.vm.debug:
-                    self.prompt.vm.print(f"[bold green]Function Return: {result}[/]")
+                # Log function result using structured logging
+                self.prompt.vm.logger.log_function_call(part.name, part.arguments, result)
 
                 tool_results.append(AiResult(vm=self.prompt.vm, name=part.name, id=part.id or "", result=str(result)))
             except Exception as e:
-                tool_results.append(AiResult(vm=self.prompt.vm, name=part.name, id=part.id or "", result=f"Error calling {str(e)}"))
+                error_result = f"Error calling {str(e)}"
+                self.prompt.vm.logger.log_function_call(part.name, part.arguments, error_result)
+                tool_results.append(AiResult(vm=self.prompt.vm, name=part.name, id=part.id or "", result=error_result))
 
         return AiMessage(vm=self.prompt.vm, role="tool", content=tool_results) if tool_results else None
 
 
 
     def make_api_request(self, url: str, headers: Dict, data: Dict, label: str) -> Dict:
+        # Get call_id from the prompt
+        call_id = getattr(self.prompt, '_current_call_id', None)
 
-        if 'LLM' in self.prompt.vm.debug:
-            self.prompt.vm.print_json(label=f"[bold blue]Sending to {self.prompt.company}::{self.prompt.model}[/bold blue]", data=data)
+        # Log API request data using structured logging
+        self.prompt.vm.logger.log_llm_call(f"Sending request to {self.prompt.company}::{self.prompt.model}", call_id)
 
-        with Progress("[progress.description]{task.description}", TimeElapsedColumn(), console=console, transient=True, ) as progress:
-            call_label = f"[white]{VERTICAL}[/]{' ' * 12}{label}"
-            task = progress.add_task(description=call_label, total=None)
-            response = requests.post(url=url, headers=headers, json=data)
-            progress.update(task, description=f"[white]{VERTICAL}[/]{' ' * 12}{label}")
+        # Make the API request without progress bar
+        response = requests.post(url=url, headers=headers, json=data)
 
         if response.status_code != 200:
             raise Exception(f"{self.prompt.company}::{self.prompt.model} API error: {response.text}")
@@ -137,15 +157,19 @@ class AiCompany(abc.ABC):
         elapsed = response.elapsed.total_seconds()
         tokens_per_sec = tokens / elapsed if elapsed > 0 else 0
         timings = f"Elapsed: {elapsed:.2f} seconds {tokens_per_sec:.2f} tps"
-        head = f"{label} {timings}"
-        rem = terminal_width - len(head)
-        self.prompt.vm.print(f"[white]{VERTICAL}{' ' * 12}{head}{' ' * rem}[white]{VERTICAL}[/]", end='')
-        # console.print(f"{head}{' ' * rem} [white]{VERTICAL}[/]", end='')
+        # Format properly within the table structure
+        # Use same width calculation as statement lines - only subtract borders (14)
+        timing_content = f"{label} {timings}"
+        content_len = self.prompt.vm.logger.terminal_width - 14  # Same as statement lines
+        padded_content = f"{timing_content:<{content_len}}"
+        final_line = f"[white]{VERTICAL}[/]            {padded_content}[white]{VERTICAL}[/]"
+        
+        self.prompt.vm.logger.log_execution(final_line)
 
         retval = response.json()
 
-        if 'LLM' in self.prompt.vm.debug:
-            self.prompt.vm.print_json(label=f"[bold blue]Received from {self.prompt.company}::{self.prompt.model}[/bold blue]", data=retval)
+        # Log API response using structured logging
+        self.prompt.vm.logger.log_llm_call(f"Received response from {self.prompt.company}::{self.prompt.model}", call_id)
 
         # Update token counts
         self.prompt.toks_in += retval.get("usage", {}).get("input_tokens", 0)

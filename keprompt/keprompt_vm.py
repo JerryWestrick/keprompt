@@ -17,6 +17,7 @@ from .AiPrompt import AiTextPart, AiImagePart, AiCall, AiResult, AiPrompt, AiMes
 from  .keprompt_util import TOP_LEFT, BOTTOM_LEFT, VERTICAL, HORIZONTAL, TOP_RIGHT, RIGHT_TRIANGLE, \
     LEFT_TRIANGLE, \
     HORIZONTAL_LINE, BOTTOM_RIGHT, CIRCLE, backup_file
+from .keprompt_logger import KepromptLogger, LogMode
 
 console = Console()
 terminal_width = console.size.width
@@ -38,7 +39,10 @@ def print_prompt_code(prompt_files: list[str]) -> None:
     for prompt_file in prompt_files:
         # console.print(f"{prompt_file}")
         try:
-            vm: VM = VM(prompt_file)
+            # Create minimal global variables for parsing
+            from .keprompt import create_global_variables
+            global_vars = create_global_variables()
+            vm: VM = VM(prompt_file, global_vars)
             vm.parse_prompt()
         except Exception as e:
             console.print(f"[bold red]Error parsing file {prompt_file} : {str(e)}[/bold red]")
@@ -56,27 +60,30 @@ def print_prompt_code(prompt_files: list[str]) -> None:
 class StmtSyntaxError(Exception):
     pass
 
-BEGIN_SUB = '<<'
-END_SUB = '>>'
-
 class VM:
     """Class to hold Prompt Virtual Machine execution state"""
 
-    def __init__(self, filename: str, debug: List[str], vdict: dict[str, any] = None, no_log: bool = False):
+    def __init__(self, filename: str, global_vars: dict[str, any], log_mode: LogMode = LogMode.PRODUCTION):
         self.filename = filename
-        self.debug = debug
-        self.no_log = no_log
+        self.log_mode = log_mode
         self.ip: int = 0
-        if vdict:
-            self.vdict = vdict
-        else:
-            self.vdict = dict()
+        
+        # Use the provided global variables (no defaults, no conditionals)
+        self.vdict = global_vars.copy()  # Copy to avoid modifying original
+        
         self.llm: dict[str, any] = dict()
         self.statements: list[StmtPrompt] = []
-        # self.messages: list[KeMessage] = []
         self.prompt: AiPrompt = AiPrompt(self)
         self.header: dict[str, any] = {}
         self.data: str = ''
+        
+        # Extract prompt name for logger
+        prompt_name = os.path.splitext(os.path.basename(filename))[0]
+        
+        # Initialize the new structured logger
+        self.logger = KepromptLogger(prompt_name=prompt_name, mode=log_mode)
+        
+        # Keep old console for backward compatibility during transition
         self.console = Console(width=terminal_width)  # Console for terminal
         self.file_console = None  # Console for file, initialized in execute
         self.model: AiModel = None
@@ -90,9 +97,6 @@ class VM:
         self.total = 0
         self.api_key: str = ''
         self.interaction_no: int = 0
-
-        if debug:
-            log.info(f'Instantiated VM(filename="{filename}",debug="{debug}",no_log="{no_log}")')
 
     def print(self, *args, **kwargs):
         """Print method to output to both console and file."""
@@ -112,7 +116,7 @@ class VM:
             table.add_column("Value", style="green", no_wrap=True)
 
             table.add_row("Filename", self.filename)
-            table.add_row("Debug Options:", str(self.debug))
+            table.add_row("Log Mode:", str(self.log_mode))
             table.add_row("IP", str(self.ip))
             table.add_row("url", str(self.llm['url']))
             table.add_row("header", str(self.header))
@@ -204,19 +208,37 @@ class VM:
                 table.add_row("Variables", "Empty")
             console.print(table)
 
-    def substitute(self, text: str):
+    def set_variable(self, key: str, value: any):
+        """Set variable with automatic logging."""
+        self.vdict[key] = value
+        self.logger.log_variable_assignment(key, str(value))
 
-        while END_SUB in text:
-            front, back = text.split(END_SUB, 1)
-            if BEGIN_SUB not in front:
+    def get_variable(self, key: str):
+        """Get variable with automatic logging."""
+        value = self.vdict[key]
+        self.logger.log_variable_retrieval(key, str(value))
+        return value
+
+    def substitute(self, text: str):
+        """
+        Substitute variables in text using configurable prefix and postfix delimiters.
+        Gets delimiters directly from dictionary for future subroutine scoping compatibility.
+        """
+        # Get delimiters directly from dictionary (supports future variable stack for subroutines)
+        prefix = self.vdict.get('Prefix', '<<')
+        postfix = self.vdict.get('Postfix', '>>')
+        
+        while postfix in text:
+            front, back = text.split(postfix, 1)
+            if prefix not in front:
                 return text  # No matching begin marker found
 
-            last_begin = front.rfind(BEGIN_SUB)
+            last_begin = front.rfind(prefix)
             if last_begin == -1:
                 return text  # No begin marker found
 
             # Extract variable name
-            variable_name = front[last_begin + 2:]
+            variable_name = front[last_begin + len(prefix):]
 
             # Handle nested dictionaries
             keys = variable_name.split('.')
@@ -225,8 +247,11 @@ class VM:
                 for key in keys:
                     value = value[key]
             except (KeyError, TypeError):
-                raise ValueError(f"Variable '{keys}' is not defined")
+                raise ValueError(f"Variable '{variable_name}' is not defined")
 
+            # Log variable retrieval (substitution)
+            self.logger.log_variable_retrieval(variable_name, str(value))
+            
             # Replace the matched part with the value
             text = front[:last_begin] + str(value) + back
 
@@ -314,55 +339,37 @@ class VM:
         self.vdict['model'] = self.model
 
     def execute(self) -> None:
-        """Execute the statements in the prompt file"""
-        if self.debug and 'Prompt' in self.debug: log.info(f'execute({self.filename} with {len(self.statements)} statements)')
-
-        if self.no_log:
-            # No logging mode - only print to console
-            self.print(
-                f"[bold white]{TOP_LEFT}{HORIZONTAL * 2}[/][bold white]{os.path.basename(self.filename):{HORIZONTAL}<{terminal_width - 4}}{TOP_RIGHT}[/]"
-            )
+        """Execute the statements in the prompt file using the new structured logging system."""
+        
+        # Use structured logging based on mode
+        if self.log_mode in [LogMode.LOG, LogMode.DEBUG]:
+            # Logging/Debug mode - use structured logger with rich UI
+            self.logger.print_header(self.filename)
 
             for stmt_no, stmt in enumerate(self.statements):
                 try:
                     stmt.execute(self)
                 except Exception as e:
-                    self.print(f"[bold red]Error executing statement above : {str(e)}\n\n")
-                    self.print_exception()
+                    self.logger.log_error(f"Error executing statement {stmt_no}: {str(e)}")
                     sys.exit(9)
 
                 if stmt.keyword == '.exit':
                     break
 
-            self.print(f"{BOTTOM_LEFT}{HORIZONTAL * (terminal_width - 2)}{BOTTOM_RIGHT}")
+            self.logger.print_footer()
+            self.logger.close()
         else:
-            # Normal logging mode - log to files
-            base_name = os.path.splitext(os.path.basename(self.filename))[0]
-            logfile_name = backup_file(f"logs/{base_name}.log", backup_dir='logs', extension='.log')
-            with open(logfile_name, 'w') as file:
-                self.file_console = Console(file=file, record=True)  # Open file for writing
+            # Production mode - clean execution, minimal output
+            for stmt_no, stmt in enumerate(self.statements):
+                try:
+                    stmt.execute(self)
+                except Exception as e:
+                    # Errors go to stderr in production mode
+                    print(f"Error: {str(e)}", file=sys.stderr)
+                    sys.exit(9)
 
-                self.print(
-                    f"[bold white]{TOP_LEFT}{HORIZONTAL * 2}[/][bold white]{os.path.basename(self.filename):{HORIZONTAL}<{terminal_width - 4}}{TOP_RIGHT}[/]"
-                )
-
-                for stmt_no, stmt in enumerate(self.statements):
-                    try:
-                        stmt.execute(self)
-                    except Exception as e:
-                        self.print(f"[bold red]Error executing statement above : {str(e)}\n\n")
-                        self.print_exception()
-                        sys.exit(9)
-
-                    if stmt.keyword == '.exit':
-                        break
-
-                self.print(f"{BOTTOM_LEFT}{HORIZONTAL * (terminal_width - 2)}{BOTTOM_RIGHT}")
-
-                self.file_console.file.close()  # Close file console at end
-                logfile_name_html = backup_file(f"logs/{base_name}.svg", backup_dir='logs', extension='.svg')
-                self.console.save_svg(logfile_name_html)
-                console.print(f"Wrote {logfile_name_html} to disk")
+                if stmt.keyword == '.exit':
+                    break
 
     def print_with_wrap(self, is_response: bool, line: str) -> None:
         line_len = terminal_width - 23
@@ -381,21 +388,20 @@ class VM:
 
         self.print(f"{hdr}[/]:{print_line}[bold white]{VERTICAL}[/]")
 
-    def log_conversation(self):
-        if self.no_log:
-            return  # Skip logging when no_log is enabled
-        base_name = os.path.splitext(os.path.basename(self.filename))[0]
-        logfile_name = backup_file(f"logs/{base_name}_messages.json", backup_dir='logs', extension='.json')
-        with open(logfile_name, 'w') as file:
-            file.write(json.dumps(self.prompt.to_json()))
-
-    def log_last_json(self, data: dict[str, any]):
-        if self.no_log:
-            return  # Skip logging when no_log is enabled
-        base_name = os.path.splitext(os.path.basename(self.filename))[0]
-        logfile_name = backup_file(f"logs/{base_name}_last_msgs.json", backup_dir='logs', extension='.json')
-        with open(logfile_name, 'w') as file:
-            file.write(json.dumps(data, indent=2, sort_keys=True))
+    def log_conversation(self, call_id: str = None):
+        """Log conversation using the new logger system."""
+        messages = self.prompt.to_json()
+        
+        # Add call_id to the conversation metadata if provided
+        if call_id:
+            conversation_data = {
+                "call_id": call_id,
+                "messages": messages
+            }
+        else:
+            conversation_data = messages
+            
+        self.logger.log_conversation(conversation_data)
 
     def print_json(self,    label: str, data: dict) -> None:
         """Print a JSON object to the console"""
@@ -442,7 +448,8 @@ class StmtPrompt:
         return self.console_str()
 
     def execute(self, vm: VM) -> None:
-        vm.print(self.console_str())
+        vm.logger.print_statement(self.msg_no, self.keyword, self.value)
+        vm.logger.log_statement(self.msg_no, self.keyword, self.value)
 
 
 class StmtAssistant(StmtPrompt):
@@ -463,13 +470,7 @@ class StmtAssistant(StmtPrompt):
     """
 
     def execute(self, vm: VM) -> None:
-        if vm.debug and 'Statements' in vm.debug:
-            vls = self.value.split('\n')
-            vl = vls.pop(0)
-            vm.print(f"[bold white]{VERTICAL}[/][white]{self.msg_no:02}[/] [cyan]{self.keyword:<8}[/] [green]{vl}[/]")
-            for vl in vls:
-                vm.print(f"[bold white]{VERTICAL}[/]            [green]{vl}[/]")
-        vm.print(self.console_str())
+        super().execute(vm)
         if not self.value:
             vm.prompt.add_message(vm=vm, role='assistant', content=[])
         else:
@@ -493,21 +494,17 @@ class StmtClear(StmtPrompt):
     """
 
     def execute(self, vm: VM) -> None:
-        if vm.debug and 'Statements' in vm.debug:
-            vm.print(
-                f"[bold white]{VERTICAL}[/][white]{self.msg_no:02}[/] [cyan]{self.keyword:<8}[/] [green]{self.value}[/]")
+        super().execute(vm)
 
         try:
             parms = json.loads(self.value)
         except Exception as e:
-            vm.print(f"{VERTICAL} [white on red]Error parsing .clear parameters: {str(e)}[/]\n\n")
-            vm.print_exception()
+            vm.logger.log_error(f"Error parsing .clear parameters: {str(e)}")
+            vm.logger.print_exception()
             sys.exit(9)
-            # raise PromptSyntaxError(f"Error parsing .clear parameters: {str(e)}")
 
         if not isinstance(parms, list):
-            vm.print(
-                f"{VERTICAL} [white on red]Error parsing .clear parameters expected list, but got {type(parms).__name__}: {self.value}")
+            vm.logger.log_error(f"Error parsing .clear parameters expected list, but got {type(parms).__name__}: {self.value}")
             sys.exit(9)
 
         for k in parms:
@@ -516,18 +513,13 @@ class StmtClear(StmtPrompt):
 
                 for file_path in log_files:
                     if os.path.isfile(file_path):  # Ensure that it's a file
-                        if vm.debug and 'Statements' in vm.debug:
-                            vm.print(f"{VERTICAL} [bold green] Deleting {k}[/bold green]")
                         try:
                             os.remove(file_path)
-                            vm.print(f"File {file_path} deleted successfully.")
+                            vm.logger.log_warning(f"File {file_path} deleted successfully.")
                         except OSError as e:
-                            vm.print(f"Error deleting file {file_path}: {str(e)}")
-
-                    if vm.debug and 'Statements' in vm.debug:
-                        vm.print(f"{VERTICAL} [bold green]File {k} deleted successfully.[/bold green]")
+                            vm.logger.log_error(f"Error deleting file {file_path}: {str(e)}")
             except OSError as e:
-                vm.print(f"{VERTICAL} [white or red]Error deleting file {k}: {str(e)}[/]\n\n")
+                vm.logger.log_error(f"Error deleting file {k}: {str(e)}")
 
 
 class StmtCmd(StmtPrompt):
@@ -551,16 +543,12 @@ class StmtCmd(StmtPrompt):
 
     def execute(self, vm: VM) -> None:
         """Execute a command that was defined in a prompt file (.prompt)"""
+        super().execute(vm)
 
         function_name, args = self.value.split('(', maxsplit=1)
         args = args[:-1]
         args_list = args.split(",")
         function_args = {}
-
-        if function_name == 'askuser':
-            vm.print(self.console_str() + ': ', end='')
-        else:
-            vm.print(self.console_str())
 
         for arg in args_list:
             name, value = arg.split("=", maxsplit=1)
@@ -593,7 +581,7 @@ class StmtComment(StmtPrompt):
         """
         Executes the comment statement by printing it for informational display.
         """
-        vm.print(self.console_str())
+        super().execute(vm)
 
 
 class StmtDebug(StmtPrompt):
@@ -617,8 +605,7 @@ class StmtDebug(StmtPrompt):
     """
 
     def execute(self, vm: VM) -> None:
-
-        vm.print(self.console_str())
+        vm.logger.print_statement(self.msg_no, self.keyword, self.value)
 
         if not self.value:
             self.value = '["all"]'
@@ -670,26 +657,47 @@ class StmtExec(StmtPrompt):
             None: The execution modifies the VM's state directly by adding the response to 
                   the prompt context and logging the conversation data.
         """
+        # Print the exec statement for execution.log (but don't log to statements.log yet)
+        vm.logger.print_statement(self.msg_no, self.keyword, self.value)
+        
         header = f"[bold white]{VERTICAL}[/][white]{self.msg_no:02}[/] [cyan]{self.keyword:<8}[/]"
-        # vm.print(header, end='')
 
         start_time = time.time()
-        response: AiMessage = vm.prompt.ask(label=header)
+        
+        # Generate unique call identifier
+        vm.interaction_no += 1
+        call_id = f"call-{vm.interaction_no:03d}"
+        
+        responses = vm.prompt.ask(label=header, call_id=call_id)
         elapsed_time = time.time() - start_time
 
-        pline = f"{header} {elapsed_time:.2f} secs output tokens {vm.prompt.toks_out} at {vm.prompt.toks_out / elapsed_time:.2f} tps"
-        used_bytes = 13 + 11 + len(vm.company) + 2 + len(vm.model_name) + 9
-        no_bytes_remaining = terminal_width - used_bytes
-        vm.print(f"{pline:<{no_bytes_remaining}}[bold white]{VERTICAL}[/]")
+        # Extract last response text for variable substitution
+        last_response_text = ""
+        for response in responses:
+            if hasattr(response, 'content') and response.content:
+                for part in response.content:
+                    if isinstance(part, AiTextPart):
+                        last_response_text += part.text
+        
+        # Store last response using centralized method with automatic logging
+        vm.set_variable('last_response', last_response_text)
 
-        if vm.debug and 'Statements' in vm.debug:
-            vm.print(f"[bold blue]Response from {vm.company} API:[/bold blue]")
-            vm.print(response)
+        # Log the exec completion to statements.log (only this one, not the initial empty one)
+        exec_completion_msg = f"{vm.company}::{vm.model_name} {call_id} completed in {elapsed_time:.2f} seconds"
+        vm.logger.log_statement(self.msg_no, self.keyword, exec_completion_msg)
 
-        pline = f"Tokens In={vm.toks_in}(${vm.cost_in:06.4f}), Out={vm.toks_out}(${vm.cost_out:06.4f}) Total=${vm.total:06.4f}"
-        vm.print(f"{header}{pline:<{terminal_width - 14}}[bold white]{VERTICAL}[/]")
+        # Format the execution timing to match the table structure
+        timing_msg = f"{vm.company}::{vm.model_name} completed in {elapsed_time:.2f} seconds"
+        # Use same width calculation as other timing lines
+        content_len = vm.logger.terminal_width - 14  # Same as statement lines
+        padded_content = f"{timing_msg:<{content_len}}"
+        final_line = f"[white]{VERTICAL}[/]            {padded_content}[white]{VERTICAL}[/]"
+        vm.logger.log_execution(final_line)
+        
+        # Log the response using structured logging
+        vm.logger.log_llm_call(f"Response from {vm.company} API completed", call_id)
 
-        vm.log_conversation()
+        vm.log_conversation(call_id)
 
 
 class StmtExit(StmtPrompt):
@@ -709,7 +717,7 @@ class StmtExit(StmtPrompt):
     """
 
     def execute(self, vm: VM) -> None:
-        vm.print(self.console_str())
+        vm.logger.print_statement(self.msg_no, self.keyword, self.value)
 
 
 class StmtInclude(StmtPrompt):
@@ -734,7 +742,7 @@ class StmtInclude(StmtPrompt):
 
     def execute(self, vm: VM) -> None:
         filename = vm.substitute(self.value)
-        vm.print(self.console_str())
+        vm.logger.print_statement(self.msg_no, self.keyword, self.value)
         lines = readfile(filename=filename)
         last_msg = vm.prompt.messages[-1]
         last_msg.content.append(AiTextPart(vm=vm, text=lines))
@@ -758,7 +766,7 @@ class StmtImage(StmtPrompt):
     """
 
     def execute(self, vm: VM) -> None:
-        vm.print(self.console_str())
+        vm.logger.print_statement(self.msg_no, self.keyword, self.value)
         filename = self.value
         vm.prompt.add_message(vm=vm, role="user", content=[AiImagePart(vm=self.vm, filename=filename)])
 
@@ -782,7 +790,7 @@ class StmtLlm(StmtPrompt):
     """
 
     def execute(self, vm: VM) -> None:
-        vm.print(self.console_str())
+        super().execute(vm)
         try:
             if vm.llm:
                 raise (StmtSyntaxError(f".llm syntax: only one .lls statement allowed in vm {vm.filename}"))
@@ -795,8 +803,8 @@ class StmtLlm(StmtPrompt):
             try:
                 parms = json.loads(value)
             except Exception as e:
-                vm.print(f"{VERTICAL} [white on red]Error parsing .llm parameters: {str(e)}[/]\n\n")
-                vm.print_exception()
+                vm.logger.log_error(f"Error parsing .llm parameters: {str(e)}")
+                vm.logger.print_exception()
                 sys.exit(9)
 
             if not isinstance(parms, dict):
@@ -809,21 +817,21 @@ class StmtLlm(StmtPrompt):
             vm.load_llm(parms)
 
         except Exception as err:
-            vm.print_exception()
+            vm.logger.print_exception()
             sys.exit(9)
 
         # Now we that we have loaded the LLM,  we will load the API_KEY
         try:
             api_key = keyring.get_password('keprompt', username=vm.company)
         except keyring.errors.PasswordDeleteError:
-            vm.print(f"[bold red]Error accessing keyring ('keprompt', username={vm.company})[/bold red]")
+            vm.logger.log_error(f"Error accessing keyring ('keprompt', username={vm.company})")
             api_key = None
 
         if api_key is None:
             api_key = console.input(f"Please enter your {vm.company} API key: ")
             keyring.set_password("keprompt", username=vm.company, password=api_key)
         if not api_key:
-            vm.print("[bold red]API key cannot be empty.[/bold red]")
+            vm.logger.log_error("API key cannot be empty.")
             sys.exit(1)
 
         vm.llm['API_KEY'] = api_key
@@ -852,7 +860,7 @@ class StmtSystem(StmtPrompt):
     """
 
     def execute(self, vm: VM) -> None:
-        vm.print(self.console_str())
+        super().execute(vm)
         if not self.value:
             vm.prompt.add_message(vm=vm, role='system', content=[])
         else:
@@ -878,7 +886,7 @@ class StmtText(StmtPrompt):
     """
 
     def execute(self, vm: VM) -> None:
-        vm.print(self.console_str())
+        super().execute(vm)
         if vm.prompt.messages[-1].role in ['assistant', 'system', 'user']:
             vm.prompt.messages[-1].content.append(AiTextPart(vm=vm, text=self.value))
         else:
@@ -904,11 +912,79 @@ class StmtUser(StmtPrompt):
     """
 
     def execute(self, vm: VM) -> None:
-        vm.print(self.console_str())
+        super().execute(vm)
         if not self.value:
             vm.prompt.add_message(vm=vm, role='user', content=[])
         else:
-            vm.prompt.add_message(vm=vm, role='user', content=[AiTextPart(vm=vm, text=self.value)])
+            # Substitute variables in the user message
+            substituted_text = vm.substitute(self.value)
+            vm.prompt.add_message(vm=vm, role='user', content=[AiTextPart(vm=vm, text=substituted_text)])
+
+
+class StmtPrint(StmtPrompt):
+    """
+    Handles the execution of a print statement in the VM.
+
+    This class represents a `.print` keyword statement in the prompt file. It 
+    outputs text directly to STDOUT for production use, separate from development
+    logging which goes to STDERR.
+
+    Attributes:
+        msg_no (int): The message number in the execution sequence.
+        keyword (str): The keyword associated with the statement (e.g., '.print').
+        value (str): The value/content to print to STDOUT.
+
+    Methods:
+        execute(vm: VM): Outputs the text to STDOUT after variable substitution.
+    """
+
+    def execute(self, vm: VM) -> None:
+        # Log the print statement execution to development channels (STDERR)
+        super().execute(vm)
+        
+        # Substitute variables and print to STDOUT (production channel)
+        output_text = vm.substitute(self.value)
+        print(output_text)  # Add newline for clean output
+
+
+class StmtSet(StmtPrompt):
+    """
+    Handles the execution of a set statement in the VM.
+
+    This class represents a `.set` keyword statement in the prompt file. It 
+    allows setting variables in the VM's variable dictionary, including special
+    configuration variables like Prefix and Postfix for variable substitution.
+
+    Attributes:
+        msg_no (int): The message number in the execution sequence.
+        keyword (str): The keyword associated with the statement (e.g., '.set').
+        value (str): The value/content in format "variable_name value".
+
+    Methods:
+        execute(vm: VM): Parses the variable name and value, stores them in vm.vdict.
+    """
+
+    def execute(self, vm: VM) -> None:
+        # Log the set statement execution to development channels (STDERR)
+        super().execute(vm)
+        
+        # Parse the variable name and value
+        if not self.value.strip():
+            raise StmtSyntaxError(f".set syntax error: variable name and value required")
+        
+        # Split on first space to separate variable name from value
+        parts = self.value.split(' ', 1)
+        if len(parts) < 2:
+            raise StmtSyntaxError(f".set syntax error: both variable name and value required: {self.value}")
+        
+        var_name = parts[0].strip()
+        var_value = parts[1].strip()
+        
+        if not var_name:
+            raise StmtSyntaxError(f".set syntax error: variable name cannot be empty")
+        
+        # Store the variable using centralized method with automatic logging
+        vm.set_variable(var_name, var_value)
 
 
 # Create a _PromptStatement subclass depending on keyword
@@ -923,6 +999,8 @@ StatementTypes: dict[str, type(StmtPrompt)] = {
     '.image': StmtImage,
     '.include': StmtInclude,
     '.llm': StmtLlm,
+    '.print': StmtPrint,
+    '.set': StmtSet,
     '.system': StmtSystem,
     '.text': StmtText,
     '.user': StmtUser,
@@ -943,8 +1021,28 @@ def print_statement_types():
     table.add_column("Keyword", style="green")
     table.add_column("Description", style="yellow")
 
+    # Custom descriptions for better documentation
+    descriptions = {
+        '.#': 'Comment statement - ignored during execution',
+        '.assistant': 'Add an assistant message to the conversation context',
+        '.clear': 'Delete specified files or file patterns from the system',
+        '.cmd': 'Execute a defined function with specified arguments',
+        '.debug': 'Display VM state information for debugging purposes',
+        '.exec': 'Execute the current prompt context with the configured LLM',
+        '.exit': 'Terminate prompt execution',
+        '.image': 'Add an image file to the conversation context',
+        '.include': 'Include content from another file into the current context',
+        '.llm': 'Configure the Language Learning Model and its parameters',
+        '.print': 'Output text to STDOUT with variable substitution (production output)',
+        '.set': 'Set variables including Prefix/Postfix for configurable substitution delimiters',
+        '.system': 'Add a system message to the conversation context',
+        '.text': 'Add text content to the current message context',
+        '.user': 'Add a user message to the conversation context',
+    }
+
     for k, v in StatementTypes.items():
-        table.add_row(k, v.__doc__)
+        description = descriptions.get(k, v.__doc__ or 'No description available')
+        table.add_row(k, description)
         
 
     console.print(table)

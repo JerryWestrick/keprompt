@@ -1,0 +1,13 @@
+.# Test the new .set statement and configurable variable substitution
+.set Prefix {{
+.set Postfix }}
+.set Example This is an example value of a variable
+.set TestVar Hello World from .set statement
+.llm {"model": "gpt-4o-mini"}
+.system You are a helpful assistant that provides concise responses.
+.user What is 2 + 2? Answer with just the number.
+.exec
+.print Math result: {{last_response}}
+.print Example variable: {{Example}}
+.print Test variable: {{TestVar}}
+.print Using custom delimiters works: {{Example}} and {{TestVar}}

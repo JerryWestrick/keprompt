@@ -175,13 +175,12 @@ def get_cmd_args() -> argparse.Namespace:
     parser.add_argument('-l', '--list', nargs='?', const='*', help='List Prompt file')
     parser.add_argument('-e', '--execute', nargs='?', const='*', help='Execute one or more Prompts')
     parser.add_argument('-k', '--key', action='store_true', help='Ask for (new) Company Key')
-    parser.add_argument('-d', '--debug', nargs='+', choices=['Statements', 'Prompt', 'LLM', 'Functions', 'Messages'],
-                        help='Select one or more types of debugging: Statements, Prompt, LLM, Functions, Messages.', default=[])
+    parser.add_argument('--log', action='store_true', help='Enable structured logging to prompts/<prompt_name>/ directory')
+    parser.add_argument('--debug', action='store_true', help='Enable structured logging + rich output to STDERR')
     parser.add_argument('-r', '--remove', action='store_true', help='remove all .~nn~. files from sub directories')
     parser.add_argument('--init', action='store_true', help='Initialize prompts and functions directories')
     parser.add_argument('--check-builtins', action='store_true', help='Check for built-in function updates')
     parser.add_argument('--update-builtins', action='store_true', help='Update built-in functions')
-    parser.add_argument('--no-log', action='store_true', help='Disable logging to files (prevents conflicts in multithreaded execution)')
 
     return parser.parse_args()
 
@@ -197,6 +196,19 @@ def prompt_pattern(prompt_name: str) -> str:
 def glob_prompt(prompt_name: str) -> list[Path]:
     prompt_p = prompt_pattern(prompt_name)
     return sorted(Path('.').glob(str(prompt_p)))
+
+def create_global_variables():
+    """Create global variables dictionary with explicit hard-coded defaults"""
+    return {
+        # Variable substitution delimiters
+        'Prefix': '<<',
+        'Postfix': '>>',
+        
+        # Future expansion possibilities
+        'Debug': False,
+        'Verbose': False,
+        # Add other system defaults here
+    }
 
 def main():
     # Ensure 'prompts' directory exists
@@ -215,11 +227,13 @@ def main():
         console.print(f"[bold cyan]keprompt[/] [bold green]version[/] [bold magenta]{__version__}[/]")
         return
 
-    variables = {}
+    # Start with hard-coded defaults
+    global_variables = create_global_variables()
+    
+    # Override with command line parameters
     if args.param:
-        params = {k: v for k, v in args.param}
-        # console.print(params)  # print to verify
-        variables = params
+        for key, value in args.param:
+            global_variables[key] = value
 
     # Add in main() after args parsing:
     if args.remove:
@@ -350,12 +364,20 @@ def main():
 
     if args.execute:
         glob_files = glob_prompt(args.execute)
-        if debug: log.info(f"--execute '{args.list}' returned {len(glob_files)} files: {glob_files}")
 
         if glob_files:
             for prompt_file in glob_files:
-                # console.print(params)  # print to verify
-                step = VM(prompt_file, args.debug, vdict=variables, no_log=args.no_log)
+                # Determine logging mode
+                from .keprompt_logger import LogMode
+                
+                if args.debug:
+                    log_mode = LogMode.DEBUG
+                elif args.log:
+                    log_mode = LogMode.LOG
+                else:
+                    log_mode = LogMode.PRODUCTION
+                
+                step = VM(prompt_file, global_variables, log_mode=log_mode)
                 step.parse_prompt()
                 step.execute()
         else:

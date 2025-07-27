@@ -1,0 +1,4 @@
+
+
+Math result: 4
+Geography result: ParisFinal summary: Math=Paris, but we need the previous math result too

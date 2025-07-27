@@ -1,0 +1,20 @@
+.# Test prompt for the new .print statement and logging architecture
+.# This demonstrates production output vs development logging separation
+
+.llm {"model": "gpt-4o-mini"}
+
+.system You are a helpful assistant that provides concise responses.
+
+.user What is 2 + 2? Answer with just the number.
+.exec
+
+.print Math result: <<last_response>>
+
+.user What is the capital of France? Answer with just the city name.
+.exec
+
+.print Geography result: <<last_response>>
+
+.print Final summary: Math=<<last_response>>, but we need the previous math result too
+
+.exit
