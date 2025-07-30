@@ -175,7 +175,7 @@ def get_cmd_args() -> argparse.Namespace:
     parser.add_argument('-l', '--list', nargs='?', const='*', help='List Prompt file')
     parser.add_argument('-e', '--execute', nargs='?', const='*', help='Execute one or more Prompts')
     parser.add_argument('-k', '--key', action='store_true', help='Ask for (new) Company Key')
-    parser.add_argument('--log', action='store_true', help='Enable structured logging to prompts/<prompt_name>/ directory')
+    parser.add_argument('--log', metavar='IDENTIFIER', nargs='?', const='', help='Enable structured logging to prompts/logs-<identifier>/ directory (if no identifier provided, uses prompt name)')
     parser.add_argument('--debug', action='store_true', help='Enable structured logging + rich output to STDERR')
     parser.add_argument('-r', '--remove', action='store_true', help='remove all .~nn~. files from sub directories')
     parser.add_argument('--init', action='store_true', help='Initialize prompts and functions directories')
@@ -367,17 +367,24 @@ def main():
 
         if glob_files:
             for prompt_file in glob_files:
-                # Determine logging mode
+                # Determine logging mode and identifier
                 from .keprompt_logger import LogMode
                 
+                log_identifier = None
                 if args.debug:
                     log_mode = LogMode.DEBUG
-                elif args.log:
+                    # Use prompt name as default identifier for debug mode
+                    log_identifier = os.path.splitext(os.path.basename(prompt_file))[0]
+                elif args.log is not None:  # --log was specified (with or without identifier)
                     log_mode = LogMode.LOG
+                    if args.log:  # --log <identifier> was provided
+                        log_identifier = args.log
+                    else:  # --log without identifier, use prompt name
+                        log_identifier = os.path.splitext(os.path.basename(prompt_file))[0]
                 else:
                     log_mode = LogMode.PRODUCTION
                 
-                step = VM(prompt_file, global_variables, log_mode=log_mode)
+                step = VM(prompt_file, global_variables, log_mode=log_mode, log_identifier=log_identifier)
                 step.parse_prompt()
                 step.execute()
         else:

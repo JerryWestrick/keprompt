@@ -63,7 +63,7 @@ class StmtSyntaxError(Exception):
 class VM:
     """Class to hold Prompt Virtual Machine execution state"""
 
-    def __init__(self, filename: str, global_vars: dict[str, any], log_mode: LogMode = LogMode.PRODUCTION):
+    def __init__(self, filename: str, global_vars: dict[str, any], log_mode: LogMode = LogMode.PRODUCTION, log_identifier: str = None):
         self.filename = filename
         self.log_mode = log_mode
         self.ip: int = 0
@@ -81,7 +81,7 @@ class VM:
         prompt_name = os.path.splitext(os.path.basename(filename))[0]
         
         # Initialize the new structured logger
-        self.logger = KepromptLogger(prompt_name=prompt_name, mode=log_mode)
+        self.logger = KepromptLogger(prompt_name=prompt_name, mode=log_mode, log_identifier=log_identifier)
         
         # Keep old console for backward compatibility during transition
         self.console = Console(width=terminal_width)  # Console for terminal

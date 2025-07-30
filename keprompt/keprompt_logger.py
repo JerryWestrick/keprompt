@@ -45,16 +45,18 @@ class KepromptLogger:
     - errors.log: Errors and warnings
     """
     
-    def __init__(self, prompt_name: str, mode: LogMode = LogMode.PRODUCTION):
+    def __init__(self, prompt_name: str, mode: LogMode = LogMode.PRODUCTION, log_identifier: str = None):
         """
         Initialize the structured logger.
         
         Args:
             prompt_name: Name of the prompt (without .prompt extension)
             mode: Logging mode (production, log, or debug)
+            log_identifier: Custom identifier for log directory (if None, uses prompt_name)
         """
         self.prompt_name = prompt_name
         self.mode = mode
+        self.log_identifier = log_identifier if log_identifier else prompt_name
         
         # Initialize console for STDERR output
         self.console = Console(stderr=True)
@@ -80,8 +82,8 @@ class KepromptLogger:
     
     def _setup_logging(self):
         """Setup the logging directory and create all log files."""
-        # Create log directory path
-        self.log_directory = Path(f"prompts/logs_{self.prompt_name}")
+        # Create log directory path using the log identifier
+        self.log_directory = Path(f"prompts/logs-{self.log_identifier}")
         
         # Delete existing directory if it exists
         if self.log_directory.exists():
