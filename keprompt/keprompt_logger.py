@@ -167,6 +167,19 @@ class KepromptLogger:
             json_content = json.dumps(conversation_data, indent=2)
             self._write_to_file('messages.log', json_content)
     
+    def log_message_exchange(self, direction: str, messages: List[Dict], call_id: str = None):
+        """Log detailed message exchange with LLM."""
+        if self.mode in [LogMode.LOG, LogMode.DEBUG]:
+            timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+            exchange_data = {
+                "timestamp": timestamp,
+                "direction": direction,
+                "call_id": call_id,
+                "messages": messages
+            }
+            json_content = json.dumps(exchange_data, indent=2)
+            self._write_to_file('messages.log', json_content)
+    
     def log_error(self, message: str, exit_code: int = 1):
         """Log error message and exit."""
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S")

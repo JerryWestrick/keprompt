@@ -331,10 +331,10 @@ class AiPrompt:
                     console.print(f"[red]Unexpected response type: {type(part)}[/red]")
                     raise APIKeyError("Unexpected response structure from the company.")
 
-            tool_calls = []
+            # Process tool_calls and add them to msg_parts
             if "tool_calls" in llm_msg and llm_msg["tool_calls"]:
                 for fc in llm_msg["tool_calls"]:
-                    tool_calls.append(
+                    msg_parts.append(
                         AiCall(
                             vm=self.vm,
                             name=fc["function"]["name"],

@@ -46,23 +46,23 @@ class AiOpenAi(AiCompany):
         for msg in messages:
             content = []
             tool_calls = []
-            tool_results = {}
+            tool_result_messages = []
 
             for part in msg.content:
                 if   part.type == "text":       content.append({"type": "text", "text": part.text})
                 elif part.type == "image_url":  content.append({'type': 'image_url','image_url': {'url': f"data:{part.media_type};base64,{part.file_contents}"}})
                 elif part.type == "call":       tool_calls.append({'id': part.id,'type': 'function','function': {'name': part.name,'arguments': json.dumps(part.arguments)}})
-                elif part.type == 'result':     tool_results= {'role': "tool", 'tool_call_id': part.id,'content': part.result}
+                elif part.type == 'result':     tool_result_messages.append({'role': "tool", 'tool_call_id': part.id,'content': part.result})
                 else:                           raise ValueError(f"Unknown part type: {part.type}")
 
             if msg.role == "tool":
-                message = tool_results
+                # Add all tool result messages separately
+                openai_messages.extend(tool_result_messages)
             else:
                 message = {"role": msg.role,"content": content[0]["text"] if len(content) == 1 else content}
                 if tool_calls:
                     message["tool_calls"] = tool_calls
-
-            openai_messages.append(message)
+                openai_messages.append(message)
 
         return openai_messages
 

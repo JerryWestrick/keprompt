@@ -83,6 +83,10 @@ class AiCompany(abc.ABC):
             self.prompt.vm.logger.log_llm_call(f"Sent messages to {self.prompt.model}", call_id)
 
             company_messages = self.to_company_messages(self.prompt.messages)
+            
+            # Log detailed message exchange - what we're sending
+            self.prompt.vm.logger.log_message_exchange("send", company_messages, call_id)
+            
             request = self.prepare_request(company_messages)
 
             # Make API call with formatted label
@@ -97,12 +101,20 @@ class AiCompany(abc.ABC):
             response_msg = self.to_ai_message(response)
             self.prompt.messages.append(response_msg)
             responses.append(response_msg)
+            
+            # Log detailed message exchange - what we received
+            # Convert the response message back to company format for logging
+            received_messages = self.to_company_messages([response_msg])
+            self.prompt.vm.logger.log_message_exchange("received", received_messages, call_id)
 
             tool_msg = self.call_functions(response_msg)
             if tool_msg:
                 do_again = True
                 self.prompt.messages.append(tool_msg)
                 responses.append(tool_msg)
+                
+                # Don't log tool_response to messages.log - it's not sent to OpenAI
+                # The tool results will be included in the next "send" message
 
         # Log received messages if in debug/log mode
         self.prompt.vm.logger.log_llm_call(f"Received messages from {self.prompt.model}", call_id)

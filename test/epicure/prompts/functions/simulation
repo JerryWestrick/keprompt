@@ -1,0 +1,245 @@
+#!/usr/bin/env python3
+"""
+Epicure Business Simulation - Keprompt Function Interface
+Bridges keprompt function calls to Prolog schema.pl
+Implements Prolog Variable Binding System with _pNN parameters
+"""
+
+import json
+import sys
+import subprocess
+import os
+from pathlib import Path
+import inflect
+
+# Import function definitions from separate module
+from simulation_functions import FUNCTIONS
+
+# Initialize inflect engine for pluralization
+p = inflect.engine()
+
+def get_entity_name(function_name):
+    """Convert function name to singular entity name using inflect"""
+    if function_name.startswith('get_'):
+        plural_name = function_name[4:]  # Remove 'get_' prefix
+        singular = p.singular_noun(plural_name)
+        return singular if singular else plural_name  # Handle already singular words
+    return function_name
+
+def get_field_names_from_function(func_def):
+    """Extract field names from function definition parameters"""
+    field_names = []
+    param_positions = []
+    
+    # Extract parameter names and their positions
+    for param_name in func_def["parameters"]["properties"].keys():
+        if len(param_name) >= 4 and param_name[-4:-2] == '_p':
+            try:
+                position = int(param_name[-2:])
+                param_positions.append((position, param_name))
+            except ValueError:
+                continue
+    
+    # Sort by position and extract names
+    param_positions.sort(key=lambda x: x[0])
+    field_names = [name for pos, name in param_positions]
+    
+    return field_names
+
+def get_universal_query_functions():
+    """Extract universal query function names from FUNCTIONS structure"""
+    return [func["name"] for func in FUNCTIONS 
+            if func["name"].startswith("get_") and "Universal Query" in func.get("description", "")]
+
+def convert_pnn_to_prolog_params(args_dict):
+    """Convert _pNN parameters to Prolog variable assignments and positional parameters"""
+    if not args_dict:
+        return [], ""
+    
+    # Extract position numbers and sort by position
+    param_positions = []
+    for key, value in args_dict.items():
+        if '_p' in key:
+            # Extract position number from parameter name (e.g., client_name_p01 -> 01)
+            parts = key.split('_p')
+            if len(parts) == 2:
+                try:
+                    position = int(parts[1])
+                    param_positions.append((position, key, value))
+                except ValueError:
+                    continue
+    
+    # Sort by position
+    param_positions.sort(key=lambda x: x[0])
+    
+    # Generate variable assignments and positional parameters
+    variable_assignments = []
+    prolog_vars = []
+    
+    for position, param_name, value in param_positions:
+        # Generate Prolog variable name (P01, P02, etc.)
+        var_name = f"P{position:02d}"
+        prolog_vars.append(var_name)
+        
+        # Generate variable assignment if value is provided
+        if value is not None and value != "":
+            if isinstance(value, str):
+                variable_assignments.append(f"{var_name}='{value}'")
+            else:
+                variable_assignments.append(f"{var_name}={value}")
+    
+    return variable_assignments, prolog_vars
+
+def execute_universal_query(function_name, args_dict, debug_mode=False):
+    """Execute universal query functions using Prolog Variable Binding System"""
+    try:
+        # Convert _pNN parameters to Prolog format
+        variable_assignments, prolog_vars = convert_pnn_to_prolog_params(args_dict)
+        
+        # Find the function definition to get parameter count
+        func_def = None
+        for func in FUNCTIONS:
+            if func["name"] == function_name:
+                func_def = func
+                break
+        
+        if not func_def:
+            return f"Error: Universal function {function_name} not found in FUNCTIONS"
+        
+        # Get parameter count from function definition
+        param_count = len(func_def["parameters"]["properties"])
+        
+        # Build the simplified Prolog query - formatting is now handled in Prolog
+        param_vars = [f"P{i:02d}" for i in range(1, param_count + 1)]
+        params_str = ",".join(param_vars)
+        
+        if variable_assignments:
+            # With variable bindings: P02='GOAT', get_orders(P01,P02,P03,P04,P05), fail
+            assignments_str = ", ".join(variable_assignments)
+            query = f"{assignments_str}, {function_name}({params_str}), fail"
+        else:
+            # Without bindings: get_orders(P01,P02,P03,P04,P05), fail
+            query = f"{function_name}({params_str}), fail"
+        
+        # Add halt to end the query
+        full_query = f"({query}; halt)"
+        
+        # Build command
+        cmd = ['swipl', '-s', 'schema.pl', '-g', full_query]
+        
+        if debug_mode:
+            # Print command instead of executing
+            print(' '.join(cmd))
+            return ""
+        
+        # Execute the Prolog query
+        result = subprocess.run(cmd, capture_output=True, text=True, cwd=os.path.dirname(__file__))
+        
+        if result.returncode == 0:
+            output = result.stdout.strip()
+            return output if output else "No results found"
+        else:
+            return f"Error executing {function_name}: {result.stderr.strip()}"
+            
+    except Exception as e:
+        return f"Error executing {function_name}: {str(e)}"
+
+def execute_business_function(function_name, args_dict):
+    """Execute business functions with _pNN parameter conversion"""
+    try:
+        # Convert _pNN parameters to standard parameter names for business functions
+        converted_args = {}
+        for key, value in args_dict.items():
+            if '_p' in key:
+                # Remove _pNN suffix to get original parameter name
+                base_name = key.split('_p')[0]
+                converted_args[base_name] = value
+            else:
+                converted_args[key] = value
+        
+        # Build the Prolog query string
+        if converted_args:
+            # Convert arguments to Prolog format
+            arg_strings = []
+            for key, value in converted_args.items():
+                if isinstance(value, str):
+                    arg_strings.append(f"'{value}'")
+                else:
+                    arg_strings.append(str(value))
+            args_str = ', '.join(arg_strings)
+            query = f"{function_name}({args_str})"
+        else:
+            # For functions with no parameters, call with empty string parameter
+            query = f"{function_name}('')"
+        
+        # Execute the Prolog query with proper output handling
+        if converted_args:
+            prolog_query = f"{query}, halt."
+        else:
+            prolog_query = f"{function_name}('', Result), write(Result), halt."
+        
+        result = subprocess.run([
+            'swipl', '-s', 'schema.pl', '-g', prolog_query
+        ], capture_output=True, text=True, cwd=os.path.dirname(__file__))
+        
+        if result.returncode == 0:
+            return result.stdout.strip()
+        else:
+            return f"Error executing {function_name}: {result.stderr.strip()}"
+            
+    except Exception as e:
+        return f"Error executing {function_name}: {str(e)}"
+
+def main():
+    if len(sys.argv) < 2:
+        print("Usage: simulation --list-functions | --debug <function_name> | <function_name>")
+        sys.exit(1)
+    
+    if sys.argv[1] == "--list-functions":
+        # Return function schema for keprompt
+        print(json.dumps(FUNCTIONS, indent=2))
+        return
+    
+    # Check for debug mode
+    if len(sys.argv) >= 3 and sys.argv[1] == "--debug":
+        debug_mode = True
+        function_name = sys.argv[2]
+    else:
+        debug_mode = False
+        function_name = sys.argv[1]
+    
+    # Read arguments from stdin
+    try:
+        args_json = sys.stdin.read().strip()
+        if args_json:
+            args_dict = json.loads(args_json)
+        else:
+            args_dict = {}
+    except json.JSONDecodeError:
+        print("Error: Invalid JSON arguments")
+        sys.exit(1)
+    
+    # Find the function
+    function_found = False
+    for func in FUNCTIONS:
+        if func["name"] == function_name:
+            function_found = True
+            break
+    
+    if not function_found:
+        print(f"Error: Function '{function_name}' not found")
+        sys.exit(1)
+    
+    # Execute the function based on type
+    universal_functions = get_universal_query_functions()
+    if function_name in universal_functions:
+        # Universal query functions
+        result = execute_universal_query(function_name, args_dict, debug_mode)
+    else:
+        # Business functions with _pNN parameter conversion
+        result = execute_business_function(function_name, args_dict)
+    
+    print(result)
+
+if __name__ == "__main__":
+    main()
