@@ -4,27 +4,32 @@ A powerful prompt engineering and LLM interaction tool designed for developers, 
 
 ## Overview
 
-KePrompt provides a flexible framework for crafting, executing, and iterating on LLM prompts across multiple AI providers.
+KePrompt provides a flexible framework for crafting, executing, and iterating on LLM prompts across multiple AI providers using a domain-specific language that translates to a universal prompt structure.
 
 ## Philosophy
- - A domain-specific language allows for easy prompt definition and development.  
- - This is translated into a **_universal prompt structure_** upon which the code is implemented.  
- - Different company interfaces translate **_universal prompt structure_** to company specific prompts and back.
+- A domain-specific language allows for easy prompt definition and development  
+- This is translated into a **_universal prompt structure_** upon which the code is implemented  
+- Different company interfaces translate **_universal prompt structure_** to company specific prompts and back
 
 ## Features
 
 - **Multi-Provider Support**: Interfaces with Anthropic, OpenAI, Google, MistralAI, XAI, DeepSeek, and more
-- **Prompt Language**: Simple yet powerful DSL for defining prompts
+- **Prompt Language**: Simple yet powerful DSL for defining prompts with 15+ statement types
 - **Function Calling**: Integrated tools for file operations, web requests, and user interaction
 - **User-Defined Functions**: Create custom functions in any programming language that LLMs can call
 - **Language Agnostic Extensions**: Write functions in Python, Shell, Go, Rust, or any executable language
 - **Function Override System**: Replace built-in functions with custom implementations
 - **API Key Management**: Secure storage of API keys via system keyring
 - **Rich Terminal Output**: Terminal-friendly visuals with color-coded responses
-- **Logging**: Automatic conversation and response logging
+- **Structured Logging**: Advanced logging system with multiple modes (production, log, debug)
 - **Cost Tracking**: Token usage and cost estimation for API calls
-- **Extensive Debugging Support**: different debugging options to aid in Prompt development
-- **File Versioning**: Renames files adding version number instead of overwriting to aid in development
+- **Variable Substitution**: Configurable variable substitution with customizable delimiters
+- **File Backup**: Automatic backup system to prevent overwriting files
+
+
+## Disclaimer
+Not tested on windows or mac...
+
 
 ## Installation
 
@@ -33,7 +38,7 @@ KePrompt provides a flexible framework for crafting, executing, and iterating on
 pip install keprompt
 
 # Install from source
-git clone https://github.com/yourusername/keprompt.git
+git clone https://github.com/JerryWestrick/keprompt.git
 cd keprompt
 
 # Create and activate virtual environment
@@ -48,72 +53,33 @@ pip install -r requirements-dev.txt
 ```
 
 ### Quick Start
-```bash 
-#!/bin/bash
 
-# Create prompts directory if it doesn't exist
+1. **Initialize keprompt** (creates directories and installs built-in functions):
+```bash
+keprompt --init
+```
+
+2. **Create a simple prompt**:
+```bash
 mkdir -p prompts
-
-# Write content to Test.prompt
-cat > prompts/Test.prompt << 'EOL'
-.# Make snake program with gpt-4o
-.llm "model": "gpt-4o"
-.system
-You are to provide short concise answers.
-.user
-Generate the python code implementing the game of snake, and write the code to the file snake.py using the provided writefile function.
+cat > prompts/hello.prompt << 'EOL'
+.# Simple hello world example
+.llm {"model": "gpt-4o-mini"}
+.system You are a helpful assistant.
+.user Hello! Please introduce yourself.
 .exec
 EOL
-
-echo "Created prompts/Test.prompt successfully."
 ```
 
-```bash 
-keprompt -e Test --debug Messages
+3. **Execute the prompt**:
+```bash
+keprompt -e hello --debug
 ```
-
-#### Output
-```aiignore
-(keprompt-py3.10) jerry@desktop:~/PycharmProjects/keprompt$ keprompt -e Test --debug Messages
-╭──Test.prompt───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│00 .#       Make snake program with gpt-4o                                                                                                                                                                                                  │
-│01 .llm     "model": "gpt-4o"                                                                                                                                                                                                               │
-│02 .system  You are to provide short concise answers.                                                                                                                                                                                       │
-│03 .user    Generate the python code implementing the game of snake, and write the code to the file snake.py using the provided writefile function.                                                                                         │
-│04 .exec    Calling OpenAI::gpt-4o
-
-│╭─── Messages Sent to gpt-4o ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮│
-││ system    Text(You are to provide short concise answers.)                                                                                                                                                                                ││
-││ user      Text(Generate the python code implementing the game of snake, and write the code to the file snake.py using the provided writefile function.)                                                                                  ││
-│╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯│
-│            Call-01 Elapsed: 17.14 seconds 0.00 tps                                                                                                                                                                                          
-│
-│╭─── Messages Sent to gpt-4o ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮│
-││ system    Text(You are to provide short concise answers.)                                                                                                                                                                                ││
-││ user      Text(Generate the python code implementing the game of snake, and write the code to the file snake.py using the provided writefile function.)                                                                                  ││
-││ assistant Call writefile(id=call_O2R056UlBxXZfzBXs7ESAjk7, "filename": "snake.py", "content": "import pygame\nimport time...")                                                                                                           ││
-││ tool      Rtn  writefile(id=call_O2R056UlBxXZfzBXs7ESAjk7, content:Content written to file './snake.py')                                                                                                                                 ││
-│╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯│
-│            Call-02 Elapsed: 1.08 seconds 0.00 tps                                                                                                                                                                                           
-│
-│╭─── Messages Received from gpt-4o ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮│
-││ system    Text(You are to provide short concise answers.)                                                                                                                                                                                ││
-││ user      Text(Generate the python code implementing the game of snake, and write the code to the file snake.py using the provided writefile function.)                                                                                  ││
-││ assistant Call writefile(id=call_O2R056UlBxXZfzBXs7ESAjk7, "filename": "snake.py", "content": "import pygame\nimport time...")                                                                                                           ││
-││ tool      Rtn  writefile(id=call_O2R056UlBxXZfzBXs7ESAjk7, content:Content written to file './snake.py')                                                                                                                                 ││
-││ assistant Text(The Snake game code has been successfully written to the file `snake.py`. You can run it using Python to play the game!)                                                                                                  ││
-│╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯│
-│04 .exec    18.31 secs output tokens 0 at 0.00 tps                                                                                                          │
-│04 .exec   Tokens In=0($0.0000), Out=0($0.0000) Total=$0.0000                                                                                                                                                                              │
-╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-Wrote logs/Test.svg to disk
-
-```
-
 
 ## Command Line Options
+
 ```
-keprompt [-h] [-v] [--param key value] [-m] [-f] [-p [PROMPTS]] [-c [CODE]] [-l [LIST]] [-e [EXECUTE]] [-k] [-d {Statements,Prompt,LLM,Functions,Messages} [...]] [-r] [--init] [--check-builtins] [--update-builtins]
+keprompt [-h] [-v] [--param key value] [-m] [-s] [-f] [-p [PROMPTS]] [-c [CODE]] [-l [LIST]] [-e [EXECUTE]] [-k] [--log [IDENTIFIER]] [--debug] [-r] [--init] [--check-builtins] [--update-builtins]
 ```
 
 | Option | Description |
@@ -121,19 +87,20 @@ keprompt [-h] [-v] [--param key value] [-m] [-f] [-p [PROMPTS]] [-c [CODE]] [-l 
 | `-h, --help` | Show help message and exit |
 | `-v, --version` | Show version information and exit |
 | `--param key value` | Add key/value pairs for substitution in prompts |
-| `-m, --models` | List all available LLM models |
+| `-m, --models` | List all available LLM models with pricing and capabilities |
+| `-s, --statements` | List all supported prompt statement types |
 | `-f, --functions` | List all available functions (built-in + user-defined) |
 | `-p, --prompts [PATTERN]` | List available prompt files (default: all) |
 | `-c, --code [PATTERN]` | Show prompt code/commands in files |
 | `-l, --list [PATTERN]` | List prompt file content line by line |
 | `-e, --execute [PATTERN]` | Execute one or more prompt files |
 | `-k, --key` | Add or update API keys for LLM providers |
-| `-d, --debug {Statements,Prompt,LLM,Functions,Messages}` | Enable debug output for specific components |
+| `--log [IDENTIFIER]` | Enable structured logging to prompts/logs-<identifier>/ directory |
+| `--debug` | Enable structured logging + rich output to STDERR |
 | `-r, --remove` | Remove all backup files with .~nn~ pattern |
 | `--init` | Initialize prompts and functions directories |
 | `--check-builtins` | Check for built-in function updates |
 | `--update-builtins` | Update built-in functions |
-| `--output-only` | Output only the final LLM response text (for programmatic usage) |
 
 ## Prompt Language
 
@@ -141,7 +108,7 @@ keprompt uses a simple line-based language for defining prompts. Each line eithe
 
 | Command | Description |
 |---------|-------------|
-| `.#` | Comment (ignored) |
+| `.#` | Comment (ignored during execution) |
 | `.assistant` | Define assistant message |
 | `.clear ["pattern1", ...]` | Delete files matching pattern(s) |
 | `.cmd function(arg=value)` | Execute a predefined function |
@@ -151,13 +118,33 @@ keprompt uses a simple line-based language for defining prompts. Each line eithe
 | `.image filename` | Include an image in the message |
 | `.include filename` | Include text file content |
 | `.llm {options}` | Configure LLM (model, temperature, etc.) |
+| `.print text` | Output text to STDOUT with variable substitution |
+| `.set variable value` | Set variables including Prefix/Postfix delimiters |
 | `.system text` | Define system message |
 | `.text text` | Add text to the current message |
 | `.user text` | Define user message |
 
 ### Variable Substitution
 
-You can use `<<variable>>` syntax for substituting variables in prompts. Variables can be defined using the `--param` option.
+You can use configurable variable substitution in prompts:
+
+- **Default delimiters**: `<<variable>>` syntax
+- **Configurable delimiters**: Use `.set Prefix {{` and `.set Postfix }}` to change to `{{variable}}`
+- **Command line variables**: Use `--param key value` to set variables
+- **Built-in variables**: `last_response` contains the most recent LLM response
+
+Example:
+```bash
+# Using default delimiters
+keprompt -e greeting --param name "Alice" --param model "gpt-4o-mini"
+
+# In greeting.prompt:
+.set Prefix {{
+.set Postfix }}
+.llm {"model": "{{model}}"}
+.user Hello! My name is {{name}}.
+.exec
+```
 
 ## Available Functions
 
@@ -166,7 +153,7 @@ keprompt provides several built-in functions that can be called from prompts:
 | Function | Description |
 |----------|-------------|
 | `readfile(filename)` | Read content from a file |
-| `writefile(filename, content)` | Write content to a file |
+| `writefile(filename, content)` | Write content to a file (creates .backup, .backup.1, etc. if file exists) |
 | `write_base64_file(filename, base64_str)` | Write decoded base64 content to a file |
 | `wwwget(url)` | Fetch content from a web URL |
 | `execcmd(cmd)` | Execute a shell command |
@@ -260,85 +247,6 @@ Functions are called with the function name and JSON arguments via stdin:
 echo '{"param1": "value1"}' | ./my_function function_name
 ```
 
-### Examples
-
-#### Shell Script Function
-```bash
-#!/bin/bash
-# File: prompts/functions/git_tools
-
-if [ "$1" = "--list-functions" ]; then
-    cat << 'EOF'
-[{
-    "name": "git_status",
-    "description": "Get git repository status",
-    "parameters": {
-        "type": "object",
-        "properties": {
-            "path": {"type": "string", "description": "Repository path", "default": "."}
-        }
-    }
-}]
-EOF
-    exit 0
-fi
-
-if [ "$1" = "git_status" ]; then
-    ARGS=$(cat)
-    PATH_ARG=$(echo "$ARGS" | jq -r '.path // "."')
-    cd "$PATH_ARG" && git status --porcelain
-fi
-```
-
-#### Python Function with Multiple Functions
-```python
-#!/usr/bin/env python3
-# File: prompts/functions/math_tools
-import json, sys, math
-
-FUNCTIONS = {
-    "add": {
-        "name": "add",
-        "description": "Add two numbers",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "a": {"type": "number", "description": "First number"},
-                "b": {"type": "number", "description": "Second number"}
-            },
-            "required": ["a", "b"]
-        }
-    },
-    "sqrt": {
-        "name": "sqrt",
-        "description": "Calculate square root",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "x": {"type": "number", "description": "Number to calculate square root of"}
-            },
-            "required": ["x"]
-        }
-    }
-}
-
-def add(a, b):
-    return f"The sum of {a} and {b} is {a + b}"
-
-def sqrt(x):
-    return f"The square root of {x} is {math.sqrt(x)}"
-
-if len(sys.argv) > 1:
-    if sys.argv[1] == "--list-functions":
-        print(json.dumps(list(FUNCTIONS.values())))
-    elif sys.argv[1] in FUNCTIONS:
-        args = json.loads(sys.stdin.read())
-        if sys.argv[1] == "add":
-            print(add(args["a"], args["b"]))
-        elif sys.argv[1] == "sqrt":
-            print(sqrt(args["x"]))
-```
-
 ### Function Management
 
 #### Override Built-in Functions
@@ -365,116 +273,48 @@ chmod +x prompts/functions/01_readfile
 echo '{"param": "value"}' | ./prompts/functions/my_function function_name
 
 # Debug function calls in prompts
-keprompt -e my_prompt -d Functions
+keprompt -e my_prompt --debug
 ```
-
-### Best Practices
-
-1. **Error Handling**: Always include proper error handling in your functions
-2. **Validation**: Validate input parameters before processing
-3. **Documentation**: Provide clear descriptions in function schemas
-4. **Testing**: Test functions independently before using in prompts
-5. **Naming**: Use descriptive function and parameter names
-6. **Performance**: Consider timeout implications (30-second limit)
-
-### Advanced Features
-
-#### Function Versioning
-```bash
-# Check built-in function version
-keprompt --check-builtins
-
-# Update built-in functions
-keprompt --update-builtins
-```
-
-#### Multiple Functions per Executable
-A single executable can provide multiple functions by checking the function name argument and implementing different behaviors.
-
-#### Language Support
-Functions can be written in any language that can:
-- Accept command line arguments
-- Read from stdin
-- Write to stdout
-- Be made executable on your system
-
-Examples: Python, Shell, Go, Rust, Node.js, Ruby, Perl, compiled C/C++, etc.
 
 ## Supported LLM Providers
 
-- **Anthropic**: Claude models
-- **OpenAI**: GPT models including GPT-4o
-- **Google**: Gemini models
-- **MistralAI**: Mistral, Small, Large models
-- **XAI**: Grok models
+- **Anthropic**: Claude models (Haiku, Sonnet, Opus)
+- **OpenAI**: GPT models including GPT-4o, o1, o3, o4-mini
+- **Google**: Gemini models (1.5, 2.0, 2.5 series)
+- **MistralAI**: Mistral, Codestral, Devstral, Magistral models
+- **XAI**: Grok models (2, 3, 4, beta versions)
 - **DeepSeek**: DeepSeek Chat and Reasoner models
 
-Execute following command to see supported models:
+Execute the following command to see all supported models with pricing and capabilities:
 ```bash
 keprompt -m
 ```
 
-## Available Models
+## Logging and Debugging
 
-| Company   | Model                 | Max Token | $/mT In | $/mT Out | Input             | Output     | Functions | Cutoff   | Description                                                                          |
-|-----------|-----------------------|-----------|---------|----------|-------------------|------------|-----------|----------|--------------------------------------------------------------------------------------|
-| Anthropic | claude-haiku-3        | 200000    | 0.2500  | 1.2500   | Text              | Text       | Yes       | See docs | Legacy fastest model                                                                 |
-|           | claude-haiku-3.5      | 200000    | 0.8000  | 4.0000   | Text+Vision       | Text       | Yes       | See docs | Fastest, most cost-effective model                                                   |
-|           | claude-opus-3         | 200000    | 15.0000 | 75.0000  | Text+Vision       | Text       | Yes       | See docs | Legacy most intelligent model                                                        |
-|           | claude-opus-4         | 200000    | 15.0000 | 75.0000  | Text+Vision       | Text       | Yes       | See docs | Most intelligent model for complex tasks                                             |
-|           | claude-sonnet-3.7     | 200000    | 3.0000  | 15.0000  | Text+Vision       | Text       | Yes       | See docs | Legacy balanced model                                                                |
-|           | claude-sonnet-4       | 200000    | 3.0000  | 15.0000  | Text+Vision       | Text       | Yes       | See docs | Optimal balance of intelligence, cost, and speed                                     |
-| DeepSeek  | deepseek-chat         | 64000     | 0.2700  | 1.1000   | Text              | Text       | Yes       | See docs | High-performance model for general tasks with excellent reasoning capabilities       |
-|           | deepseek-reasoner     | 64000     | 0.5500  | 2.1900   | Text              | Text       | Yes       | See docs | Advanced reasoning model with transparent thinking process                           |
-| Google    | gemini-1.5-flash      | 1000000   | 0.0750  | 0.3000   | Text+Vision       | Text       | Yes       | See docs | Fastest multimodal model with great performance                                      |
-|           | gemini-1.5-flash-8b   | 1000000   | 0.0375  | 0.1500   | Text+Vision       | Text       | Yes       | See docs | Smallest model for lower intelligence use cases                                      |
-|           | gemini-1.5-pro        | 2000000   | 1.2500  | 5.0000   | Text+Vision       | Text       | Yes       | See docs | Highest intelligence Gemini 1.5 series model                                         |
-|           | gemini-2.0-flash      | 1000000   | 0.1000  | 0.4000   | Text+Vision+Audio | Text+Image | Yes       | See docs | Most balanced multimodal model, built for the era of Agents                          |
-|           | gemini-2.0-flash-lite | 1000000   | 0.0750  | 0.3000   | Text              | Text       | Yes       | See docs | Smallest and most cost effective model                                               |
-|           | gemini-2.5-flash      | 1000000   | 0.3000  | 2.5000   | Text+Vision+Audio | Text       | Yes       | See docs | First hybrid reasoning model with thinking budgets                                   |
-|           | gemini-2.5-flash-lite | 1000000   | 0.1000  | 0.4000   | Text+Vision+Audio | Text       | Yes       | See docs | Smallest and most cost effective model, built for at scale usage                     |
-|           | gemini-2.5-pro        | 1000000   | 1.2500  | 10.0000  | Text+Vision+Audio | Text       | Yes       | See docs | State-of-the-art multipurpose model, excels at coding and complex reasoning          |
-|           | gemma-3-27b           | 8192      | 0.0000  | 0.0000   | Text              | Text       | No        | See docs | Lightweight, state-of-the-art, open model                                            |
-|           | gemma-3n-e4b          | 8192      | 0.0000  | 0.0000   | Text              | Text       | No        | See docs | Open model built for efficient performance on everyday devices                       |
-| MistralAI | codestral             | 32000     | 0.3000  | 0.9000   | Text              | Text       | Yes       | See docs | Lightweight, fast, and proficient in over 80 programming languages                   |
-|           | devstral-medium       | 128000    | 0.4000  | 2.0000   | Text              | Text       | Yes       | See docs | Enhanced model for advanced coding agents                                            |
-|           | devstral-small        | 128000    | 0.1000  | 0.3000   | Text              | Text       | Yes       | See docs | The best open-source model for coding agents                                         |
-|           | magistral-medium      | 128000    | 2.0000  | 5.0000   | Text              | Text       | Yes       | See docs | Thinking model excelling in domain-specific, transparent, and multilingual reasoning |
-|           | magistral-small       | 128000    | 0.5000  | 1.5000   | Text              | Text       | Yes       | See docs | Thinking model excelling in domain-specific reasoning                                |
-|           | ministral-3b-24.10    | 128000    | 0.0400  | 0.0400   | Text              | Text       | Yes       | See docs | Most efficient edge model                                                            |
-|           | ministral-8b-24.10    | 128000    | 0.1000  | 1.0000   | Text              | Text       | Yes       | See docs | Powerful model for on-device use cases                                               |
-|           | mistral-7b            | 32000     | 0.2500  | 0.2500   | Text              | Text       | Yes       | See docs | A 7B transformer model, fast-deployed and easily customisable                        |
-|           | mistral-large         | 128000    | 2.0000  | 6.0000   | Text              | Text       | Yes       | See docs | Top-tier reasoning for high-complexity tasks and sophisticated problems              |
-|           | mistral-medium-3      | 128000    | 0.4000  | 2.0000   | Text              | Text       | Yes       | See docs | State-of-the-art performance. Simplified enterprise deployments. Cost-efficient      |
-|           | mistral-nemo          | 128000    | 0.1500  | 0.1500   | Text              | Text       | Yes       | See docs | State-of-the-art Mistral model trained specifically for code tasks                   |
-|           | mistral-saba          | 32000     | 0.2000  | 0.6000   | Text              | Text       | Yes       | See docs | Custom-trained model to serve specific geographies, markets, and customers           |
-|           | mistral-small-3.2     | 128000    | 0.1000  | 0.3000   | Text+Vision       | Text       | Yes       | See docs | SOTA. Multimodal. Multilingual. Apache 2.0                                           |
-|           | mixtral-8x22b         | 64000     | 2.0000  | 6.0000   | Text              | Text       | Yes       | See docs | A 22B sparse Mixture-of-Experts (SMoE). Uses only 39B active parameters out of 141B  |
-|           | mixtral-8x7b          | 32000     | 0.7000  | 0.7000   | Text              | Text       | Yes       | See docs | A 7B sparse Mixture-of-Experts (SMoE). Uses 12.9B active parameters out of 45B total |
-|           | pixtral-12b           | 128000    | 0.1500  | 0.1500   | Text+Vision       | Text       | Yes       | See docs | Vision-capable small model                                                           |
-|           | pixtral-large         | 128000    | 2.0000  | 6.0000   | Text+Vision       | Text       | Yes       | See docs | Vision-capable large model with frontier reasoning capabilities                      |
-|           | voxtral-mini          | 128000    | 0.0400  | 0.0400   | Text+Audio        | Text       | Yes       | See docs | Low-latency speech recognition for edge and devices                                  |
-|           | voxtral-small         | 128000    | 0.1000  | 0.3000   | Text+Audio        | Text       | Yes       | See docs | State-of-the-art performance on speech and audio understanding                       |
-| OpenAI    | gpt-4.1               | 128000    | 2.0000  | 8.0000   | Text+Vision       | Text       | Yes       | See docs | Smartest model for complex tasks                                                     |
-|           | gpt-4.1-mini          | 128000    | 0.4000  | 1.6000   | Text+Vision       | Text       | Yes       | See docs | Affordable model balancing speed and intelligence                                    |
-|           | gpt-4.1-nano          | 128000    | 0.1000  | 0.4000   | Text              | Text       | Yes       | See docs | Fastest, most cost-effective model for low-latency tasks                             |
-|           | gpt-4o                | 128000    | 5.0000  | 20.0000  | Text+Vision       | Text       | Yes       | 2023-10  | Advanced multimodal model for complex tasks                                          |
-|           | gpt-4o-mini           | 128000    | 0.6000  | 2.4000   | Text+Vision       | Text       | Yes       | See docs | Affordable multimodal model                                                          |
-|           | o1                    | 128000    | 3.0000  | 12.0000  | Text              | Text       | Limited   | See docs | Reasoning model for complex problems                                                 |
-|           | o1-mini               | 128000    | 0.6000  | 2.4000   | Text              | Text       | Limited   | See docs | Smaller reasoning model                                                              |
-|           | o3                    | 128000    | 2.0000  | 8.0000   | Text              | Text       | Yes       | See docs | Most powerful reasoning model with leading performance                               |
-|           | o3-mini               | 128000    | 1.1000  | 4.4000   | Text              | Text       | Yes       | See docs | Compact reasoning model                                                              |
-|           | o4-mini               | 128000    | 1.1000  | 4.4000   | Text              | Text       | Yes       | See docs | Faster, cost-efficient reasoning model                                               |
-| XAI       | grok-2-1212           | 131072    | 2.0000  | 10.0000  | Text              | Text       | Yes       | See docs | Updated Grok-2 model with improved performance                                       |
-|           | grok-2-vision-1212    | 131072    | 2.0000  | 10.0000  | Text+Vision       | Text       | Yes       | See docs | Vision-capable Grok-2 model                                                          |
-|           | grok-3                | 131072    | 3.0000  | 15.0000  | Text+Vision       | Text       | Yes       | See docs | Flagship enterprise model with advanced reasoning                                    |
-|           | grok-3-mini           | 131072    | 0.3000  | 0.5000   | Text              | Text       | Yes       | See docs | Lightweight reasoning model for cost-effective applications                          |
-|           | grok-4                | 256000    | 3.0000  | 15.0000  | Text+Vision       | Text       | Yes       | See docs | The world's best model                                                               |
-|           | grok-beta             | 131072    | 5.0000  | 15.0000  | Text              | Text       | Yes       | See docs | Beta version of Grok with experimental features                                      |
-|           | grok-vision-beta      | 8192      | 5.0000  | 15.0000  | Text+Vision       | Text       | Yes       | See docs | Beta vision model with image understanding capabilities                              |
+keprompt provides three logging modes:
 
+### Production Mode (Default)
+- Clean execution with minimal output
+- Errors go to stderr
+- No log files created
 
-Run `keprompt -m` for complete details including pricing, context limits, and capabilities.
+### Log Mode
+```bash
+keprompt -e my_prompt --log [identifier]
+```
+- Structured logging to `prompts/logs-<identifier>/` directory
+- Creates execution.log, statements.log, conversations.json
+- Rich terminal output
+
+### Debug Mode
+```bash
+keprompt -e my_prompt --debug
+```
+- All logging features plus rich debugging output
+- Detailed API call information
+- Function call tracing
+- Variable substitution tracking
 
 ## Example Usage
 
@@ -483,43 +323,46 @@ Run `keprompt -m` for complete details including pricing, context limits, and ca
 ```bash
 # Create a prompt file
 cat > prompts/example.prompt << EOL
-.llm {"model": "claude-3-7-sonnet-latest"}
+.llm {"model": "claude-3-5-sonnet-20241022"}
 .system You are a helpful assistant.
 .user Tell me about prompt engineering.
 .exec
 EOL
 
 # Execute the prompt
-keprompt -e example --debug Messages
+keprompt -e example --debug
 ```
 
-### Using Variables
+### Using Variables and Functions
 
 ```bash
-# Create a prompt with variables
-cat > prompts/greeting.prompt << EOL
+# Create a prompt with variables and functions
+cat > prompts/analyze.prompt << EOL
 .llm {"model": "<<model>>"}
-.user Hello! My name is <<name>>.
+.user Analyze this text file:
+.cmd readfile(filename="<<filename>>")
+.user Please provide a summary and key insights.
 .exec
 EOL
 
 # Execute with variables
-keprompt -e greeting --param name "Alice" --param model "claude-3-7-sonnet-latest"  --debug Messages
+keprompt -e analyze --param model "gpt-4o" --param filename "data.txt" --debug
 ```
 
-### Using Functions
+### Advanced Example with Custom Output
 
 ```bash
-# Create a prompt that uses functions
-cat > prompts/analyze.prompt << EOL
-.llm {"model": "claude-3-7-sonnet-latest"}
-.user Analyze this text:
-.cmd readfile(filename="data.txt")
+# Create a prompt that uses .print for clean output
+cat > prompts/summary.prompt << EOL
+.llm {"model": "gpt-4o-mini"}
+.user Summarize this in one sentence: <<content>>
 .exec
+.print Summary: <<last_response>>
 EOL
 
-# Execute the prompt
-keprompt -e analyze  --debug Messages
+# Execute and capture clean output
+result=$(keprompt -e summary --param content "Long text here...")
+echo "Result: $result"
 ```
 
 ## Working with Prompts
@@ -527,15 +370,16 @@ keprompt -e analyze  --debug Messages
 1. **Create** prompt files in the `prompts/` directory with `.prompt` extension
 2. **List** available prompts with `keprompt -p`
 3. **Examine** prompt content with `keprompt -l promptname`
-4. **Execute** prompts with `keprompt -e promptname`
-5. **Debug** execution with `keprompt -e promptname -d Messages LLM`
+4. **Show** prompt structure with `keprompt -c promptname`
+5. **Execute** prompts with `keprompt -e promptname`
+6. **Debug** execution with `keprompt -e promptname --debug`
 
 ## Output and Logging
 
-keprompt automatically saves conversation logs to the `logs/` directory:
-- `logs/promptname.log`: Text log of the interaction
-- `logs/promptname.svg`: SVG visualization of the conversation
-- `logs/promptname_messages.json`: JSON format of all messages
+keprompt automatically saves conversation logs when using `--log` or `--debug` modes:
+- `prompts/logs-<identifier>/execution.log`: Rich terminal output
+- `prompts/logs-<identifier>/statements.log`: Statement execution log
+- `prompts/logs-<identifier>/conversations.json`: JSON format of all messages
 
 ## API Key Management
 
@@ -545,21 +389,24 @@ keprompt -k
 # Select provider from the menu and enter your API key
 ```
 
+API keys are securely stored using the system keyring.
+
 ## Advanced Usage
 
 ### Debugging Options
 
 ```bash
-# Debug LLM API calls
-This will give a full dump opn the screen of the data structure sent to API, and a full dump of its response.
- 
-keprompt -e example -d LLM
+# Debug with structured logging
+keprompt -e example --debug
 
-# Debug function calls
-keprompt -e example -d Functions
+# Log to specific directory
+keprompt -e example --log my_experiment
 
-# Debug everything
-keprompt -e example -d Statements Prompt LLM Functions Messages
+# Show all statement types
+keprompt -s
+
+# Show all available functions
+keprompt -f
 ```
 
 ### Working with Multiple Prompts
@@ -572,34 +419,29 @@ keprompt -e "test*"
 keprompt -p "*gpt*"
 ```
 
-### Programmatic Usage
-
-For batch processing and automation, use the `--output-only` flag to get clean LLM output suitable for scripts:
+### Function Management
 
 ```bash
-# Get only the LLM response text (no UI, logging, or metadata)
-keprompt -e my_prompt --output-only
+# Initialize functions directory
+keprompt --init
 
-# Capture output in a variable
-result=$(keprompt -e my_prompt --output-only)
-echo "LLM said: $result"
+# Check built-in function version
+keprompt --check-builtins
 
-# Use in pipelines
-keprompt -e analyze_data --output-only | grep "important"
+# Update built-in functions
+keprompt --update-builtins
 
-# Process multiple prompts
-for prompt in prompts/*.prompt; do
-    echo "Processing $prompt..."
-    keprompt -e "$(basename "$prompt" .prompt)" --output-only > "results/$(basename "$prompt" .prompt).txt"
-done
+# Remove backup files
+keprompt -r
 ```
 
-**Key features of `--output-only` mode:**
-- Outputs only the final LLM response text to stdout
-- Suppresses all UI elements, progress indicators, and formatting
-- Disables logging to files
-- Errors are sent to stderr (won't contaminate stdout)
-- Perfect for shell scripts, automation, and batch processing
+## Best Practices
+
+1. **Function Development**: Test functions independently before using in prompts
+2. **Variable Naming**: Use descriptive variable names and consistent naming conventions
+3. **Error Handling**: Include proper error handling in custom functions
+4. **Logging**: Use `--debug` mode during development, production mode for automation
+5. **Backup Management**: Regularly clean up backup files with `keprompt -r`
 
 ## Contributing
 
@@ -608,13 +450,6 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ## License
 
 [MIT](LICENSE)
-
-
-# Todos, Errors, open points
-- Done: Crash if no .prompt found
-- Done: Was invalid api-key!
-- Done: Added cmd arg --statements...
-- 
 
 ## Release Process
 
