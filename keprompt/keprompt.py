@@ -181,6 +181,8 @@ def get_cmd_args() -> argparse.Namespace:
     parser.add_argument('--init', action='store_true', help='Initialize prompts and functions directories')
     parser.add_argument('--check-builtins', action='store_true', help='Check for built-in function updates')
     parser.add_argument('--update-builtins', action='store_true', help='Update built-in functions')
+    parser.add_argument('--conversation', metavar='NAME', help='Load/save conversation state')
+    parser.add_argument('--answer', metavar='TEXT', help='Continue conversation with user response')
 
     return parser.parse_args()
 
@@ -328,6 +330,82 @@ def main():
 
     if args.key:
         get_new_api_key()
+
+    # Handle conversation mode
+    if args.conversation:
+        # Ensure 'conversations' directory exists
+        if not os.path.exists('conversations'):
+            os.makedirs('conversations')
+        
+        conversation_name = args.conversation
+        
+        # Determine logging mode and identifier
+        from .keprompt_logger import LogMode
+        
+        log_identifier = None
+        if args.debug:
+            log_mode = LogMode.DEBUG
+            log_identifier = conversation_name
+        elif args.log is not None:  # --log was specified (with or without identifier)
+            log_mode = LogMode.LOG
+            if args.log:  # --log <identifier> was provided
+                log_identifier = args.log
+            else:  # --log without identifier, use conversation name
+                log_identifier = conversation_name
+        else:
+            log_mode = LogMode.PRODUCTION
+        
+        if args.answer:
+            # Continue existing conversation with user answer
+            from .keprompt_vm import make_statement
+            from .AiPrompt import AiTextPart
+            
+            step = VM(None, global_variables, log_mode=log_mode, log_identifier=log_identifier)  # No prompt file
+            loaded = step.load_conversation(conversation_name)
+            
+            if not loaded:
+                console.print(f"[bold red]Error: Conversation '{conversation_name}' not found[/bold red]")
+                sys.exit(1)
+            
+            # Log the user answer in execution log
+            step.logger.log_user_answer(args.answer)
+            
+            # Add user answer to conversation messages
+            step.prompt.add_message(vm=step, role='user', content=[AiTextPart(vm=step, text=args.answer)])
+            
+            # Create statements for continuation
+            step.statements = []
+            step.statements.append(make_statement(step, 0, '.exec', ''))
+            step.statements.append(make_statement(step, 1, '.print', '<<last_response>>'))
+            step.statements.append(make_statement(step, 2, '.exit', ''))
+            
+            # Execute the continuation
+            step.execute()
+            
+            # Save updated conversation
+            step.save_conversation(conversation_name)
+            
+        elif args.execute:
+            # Start new conversation with prompt file
+            glob_files = glob_prompt(args.execute)
+            
+            if glob_files:
+                for prompt_file in glob_files:
+                    step = VM(prompt_file, global_variables, log_mode=log_mode, log_identifier=log_identifier)
+                    step.parse_prompt()
+                    step.execute()
+                    
+                    # Save conversation after execution
+                    step.save_conversation(conversation_name)
+            else:
+                pname = prompt_pattern(args.execute)
+                log.error(f"[bold red]No Prompt files found with {pname}[/bold red]", extra={"markup": True})
+        else:
+            # No --answer or --execute specified with --conversation
+            console.print("[bold red]Error: --conversation requires either --answer or --execute[/bold red]")
+            sys.exit(1)
+        
+        return
 
     if args.prompts:
         glob_files = glob_prompt(args.prompts)

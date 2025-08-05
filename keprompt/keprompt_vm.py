@@ -78,7 +78,10 @@ class VM:
         self.data: str = ''
         
         # Extract prompt name for logger
-        prompt_name = os.path.splitext(os.path.basename(filename))[0]
+        if filename:
+            prompt_name = os.path.splitext(os.path.basename(filename))[0]
+        else:
+            prompt_name = "conversation"
         
         # Initialize the new structured logger
         self.logger = KepromptLogger(prompt_name=prompt_name, mode=log_mode, log_identifier=log_identifier)
@@ -262,6 +265,10 @@ class VM:
             parse according to rules in docs/PromptLanguage.md
         """
 
+        if not self.filename:
+            # No prompt file to parse (conversation mode)
+            return
+
         lines: list[str]
 
         # read .prompt file
@@ -303,9 +310,22 @@ class VM:
                 raise StmtSyntaxError(
                     f"{VERTICAL} [red]Error parsing file {self.filename}:{lno} error: {str(e)}.[/]\n\n")
 
-        # Implicit .exec
-        if lines[-1][0:5] != '.exec':
-            self.statements.append(make_statement(self, len(self.statements), keyword='.exec', value=''))
+        # Apply completion logic based on last statement
+        if self.statements:
+            last_stmt = self.statements[-1]
+            
+            if last_stmt.keyword == '.exit':
+                # 1. Already ends with .exit - do nothing
+                pass
+            elif last_stmt.keyword == '.exec':
+                # 2. Ends with .exec - add print and exit
+                self.statements.append(make_statement(self, len(self.statements), keyword='.print', value='<<last_response>>'))
+                self.statements.append(make_statement(self, len(self.statements), keyword='.exit', value=''))
+            else:
+                # 3. Ends with anything else - add exec, print, and exit
+                self.statements.append(make_statement(self, len(self.statements), keyword='.exec', value=''))
+                self.statements.append(make_statement(self, len(self.statements), keyword='.print', value='<<last_response>>'))
+                self.statements.append(make_statement(self, len(self.statements), keyword='.exit', value=''))
 
         return
 
@@ -344,7 +364,8 @@ class VM:
         # Use structured logging based on mode
         if self.log_mode in [LogMode.LOG, LogMode.DEBUG]:
             # Logging/Debug mode - use structured logger with rich UI
-            self.logger.print_header(self.filename)
+            header_name = self.filename or "conversation"
+            self.logger.print_header(header_name)
 
             for stmt_no, stmt in enumerate(self.statements):
                 try:
@@ -417,6 +438,172 @@ class VM:
             else:
                 pdict[k] = v
         self.print(json.dumps(pdict, indent=2, sort_keys=True))
+
+    def save_conversation(self, conversation_filename: str):
+        """Save VM state using universal messages format"""
+        from pathlib import Path
+        
+        conversation_path = Path(f"conversations/{conversation_filename}.conversation")
+        conversation_path.parent.mkdir(exist_ok=True)
+        
+        # Create a JSON-serializable copy of variables
+        serializable_vars = {}
+        for key, value in self.vdict.items():
+            try:
+                # Test if the value is JSON serializable
+                json.dumps(value)
+                serializable_vars[key] = value
+            except (TypeError, ValueError):
+                # Skip non-serializable objects like AiModel
+                if hasattr(value, '__class__'):
+                    serializable_vars[key] = f"<{value.__class__.__name__} object>"
+                else:
+                    serializable_vars[key] = str(value)
+        
+        # Save VM state with universal messages format
+        conversation_data = {
+            "vm_state": {
+                "ip": self.ip,
+                "model_name": self.model_name,
+                "company": self.company,
+                "interaction_no": self.interaction_no,
+                "created": time.strftime("%Y-%m-%d %H:%M:%S")
+            },
+            "messages": self.prompt.to_json(),  # Universal format messages
+            "variables": serializable_vars
+        }
+        
+        with open(conversation_path, 'w') as f:
+            json.dump(conversation_data, f, indent=2)
+
+    def load_conversation(self, conversation_filename: str):
+        """Load VM state from universal messages format"""
+        from pathlib import Path
+        
+        conversation_path = Path(f"conversations/{conversation_filename}.conversation")
+        
+        if not conversation_path.exists():
+            return False  # New conversation
+        
+        with open(conversation_path, 'r') as f:
+            conversation_data = json.load(f)
+        
+        # Restore VM state
+        vm_state = conversation_data.get("vm_state", {})
+        self.ip = vm_state.get("ip", 0)
+        self.model_name = vm_state.get("model_name", "")
+        self.company = vm_state.get("company", "")
+        self.interaction_no = vm_state.get("interaction_no", 0)
+        
+        # Restore LLM configuration if we have model info
+        if self.model_name:
+            if self.model_name in AiRegistry.models:
+                self.model = AiRegistry.get_model(self.model_name)
+                # Set up basic LLM configuration
+                self.llm = {"model": self.model_name}
+                self.prompt.company = self.company
+                self.prompt.model = self.model_name
+                
+                # Get API key
+                try:
+                    api_key = keyring.get_password('keprompt', username=self.company)
+                    if api_key:
+                        self.llm['API_KEY'] = api_key
+                        self.api_key = api_key
+                        self.prompt.api_key = api_key
+                except:
+                    pass  # API key will be requested when needed
+        
+        # Restore messages (universal format)
+        messages_data = conversation_data.get("messages", [])
+        self.prompt.messages = []
+        
+        for msg_data in messages_data:
+            role = msg_data.get("role", "")
+            content_data = msg_data.get("content", [])
+            
+            # Reconstruct message parts
+            content_parts = []
+            for part_data in content_data:
+                part_type = part_data.get("type", "")
+                
+                if part_type == "text":
+                    content_parts.append(AiTextPart(vm=self, text=part_data.get("text", "")))
+                elif part_type == "tool":
+                    content_parts.append(AiCall(
+                        vm=self,
+                        name=part_data.get("name", ""),
+                        arguments=part_data.get("arguments", {}),
+                        id=part_data.get("id", "")
+                    ))
+                elif part_type == "tool_result":
+                    content_parts.append(AiResult(
+                        vm=self,
+                        name=part_data.get("name", ""),
+                        id=part_data.get("tool_use_id", ""),
+                        result=part_data.get("content", "")
+                    ))
+            
+            # Add message to prompt
+            self.prompt.messages.append(AiMessage(vm=self, role=role, content=content_parts))
+        
+        # Restore variables
+        self.vdict.update(conversation_data.get("variables", {}))
+        
+        return True  # Successfully loaded conversation
+
+    def execute_from(self, start_index: int = 0):
+        """Execute statements starting from specified index"""
+        # Use structured logging based on mode
+        if self.log_mode in [LogMode.LOG, LogMode.DEBUG]:
+            # Logging/Debug mode - use structured logger with rich UI
+            header_name = self.filename or "conversation"
+            self.logger.print_header(header_name)
+
+            for stmt_no in range(start_index, len(self.statements)):
+                stmt = self.statements[stmt_no]
+                try:
+                    stmt.execute(self)
+                except Exception as e:
+                    self.logger.log_error(f"Error executing statement {stmt_no}: {str(e)}")
+                    sys.exit(9)
+
+                if stmt.keyword == '.exit':
+                    break
+
+            self.logger.print_footer()
+            self.logger.close()
+        else:
+            # Production mode - clean execution, minimal output
+            for stmt_no in range(start_index, len(self.statements)):
+                stmt = self.statements[stmt_no]
+                try:
+                    stmt.execute(self)
+                except Exception as e:
+                    # Errors go to stderr in production mode
+                    print(f"Error: {str(e)}", file=sys.stderr)
+                    sys.exit(9)
+
+                if stmt.keyword == '.exit':
+                    break
+
+    def apply_completion_logic(self):
+        """Apply completion logic to the current statements"""
+        if self.statements:
+            last_stmt = self.statements[-1]
+            
+            if last_stmt.keyword == '.exit':
+                # 1. Already ends with .exit - do nothing
+                pass
+            elif last_stmt.keyword == '.exec':
+                # 2. Ends with .exec - add print and exit
+                self.statements.append(make_statement(self, len(self.statements), keyword='.print', value='<<last_response>>'))
+                self.statements.append(make_statement(self, len(self.statements), keyword='.exit', value=''))
+            else:
+                # 3. Ends with anything else - add exec, print, and exit
+                self.statements.append(make_statement(self, len(self.statements), keyword='.exec', value=''))
+                self.statements.append(make_statement(self, len(self.statements), keyword='.print', value='<<last_response>>'))
+                self.statements.append(make_statement(self, len(self.statements), keyword='.exit', value=''))
 
 class StmtPrompt:
 
@@ -682,6 +869,23 @@ class StmtExec(StmtPrompt):
         # Store last response using centralized method with automatic logging
         vm.set_variable('last_response', last_response_text)
 
+        # Log token usage and costs if available
+        if hasattr(vm.prompt, 'last_tokens_in') and hasattr(vm.prompt, 'last_tokens_out'):
+            tokens_in = vm.prompt.last_tokens_in
+            tokens_out = vm.prompt.last_tokens_out
+            cost_in = tokens_in * vm.model.input if vm.model else 0
+            cost_out = tokens_out * vm.model.output if vm.model else 0
+            
+            # Update VM totals
+            vm.toks_in += tokens_in
+            vm.toks_out += tokens_out
+            vm.cost_in += cost_in
+            vm.cost_out += cost_out
+            vm.total = vm.cost_in + vm.cost_out
+            
+            # Log tokens and costs
+            vm.logger.log_llm_tokens_and_cost(call_id, tokens_in, tokens_out, cost_in, cost_out)
+
         # Log the exec completion to statements.log (only this one, not the initial empty one)
         exec_completion_msg = f"{vm.company}::{vm.model_name} {call_id} completed in {elapsed_time:.2f} seconds"
         vm.logger.log_statement(self.msg_no, self.keyword, exec_completion_msg)
@@ -718,6 +922,10 @@ class StmtExit(StmtPrompt):
 
     def execute(self, vm: VM) -> None:
         vm.logger.print_statement(self.msg_no, self.keyword, self.value)
+        
+        # Log total costs when exiting
+        if vm.toks_in > 0 or vm.toks_out > 0:
+            vm.logger.log_total_costs(vm.toks_in, vm.toks_out, vm.cost_in, vm.cost_out)
 
 
 class StmtInclude(StmtPrompt):
@@ -987,6 +1195,8 @@ class StmtSet(StmtPrompt):
         vm.set_variable(var_name, var_value)
 
 
+
+
 # Create a _PromptStatement subclass depending on keyword
 StatementTypes: dict[str, type(StmtPrompt)] = {
     '.#': StmtComment,
@@ -1019,6 +1229,7 @@ def print_statement_types():
     table = Table(title="Supported Statement Types", show_header=True, header_style="bold cyan", width=terminal_width,)
 
     table.add_column("Keyword", style="green")
+    table.add_column("From", style="cyan", width=8)
     table.add_column("Description", style="yellow")
 
     # Custom descriptions for better documentation
@@ -1040,9 +1251,29 @@ def print_statement_types():
         '.user': 'Add a user message to the conversation context',
     }
 
+    # Define which statements come from user vs LLM
+    statement_origins = {
+        '.#': 'user',
+        '.assistant': 'llm',
+        '.clear': 'user',
+        '.cmd': 'user',
+        '.debug': 'user',
+        '.exec': 'user',
+        '.exit': 'user',
+        '.image': 'user',
+        '.include': 'user',
+        '.llm': 'user',
+        '.print': 'user',
+        '.set': 'user',
+        '.system': 'user',
+        '.text': 'user',
+        '.user': 'user',
+    }
+
     for k, v in StatementTypes.items():
         description = descriptions.get(k, v.__doc__ or 'No description available')
-        table.add_row(k, description)
+        origin = statement_origins.get(k, 'user')
+        table.add_row(k, origin, description)
         
 
     console.print(table)

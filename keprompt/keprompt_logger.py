@@ -39,9 +39,7 @@ class KepromptLogger:
     - execution.log: Rich table execution trace
     - messages.log: Conversation JSON
     - llm.log: API requests/responses, timing
-    - statements.log: Statement-by-statement debug
-    - functions.log: Function calls and returns
-    - variables.log: Variable substitutions
+    - functions.log: Function calls and returns (with errors to stderr)
     - errors.log: Errors and warnings
     """
     
@@ -71,7 +69,6 @@ class KepromptLogger:
             'execution.log',
             'messages.log', 
             'llm.log',
-            'statements.log',
             'functions.log',
             'errors.log'
         ]
@@ -85,19 +82,18 @@ class KepromptLogger:
         # Create log directory path using the log identifier
         self.log_directory = Path(f"prompts/logs-{self.log_identifier}")
         
-        # Delete existing directory if it exists
-        if self.log_directory.exists():
-            shutil.rmtree(self.log_directory)
-        
-        # Create fresh directory
+        # Create directory if it doesn't exist
         self.log_directory.mkdir(parents=True, exist_ok=True)
         
-        # Create all log files with headers
+        # Create all log files with headers (only if they don't exist)
         for log_file_name in self.log_file_names:
             log_file_path = self.log_directory / log_file_name
-            # Create file with header instead of just touch
-            with open(log_file_path, 'w') as f:
-                f.write(f"=== {log_file_name} ===\n")
+            
+            # Only create header if file doesn't exist
+            if not log_file_path.exists():
+                with open(log_file_path, 'w') as f:
+                    f.write(f"=== {log_file_name} ===\n")
+            
             # Open file handle for appending
             self.log_files[log_file_name] = open(log_file_path, 'a')
     
@@ -129,10 +125,8 @@ class KepromptLogger:
             self._write_to_stderr(message)
     
     def log_statement(self, msg_no: int, keyword: str, value: str):
-        """Log statement execution details."""
-        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-        statement_info = f"[{timestamp}] [{msg_no:02d}] {keyword}: {value}"
-        self._write_to_file('statements.log', statement_info)
+        """Log statement execution details - removed, not helpful."""
+        pass
     
     def log_llm_call(self, message: str, call_id: str = None):
         """Log LLM API call information."""
@@ -148,18 +142,49 @@ class KepromptLogger:
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
         log_entry = f"[{timestamp}] CALL: {function_name}({args}) -> {result}"
         self._write_to_file('functions.log', log_entry)
+        
+        # If the result contains an error, also write to stderr
+        if isinstance(result, str) and ("Error executing" in result or "ERROR:" in result):
+            print(f"Function Error: {function_name}({args}) -> {result}", file=sys.stderr)
+    
+    def log_user_answer(self, answer: str):
+        """Log user answer in execution log for --answer mode."""
+        if self.mode in [LogMode.LOG, LogMode.DEBUG]:
+            line_len = self.terminal_width - 14
+            header = f"{VERTICAL}-- .user    "
+            
+            lines = answer.split("\n")
+            for line in lines:
+                while len(line) > 0:
+                    print_line = f"{line:<{line_len}}{VERTICAL}"
+                    self.log_execution(f"{header}{print_line}")
+                    header = f"{VERTICAL}            "
+                    line = line[line_len:]
+    
+    def log_llm_tokens_and_cost(self, call_id: str, tokens_in: int, tokens_out: int, cost_in: float, cost_out: float):
+        """Log LLM token usage and costs."""
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        total_cost = cost_in + cost_out
+        log_entry = f"[{timestamp}] {call_id}: Tokens In: {tokens_in}, Out: {tokens_out}, Cost In: ${cost_in:.6f}, Out: ${cost_out:.6f}, Total: ${total_cost:.6f}"
+        self._write_to_file('llm.log', log_entry)
+    
+    def log_total_costs(self, total_tokens_in: int, total_tokens_out: int, total_cost_in: float, total_cost_out: float):
+        """Log total costs when exiting keprompt."""
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        total_cost = total_cost_in + total_cost_out
+        log_entry = f"[{timestamp}] SESSION TOTAL: Tokens In: {total_tokens_in}, Out: {total_tokens_out}, Cost In: ${total_cost_in:.6f}, Out: ${total_cost_out:.6f}, Total: ${total_cost:.6f}"
+        self._write_to_file('llm.log', log_entry)
+        
+        # Also print to stderr for immediate visibility
+        print(f"Session Total Cost: ${total_cost:.6f} (In: ${total_cost_in:.6f}, Out: ${total_cost_out:.6f})", file=sys.stderr)
     
     def log_variable_assignment(self, variable: str, value: str):
-        """Log variable assignment to statements.log."""
-        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-        log_entry = f"[{timestamp}] VARIABLE: {variable} = {value}"
-        self._write_to_file('statements.log', log_entry)
+        """Log variable assignment - removed, not helpful."""
+        pass
 
     def log_variable_retrieval(self, variable: str, value: str):
-        """Log variable retrieval/substitution to statements.log."""
-        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-        log_entry = f"[{timestamp}] VARIABLE: {variable} <== {value}"
-        self._write_to_file('statements.log', log_entry)
+        """Log variable retrieval/substitution - removed, not helpful."""
+        pass
     
     def log_conversation(self, conversation_data):
         """Log conversation messages to JSON file."""
