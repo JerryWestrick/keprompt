@@ -63,35 +63,9 @@ class AiGoogle(AiProvider):
 
     @classmethod
     def create_models_json(cls, provider_name: str) -> None:
-        """Create/update the models JSON file for Google using keprompt generation"""
-        import subprocess
-        import os
-        
-        console.print(f"[cyan]Generating {provider_name} models using keprompt...[/cyan]")
-        
-        try:
-            # Execute the keprompt generation script
-            result = subprocess.run([
-                "python", "-m", "keprompt", "--execute", 
-                "prompts/generate_google_models.prompt"
-            ], capture_output=True, text=True, cwd=os.getcwd())
-            
-            if result.returncode == 0:
-                console.print(f"[green]Successfully generated {provider_name} models using keprompt![/green]")
-                # Check if the file was created
-                if os.path.exists(f"prompts/models/{provider_name}.json"):
-                    console.print(f"[green]Verified {provider_name}.json was created[/green]")
-                else:
-                    console.print(f"[yellow]File not found, using manual fallback[/yellow]")
-                    cls._write_json_file(provider_name, Google_Models)
-            else:
-                console.print(f"[yellow]Keprompt generation failed: {result.stderr}[/yellow]")
-                console.print(f"[yellow]Using manual fallback definitions[/yellow]")
-                cls._write_json_file(provider_name, Google_Models)
-                
-        except Exception as e:
-            console.print(f"[yellow]Generation failed ({e}), using manual fallback[/yellow]")
-            cls._write_json_file(provider_name, Google_Models)
+        """Create/update the models JSON file for Google (manual definitions only)"""
+        console.print(f"[yellow]Google uses manual definitions to ensure system stability[/yellow]")
+        cls._write_json_file(provider_name, Google_Models)
 
 
 # Register handler and models

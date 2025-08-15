@@ -1,7 +1,7 @@
 {
   "metadata": {
     "provider": "OpenRouter",
-    "last_updated": "2025-08-13T13:31:16.761301",
+    "last_updated": "2025-08-15T11:45:24.253073",
     "total_models": 314
   },
   "models": {
@@ -11,11 +11,37 @@
       "model": "mistralai/mistral-medium-3.1",
       "input": 4e-07,
       "output": 2e-06,
-      "context": 131072,
+      "context": 262144,
       "modality_in": "Text+Vision",
       "modality_out": "Text",
       "functions": "Yes",
       "description": "Mistral Medium 3.1 is an updated version of Mistral Medium 3, which is a high-performance enterprise-grade language model designed to deliver frontier-level capabilities at significantly reduced operational cost. It balances state-of-the-art reasoning and multimodal performance with 8× lower cost compared to traditional large models, making it suitable for scalable deployments across professional and industrial use cases.\n\nThe model excels in domains such as coding, STEM reasoning, and enterprise adaptation. It supports hybrid, on-prem, and in-VPC deployments and is optimized for integration into custom workflows. Mistral Medium 3.1 offers competitive accuracy relative to larger models like Claude Sonnet 3.5/3.7, Llama 4 Maverick, and Command R+, while maintaining broad compatibility across cloud environments.",
+      "cutoff": "See provider docs"
+    },
+    "baidu/ernie-4.5-21b-a3b": {
+      "provider": "OpenRouter",
+      "company": "Baidu",
+      "model": "baidu/ernie-4.5-21b-a3b",
+      "input": 7e-08,
+      "output": 2.8e-07,
+      "context": 120000,
+      "modality_in": "Text",
+      "modality_out": "Text",
+      "functions": "Yes",
+      "description": "A sophisticated text-based Mixture-of-Experts (MoE) model featuring 21B total parameters with 3B activated per token, delivering exceptional multimodal understanding and generation through heterogeneous MoE structures and modality-isolated routing. Supporting an extensive 131K token context length, the model achieves efficient inference via multi-expert parallel collaboration and quantization, while advanced post-training techniques including SFT, DPO, and UPO ensure optimized performance across diverse applications with specialized routing and balancing losses for superior task handling.",
+      "cutoff": "See provider docs"
+    },
+    "baidu/ernie-4.5-vl-28b-a3b": {
+      "provider": "OpenRouter",
+      "company": "Baidu",
+      "model": "baidu/ernie-4.5-vl-28b-a3b",
+      "input": 1.4e-07,
+      "output": 5.6e-07,
+      "context": 30000,
+      "modality_in": "Text+Vision",
+      "modality_out": "Text",
+      "functions": "Yes",
+      "description": "A powerful multimodal Mixture-of-Experts chat model featuring 28B total parameters with 3B activated per token, delivering exceptional text and vision understanding through its innovative heterogeneous MoE structure with modality-isolated routing. Built with scaling-efficient infrastructure for high-throughput training and inference, the model leverages advanced post-training techniques including SFT, DPO, and UPO for optimized performance, while supporting an impressive 131K context length and RLVR alignment for superior cross-modal reasoning and generation capabilities.",
       "cutoff": "See provider docs"
     },
     "z-ai/glm-4.5v": {
@@ -23,7 +49,7 @@
       "company": "Z-Ai",
       "model": "z-ai/glm-4.5v",
       "input": 5e-07,
-      "output": 1.8e-06,
+      "output": 1.7e-06,
       "context": 65536,
       "modality_in": "Text+Vision",
       "modality_out": "Text",
@@ -193,7 +219,7 @@
       "model": "z-ai/glm-4.5",
       "input": 1.999188e-07,
       "output": 8.00064e-07,
-      "context": 98304,
+      "context": 131072,
       "modality_in": "Text",
       "modality_out": "Text",
       "functions": "Yes",
@@ -783,19 +809,6 @@
       "modality_out": "Text",
       "functions": "Yes",
       "description": "Sarvam-M is a 24 B-parameter, instruction-tuned derivative of Mistral-Small-3.1-24B-Base-2503, post-trained on English plus eleven major Indic languages (bn, hi, kn, gu, mr, ml, or, pa, ta, te). The model introduces a dual-mode interface: “non-think” for low-latency chat and a optional “think” phase that exposes chain-of-thought tokens for more demanding reasoning, math, and coding tasks. \n\nBenchmark reports show solid gains versus similarly sized open models on Indic-language QA, GSM-8K math, and SWE-Bench coding, making Sarvam-M a practical general-purpose choice for multilingual conversational agents as well as analytical workloads that mix English, native Indic scripts, or romanized text.",
-      "cutoff": "See provider docs"
-    },
-    "thedrummer/valkyrie-49b-v1": {
-      "provider": "OpenRouter",
-      "company": "Thedrummer",
-      "model": "thedrummer/valkyrie-49b-v1",
-      "input": 6.5e-07,
-      "output": 1e-06,
-      "context": 131072,
-      "modality_in": "Text",
-      "modality_out": "Text",
-      "functions": "Yes",
-      "description": "Built on top of NVIDIA's Llama 3.3 Nemotron Super 49B, Valkyrie is TheDrummer's newest model drop for creative writing.",
       "cutoff": "See provider docs"
     },
     "anthropic/claude-opus-4": {
@@ -2787,19 +2800,6 @@
       "description": "UnslopNemo v4.1 is the latest addition from the creator of Rocinante, designed for adventure writing and role-play scenarios.",
       "cutoff": "See provider docs"
     },
-    "anthropic/claude-3.5-haiku": {
-      "provider": "OpenRouter",
-      "company": "Anthropic",
-      "model": "anthropic/claude-3.5-haiku",
-      "input": 8e-07,
-      "output": 4e-06,
-      "context": 200000,
-      "modality_in": "Text+Vision",
-      "modality_out": "Text",
-      "functions": "Yes",
-      "description": "Claude 3.5 Haiku features offers enhanced capabilities in speed, coding accuracy, and tool use. Engineered to excel in real-time applications, it delivers quick response times that are essential for dynamic tasks such as chat interactions and immediate coding suggestions.\n\nThis makes it highly suitable for environments that demand both speed and precision, such as software development, customer service bots, and data management systems.\n\nThis model is currently pointing to \\[Claude 3.5 Haiku (2024-10-22)\\](/anthropic/claude-3-5-haiku-20241022).",
-      "cutoff": "See provider docs"
-    },
     "anthropic/claude-3.5-haiku-20241022": {
       "provider": "OpenRouter",
       "company": "Anthropic",
@@ -2813,17 +2813,17 @@
       "description": "Claude 3.5 Haiku features enhancements across all skill sets including coding, tool use, and reasoning. As the fastest model in the Anthropic lineup, it offers rapid response times suitable for applications that require high interactivity and low latency, such as user-facing chatbots and on-the-fly code completions. It also excels in specialized tasks like data extraction and real-time content moderation, making it a versatile tool for a broad range of industries.\n\nIt does not support image inputs.\n\nSee the launch announcement and benchmark results \\[here\\](https://www.anthropic.com/news/3-5-models-and-computer-use)",
       "cutoff": "See provider docs"
     },
-    "anthropic/claude-3.5-sonnet": {
+    "anthropic/claude-3.5-haiku": {
       "provider": "OpenRouter",
       "company": "Anthropic",
-      "model": "anthropic/claude-3.5-sonnet",
-      "input": 3e-06,
-      "output": 1.5e-05,
+      "model": "anthropic/claude-3.5-haiku",
+      "input": 8e-07,
+      "output": 4e-06,
       "context": 200000,
       "modality_in": "Text+Vision",
       "modality_out": "Text",
       "functions": "Yes",
-      "description": "New Claude 3.5 Sonnet delivers better-than-Opus capabilities, faster-than-Sonnet speeds, at the same Sonnet prices. Sonnet is particularly good at:\n\n- Coding: Scores ~49% on SWE-Bench Verified, higher than the last best score, and without any fancy prompt scaffolding\n- Data science: Augments human data science expertise; navigates unstructured data while using multiple tools for insights\n- Visual processing: excelling at interpreting charts, graphs, and images, accurately transcribing text to derive insights beyond just the text alone\n- Agentic tasks: exceptional tool use, making it great at agentic tasks (i.e. complex, multi-step problem solving tasks that require engaging with other systems)\n\n#multimodal",
+      "description": "Claude 3.5 Haiku features offers enhanced capabilities in speed, coding accuracy, and tool use. Engineered to excel in real-time applications, it delivers quick response times that are essential for dynamic tasks such as chat interactions and immediate coding suggestions.\n\nThis makes it highly suitable for environments that demand both speed and precision, such as software development, customer service bots, and data management systems.\n\nThis model is currently pointing to \\[Claude 3.5 Haiku (2024-10-22)\\](/anthropic/claude-3-5-haiku-20241022).",
       "cutoff": "See provider docs"
     },
     "anthracite-org/magnum-v4-72b": {
@@ -2839,17 +2839,17 @@
       "description": "This is a series of models designed to replicate the prose quality of the Claude 3 models, specifically Sonnet(https://openrouter.ai/anthropic/claude-3.5-sonnet) and Opus(https://openrouter.ai/anthropic/claude-3-opus).\n\nThe model is fine-tuned on top of \\[Qwen2.5 72B\\](https://openrouter.ai/qwen/qwen-2.5-72b-instruct).",
       "cutoff": "See provider docs"
     },
-    "mistralai/ministral-8b": {
+    "anthropic/claude-3.5-sonnet": {
       "provider": "OpenRouter",
-      "company": "Mistralai",
-      "model": "mistralai/ministral-8b",
-      "input": 1e-07,
-      "output": 1e-07,
-      "context": 128000,
-      "modality_in": "Text",
+      "company": "Anthropic",
+      "model": "anthropic/claude-3.5-sonnet",
+      "input": 3e-06,
+      "output": 1.5e-05,
+      "context": 200000,
+      "modality_in": "Text+Vision",
       "modality_out": "Text",
       "functions": "Yes",
-      "description": "Ministral 8B is an 8B parameter model featuring a unique interleaved sliding-window attention pattern for faster, memory-efficient inference. Designed for edge use cases, it supports up to 128k context length and excels in knowledge and reasoning tasks. It outperforms peers in the sub-10B category, making it perfect for low-latency, privacy-first applications.",
+      "description": "New Claude 3.5 Sonnet delivers better-than-Opus capabilities, faster-than-Sonnet speeds, at the same Sonnet prices. Sonnet is particularly good at:\n\n- Coding: Scores ~49% on SWE-Bench Verified, higher than the last best score, and without any fancy prompt scaffolding\n- Data science: Augments human data science expertise; navigates unstructured data while using multiple tools for insights\n- Visual processing: excelling at interpreting charts, graphs, and images, accurately transcribing text to derive insights beyond just the text alone\n- Agentic tasks: exceptional tool use, making it great at agentic tasks (i.e. complex, multi-step problem solving tasks that require engaging with other systems)\n\n#multimodal",
       "cutoff": "See provider docs"
     },
     "mistralai/ministral-3b": {
@@ -2863,6 +2863,19 @@
       "modality_out": "Text",
       "functions": "Yes",
       "description": "Ministral 3B is a 3B parameter model optimized for on-device and edge computing. It excels in knowledge, commonsense reasoning, and function-calling, outperforming larger models like Mistral 7B on most benchmarks. Supporting up to 128k context length, it’s ideal for orchestrating agentic workflows and specialist tasks with efficient inference.",
+      "cutoff": "See provider docs"
+    },
+    "mistralai/ministral-8b": {
+      "provider": "OpenRouter",
+      "company": "Mistralai",
+      "model": "mistralai/ministral-8b",
+      "input": 1e-07,
+      "output": 1e-07,
+      "context": 128000,
+      "modality_in": "Text",
+      "modality_out": "Text",
+      "functions": "Yes",
+      "description": "Ministral 8B is an 8B parameter model featuring a unique interleaved sliding-window attention pattern for faster, memory-efficient inference. Designed for edge use cases, it supports up to 128k context length and excels in knowledge and reasoning tasks. It outperforms peers in the sub-10B category, making it perfect for low-latency, privacy-first applications.",
       "cutoff": "See provider docs"
     },
     "qwen/qwen-2.5-7b-instruct": {
@@ -2891,19 +2904,6 @@
       "description": "NVIDIA's Llama 3.1 Nemotron 70B is a language model designed for generating precise and useful responses. Leveraging \\[Llama 3.1 70B\\](/models/meta-llama/llama-3.1-70b-instruct) architecture and Reinforcement Learning from Human Feedback (RLHF), it excels in automatic alignment benchmarks. This model is tailored for applications requiring high accuracy in helpfulness and response generation, suitable for diverse user queries across multiple domains.\n\nUsage of this model is subject to \\[Meta's Acceptable Use Policy\\](https://www.llama.com/llama3/use-policy/).",
       "cutoff": "See provider docs"
     },
-    "inflection/inflection-3-productivity": {
-      "provider": "OpenRouter",
-      "company": "Inflection",
-      "model": "inflection/inflection-3-productivity",
-      "input": 2.5e-06,
-      "output": 1e-05,
-      "context": 8000,
-      "modality_in": "Text",
-      "modality_out": "Text",
-      "functions": "Yes",
-      "description": "Inflection 3 Productivity is optimized for following instructions. It is better for tasks requiring JSON output or precise adherence to provided guidelines. It has access to recent news.\n\nFor emotional intelligence similar to Pi, see \\[Inflect 3 Pi\\](/inflection/inflection-3-pi)\n\nSee \\[Inflection's announcement\\](https://inflection.ai/blog/enterprise) for more details.",
-      "cutoff": "See provider docs"
-    },
     "inflection/inflection-3-pi": {
       "provider": "OpenRouter",
       "company": "Inflection",
@@ -2915,6 +2915,19 @@
       "modality_out": "Text",
       "functions": "Yes",
       "description": "Inflection 3 Pi powers Inflection's \\[Pi\\](https://pi.ai) chatbot, including backstory, emotional intelligence, productivity, and safety. It has access to recent news, and excels in scenarios like customer support and roleplay.\n\nPi has been trained to mirror your tone and style, if you use more emojis, so will Pi! Try experimenting with various prompts and conversation styles.",
+      "cutoff": "See provider docs"
+    },
+    "inflection/inflection-3-productivity": {
+      "provider": "OpenRouter",
+      "company": "Inflection",
+      "model": "inflection/inflection-3-productivity",
+      "input": 2.5e-06,
+      "output": 1e-05,
+      "context": 8000,
+      "modality_in": "Text",
+      "modality_out": "Text",
+      "functions": "Yes",
+      "description": "Inflection 3 Productivity is optimized for following instructions. It is better for tasks requiring JSON output or precise adherence to provided guidelines. It has access to recent news.\n\nFor emotional intelligence similar to Pi, see \\[Inflect 3 Pi\\](/inflection/inflection-3-pi)\n\nSee \\[Inflection's announcement\\](https://inflection.ai/blog/enterprise) for more details.",
       "cutoff": "See provider docs"
     },
     "google/gemini-flash-1.5-8b": {
@@ -2943,19 +2956,6 @@
       "description": "Rocinante 12B is designed for engaging storytelling and rich prose.\n\nEarly testers have reported:\n- Expanded vocabulary with unique and expressive word choices\n- Enhanced creativity for vivid narratives\n- Adventure-filled and captivating stories",
       "cutoff": "See provider docs"
     },
-    "anthracite-org/magnum-v2-72b": {
-      "provider": "OpenRouter",
-      "company": "Anthracite-Org",
-      "model": "anthracite-org/magnum-v2-72b",
-      "input": 3e-06,
-      "output": 3e-06,
-      "context": 32768,
-      "modality_in": "Text",
-      "modality_out": "Text",
-      "functions": "Yes",
-      "description": "From the maker of \\[Goliath\\](https://openrouter.ai/models/alpindale/goliath-120b), Magnum 72B is the seventh in a family of models designed to achieve the prose quality of the Claude 3 models, notably Opus & Sonnet.\n\nThe model is based on \\[Qwen2 72B\\](https://openrouter.ai/models/qwen/qwen-2-72b-instruct) and trained with 55 million tokens of highly curated roleplay (RP) data.",
-      "cutoff": "See provider docs"
-    },
     "liquid/lfm-40b": {
       "provider": "OpenRouter",
       "company": "Liquid",
@@ -2969,30 +2969,30 @@
       "description": "Liquid's 40.3B Mixture of Experts (MoE) model. Liquid Foundation Models (LFMs) are large neural networks built with computational units rooted in dynamic systems.\n\nLFMs are general-purpose AI models that can be used to model any kind of sequential data, including video, audio, text, time series, and signals.\n\nSee the \\[launch announcement\\](https://www.liquid.ai/liquid-foundation-models) for benchmarks and more info.",
       "cutoff": "See provider docs"
     },
-    "meta-llama/llama-3.2-11b-vision-instruct:free": {
+    "anthracite-org/magnum-v2-72b": {
       "provider": "OpenRouter",
-      "company": "Meta-Llama",
-      "model": "meta-llama/llama-3.2-11b-vision-instruct:free",
-      "input": 0.0,
-      "output": 0.0,
-      "context": 131072,
-      "modality_in": "Text+Vision",
+      "company": "Anthracite-Org",
+      "model": "anthracite-org/magnum-v2-72b",
+      "input": 3e-06,
+      "output": 3e-06,
+      "context": 32768,
+      "modality_in": "Text",
       "modality_out": "Text",
       "functions": "Yes",
-      "description": "Llama 3.2 11B Vision is a multimodal model with 11 billion parameters, designed to handle tasks combining visual and textual data. It excels in tasks such as image captioning and visual question answering, bridging the gap between language generation and visual reasoning. Pre-trained on a massive dataset of image-text pairs, it performs well in complex, high-accuracy image analysis.\n\nIts ability to integrate visual understanding with language processing makes it an ideal solution for industries requiring comprehensive visual-linguistic AI applications, such as content creation, AI-driven customer service, and research.\n\nClick here for the \\[original model card\\](https://github.com/meta-llama/llama-models/blob/main/models/llama3_2/MODEL_CARD_VISION.md).\n\nUsage of this model is subject to \\[Meta's Acceptable Use Policy\\](https://www.llama.com/llama3/use-policy/).",
+      "description": "From the maker of \\[Goliath\\](https://openrouter.ai/models/alpindale/goliath-120b), Magnum 72B is the seventh in a family of models designed to achieve the prose quality of the Claude 3 models, notably Opus & Sonnet.\n\nThe model is based on \\[Qwen2 72B\\](https://openrouter.ai/models/qwen/qwen-2-72b-instruct) and trained with 55 million tokens of highly curated roleplay (RP) data.",
       "cutoff": "See provider docs"
     },
-    "meta-llama/llama-3.2-11b-vision-instruct": {
+    "meta-llama/llama-3.2-1b-instruct": {
       "provider": "OpenRouter",
       "company": "Meta-Llama",
-      "model": "meta-llama/llama-3.2-11b-vision-instruct",
-      "input": 4.9e-08,
-      "output": 4.9e-08,
+      "model": "meta-llama/llama-3.2-1b-instruct",
+      "input": 5e-09,
+      "output": 1e-08,
       "context": 131072,
-      "modality_in": "Text+Vision",
+      "modality_in": "Text",
       "modality_out": "Text",
       "functions": "Yes",
-      "description": "Llama 3.2 11B Vision is a multimodal model with 11 billion parameters, designed to handle tasks combining visual and textual data. It excels in tasks such as image captioning and visual question answering, bridging the gap between language generation and visual reasoning. Pre-trained on a massive dataset of image-text pairs, it performs well in complex, high-accuracy image analysis.\n\nIts ability to integrate visual understanding with language processing makes it an ideal solution for industries requiring comprehensive visual-linguistic AI applications, such as content creation, AI-driven customer service, and research.\n\nClick here for the \\[original model card\\](https://github.com/meta-llama/llama-models/blob/main/models/llama3_2/MODEL_CARD_VISION.md).\n\nUsage of this model is subject to \\[Meta's Acceptable Use Policy\\](https://www.llama.com/llama3/use-policy/).",
+      "description": "Llama 3.2 1B is a 1-billion-parameter language model focused on efficiently performing natural language tasks, such as summarization, dialogue, and multilingual text analysis. Its smaller size allows it to operate efficiently in low-resource environments while maintaining strong task performance.\n\nSupporting eight core languages and fine-tunable for more, Llama 1.3B is ideal for businesses or developers seeking lightweight yet powerful AI solutions that can operate in diverse multilingual settings without the high computational demand of larger models.\n\nClick here for the \\[original model card\\](https://github.com/meta-llama/llama-models/blob/main/models/llama3_2/MODEL_CARD.md).\n\nUsage of this model is subject to \\[Meta's Acceptable Use Policy\\](https://www.llama.com/llama3/use-policy/).",
       "cutoff": "See provider docs"
     },
     "meta-llama/llama-3.2-3b-instruct:free": {
@@ -3021,17 +3021,30 @@
       "description": "Llama 3.2 3B is a 3-billion-parameter multilingual large language model, optimized for advanced natural language processing tasks like dialogue generation, reasoning, and summarization. Designed with the latest transformer architecture, it supports eight languages, including English, Spanish, and Hindi, and is adaptable for additional languages.\n\nTrained on 9 trillion tokens, the Llama 3.2 3B model excels in instruction-following, complex reasoning, and tool use. Its balanced performance makes it ideal for applications needing accuracy and efficiency in text generation across multilingual settings.\n\nClick here for the \\[original model card\\](https://github.com/meta-llama/llama-models/blob/main/models/llama3_2/MODEL_CARD.md).\n\nUsage of this model is subject to \\[Meta's Acceptable Use Policy\\](https://www.llama.com/llama3/use-policy/).",
       "cutoff": "See provider docs"
     },
-    "meta-llama/llama-3.2-1b-instruct": {
+    "meta-llama/llama-3.2-11b-vision-instruct:free": {
       "provider": "OpenRouter",
       "company": "Meta-Llama",
-      "model": "meta-llama/llama-3.2-1b-instruct",
-      "input": 5e-09,
-      "output": 1e-08,
+      "model": "meta-llama/llama-3.2-11b-vision-instruct:free",
+      "input": 0.0,
+      "output": 0.0,
       "context": 131072,
-      "modality_in": "Text",
+      "modality_in": "Text+Vision",
       "modality_out": "Text",
       "functions": "Yes",
-      "description": "Llama 3.2 1B is a 1-billion-parameter language model focused on efficiently performing natural language tasks, such as summarization, dialogue, and multilingual text analysis. Its smaller size allows it to operate efficiently in low-resource environments while maintaining strong task performance.\n\nSupporting eight core languages and fine-tunable for more, Llama 1.3B is ideal for businesses or developers seeking lightweight yet powerful AI solutions that can operate in diverse multilingual settings without the high computational demand of larger models.\n\nClick here for the \\[original model card\\](https://github.com/meta-llama/llama-models/blob/main/models/llama3_2/MODEL_CARD.md).\n\nUsage of this model is subject to \\[Meta's Acceptable Use Policy\\](https://www.llama.com/llama3/use-policy/).",
+      "description": "Llama 3.2 11B Vision is a multimodal model with 11 billion parameters, designed to handle tasks combining visual and textual data. It excels in tasks such as image captioning and visual question answering, bridging the gap between language generation and visual reasoning. Pre-trained on a massive dataset of image-text pairs, it performs well in complex, high-accuracy image analysis.\n\nIts ability to integrate visual understanding with language processing makes it an ideal solution for industries requiring comprehensive visual-linguistic AI applications, such as content creation, AI-driven customer service, and research.\n\nClick here for the \\[original model card\\](https://github.com/meta-llama/llama-models/blob/main/models/llama3_2/MODEL_CARD_VISION.md).\n\nUsage of this model is subject to \\[Meta's Acceptable Use Policy\\](https://www.llama.com/llama3/use-policy/).",
+      "cutoff": "See provider docs"
+    },
+    "meta-llama/llama-3.2-11b-vision-instruct": {
+      "provider": "OpenRouter",
+      "company": "Meta-Llama",
+      "model": "meta-llama/llama-3.2-11b-vision-instruct",
+      "input": 4.9e-08,
+      "output": 4.9e-08,
+      "context": 131072,
+      "modality_in": "Text+Vision",
+      "modality_out": "Text",
+      "functions": "Yes",
+      "description": "Llama 3.2 11B Vision is a multimodal model with 11 billion parameters, designed to handle tasks combining visual and textual data. It excels in tasks such as image captioning and visual question answering, bridging the gap between language generation and visual reasoning. Pre-trained on a massive dataset of image-text pairs, it performs well in complex, high-accuracy image analysis.\n\nIts ability to integrate visual understanding with language processing makes it an ideal solution for industries requiring comprehensive visual-linguistic AI applications, such as content creation, AI-driven customer service, and research.\n\nClick here for the \\[original model card\\](https://github.com/meta-llama/llama-models/blob/main/models/llama3_2/MODEL_CARD_VISION.md).\n\nUsage of this model is subject to \\[Meta's Acceptable Use Policy\\](https://www.llama.com/llama3/use-policy/).",
       "cutoff": "See provider docs"
     },
     "meta-llama/llama-3.2-90b-vision-instruct": {
@@ -3086,10 +3099,10 @@
       "description": "Lumimaid v0.2 8B is a finetune of \\[Llama 3.1 8B\\](/models/meta-llama/llama-3.1-8b-instruct) with a \"HUGE step up dataset wise\" compared to Lumimaid v0.1. Sloppy chats output were purged.\n\nUsage of this model is subject to \\[Meta's Acceptable Use Policy\\](https://llama.meta.com/llama3/use-policy/).",
       "cutoff": "See provider docs"
     },
-    "openai/o1-mini": {
+    "openai/o1-mini-2024-09-12": {
       "provider": "OpenRouter",
       "company": "Openai",
-      "model": "openai/o1-mini",
+      "model": "openai/o1-mini-2024-09-12",
       "input": 1.1e-06,
       "output": 4.4e-06,
       "context": 128000,
@@ -3099,10 +3112,10 @@
       "description": "The latest and strongest model family from OpenAI, o1 is designed to spend more time thinking before responding.\n\nThe o1 models are optimized for math, science, programming, and other STEM-related tasks. They consistently exhibit PhD-level accuracy on benchmarks in physics, chemistry, and biology. Learn more in the \\[launch announcement\\](https://openai.com/o1).\n\nNote: This model is currently experimental and not suitable for production use-cases, and may be heavily rate-limited.",
       "cutoff": "See provider docs"
     },
-    "openai/o1-mini-2024-09-12": {
+    "openai/o1-mini": {
       "provider": "OpenRouter",
       "company": "Openai",
-      "model": "openai/o1-mini-2024-09-12",
+      "model": "openai/o1-mini",
       "input": 1.1e-06,
       "output": 4.4e-06,
       "context": 128000,
@@ -3294,19 +3307,6 @@
       "description": "The highly anticipated 400B class of Llama3 is here! Clocking in at 128k context with impressive eval scores, the Meta AI team continues to push the frontier of open-source LLMs.\n\nMeta's latest class of model (Llama 3.1) launched with a variety of sizes & flavors. This 405B instruct-tuned version is optimized for high quality dialogue usecases.\n\nIt has demonstrated strong performance compared to leading closed-source models including GPT-4o and Claude 3.5 Sonnet in evaluations.\n\nTo read more about the model release, \\[click here\\](https://ai.meta.com/blog/meta-llama-3-1/). Usage of this model is subject to \\[Meta's Acceptable Use Policy\\](https://llama.meta.com/llama3/use-policy/).",
       "cutoff": "See provider docs"
     },
-    "meta-llama/llama-3.1-8b-instruct": {
-      "provider": "OpenRouter",
-      "company": "Meta-Llama",
-      "model": "meta-llama/llama-3.1-8b-instruct",
-      "input": 1.5e-08,
-      "output": 2e-08,
-      "context": 131072,
-      "modality_in": "Text",
-      "modality_out": "Text",
-      "functions": "Yes",
-      "description": "Meta's latest class of model (Llama 3.1) launched with a variety of sizes & flavors. This 8B instruct-tuned version is fast and efficient.\n\nIt has demonstrated strong performance compared to leading closed-source models in human evaluations.\n\nTo read more about the model release, \\[click here\\](https://ai.meta.com/blog/meta-llama-3-1/). Usage of this model is subject to \\[Meta's Acceptable Use Policy\\](https://llama.meta.com/llama3/use-policy/).",
-      "cutoff": "See provider docs"
-    },
     "meta-llama/llama-3.1-70b-instruct": {
       "provider": "OpenRouter",
       "company": "Meta-Llama",
@@ -3318,6 +3318,19 @@
       "modality_out": "Text",
       "functions": "Yes",
       "description": "Meta's latest class of model (Llama 3.1) launched with a variety of sizes & flavors. This 70B instruct-tuned version is optimized for high quality dialogue usecases.\n\nIt has demonstrated strong performance compared to leading closed-source models in human evaluations.\n\nTo read more about the model release, \\[click here\\](https://ai.meta.com/blog/meta-llama-3-1/). Usage of this model is subject to \\[Meta's Acceptable Use Policy\\](https://llama.meta.com/llama3/use-policy/).",
+      "cutoff": "See provider docs"
+    },
+    "meta-llama/llama-3.1-8b-instruct": {
+      "provider": "OpenRouter",
+      "company": "Meta-Llama",
+      "model": "meta-llama/llama-3.1-8b-instruct",
+      "input": 1.5e-08,
+      "output": 2e-08,
+      "context": 131072,
+      "modality_in": "Text",
+      "modality_out": "Text",
+      "functions": "Yes",
+      "description": "Meta's latest class of model (Llama 3.1) launched with a variety of sizes & flavors. This 8B instruct-tuned version is fast and efficient.\n\nIt has demonstrated strong performance compared to leading closed-source models in human evaluations.\n\nTo read more about the model release, \\[click here\\](https://ai.meta.com/blog/meta-llama-3-1/). Usage of this model is subject to \\[Meta's Acceptable Use Policy\\](https://llama.meta.com/llama3/use-policy/).",
       "cutoff": "See provider docs"
     },
     "mistralai/mistral-nemo:free": {
@@ -3463,32 +3476,6 @@
       "description": "Qwen2 72B is a transformer-based model that excels in language understanding, multilingual capabilities, coding, mathematics, and reasoning.\n\nIt features SwiGLU activation, attention QKV bias, and group query attention. It is pretrained on extensive data with supervised finetuning and direct preference optimization.\n\nFor more details, see this \\[blog post\\](https://qwenlm.github.io/blog/qwen2/) and \\[GitHub repo\\](https://github.com/QwenLM/Qwen2).\n\nUsage of this model is subject to \\[Tongyi Qianwen LICENSE AGREEMENT\\](https://huggingface.co/Qwen/Qwen1.5-110B-Chat/blob/main/LICENSE).",
       "cutoff": "See provider docs"
     },
-    "mistralai/mistral-7b-instruct-v0.3": {
-      "provider": "OpenRouter",
-      "company": "Mistralai",
-      "model": "mistralai/mistral-7b-instruct-v0.3",
-      "input": 2.8e-08,
-      "output": 5.4e-08,
-      "context": 32768,
-      "modality_in": "Text",
-      "modality_out": "Text",
-      "functions": "Yes",
-      "description": "A high-performing, industry-standard 7.3B parameter model, with optimizations for speed and context length.\n\nAn improved version of \\[Mistral 7B Instruct v0.2\\](/models/mistralai/mistral-7b-instruct-v0.2), with the following changes:\n\n- Extended vocabulary to 32768\n- Supports v3 Tokenizer\n- Supports function calling\n\nNOTE: Support for function calling depends on the provider.",
-      "cutoff": "See provider docs"
-    },
-    "nousresearch/hermes-2-pro-llama-3-8b": {
-      "provider": "OpenRouter",
-      "company": "Nousresearch",
-      "model": "nousresearch/hermes-2-pro-llama-3-8b",
-      "input": 2.5e-08,
-      "output": 4e-08,
-      "context": 131072,
-      "modality_in": "Text",
-      "modality_out": "Text",
-      "functions": "Yes",
-      "description": "Hermes 2 Pro is an upgraded, retrained version of Nous Hermes 2, consisting of an updated and cleaned version of the OpenHermes 2.5 Dataset, as well as a newly introduced Function Calling and JSON Mode dataset developed in-house.",
-      "cutoff": "See provider docs"
-    },
     "mistralai/mistral-7b-instruct:free": {
       "provider": "OpenRouter",
       "company": "Mistralai",
@@ -3513,6 +3500,32 @@
       "modality_out": "Text",
       "functions": "Yes",
       "description": "A high-performing, industry-standard 7.3B parameter model, with optimizations for speed and context length.\n\n*Mistral 7B Instruct has multiple version variants, and this is intended to be the latest version.*",
+      "cutoff": "See provider docs"
+    },
+    "nousresearch/hermes-2-pro-llama-3-8b": {
+      "provider": "OpenRouter",
+      "company": "Nousresearch",
+      "model": "nousresearch/hermes-2-pro-llama-3-8b",
+      "input": 2.5e-08,
+      "output": 4e-08,
+      "context": 131072,
+      "modality_in": "Text",
+      "modality_out": "Text",
+      "functions": "Yes",
+      "description": "Hermes 2 Pro is an upgraded, retrained version of Nous Hermes 2, consisting of an updated and cleaned version of the OpenHermes 2.5 Dataset, as well as a newly introduced Function Calling and JSON Mode dataset developed in-house.",
+      "cutoff": "See provider docs"
+    },
+    "mistralai/mistral-7b-instruct-v0.3": {
+      "provider": "OpenRouter",
+      "company": "Mistralai",
+      "model": "mistralai/mistral-7b-instruct-v0.3",
+      "input": 2.8e-08,
+      "output": 5.4e-08,
+      "context": 32768,
+      "modality_in": "Text",
+      "modality_out": "Text",
+      "functions": "Yes",
+      "description": "A high-performing, industry-standard 7.3B parameter model, with optimizations for speed and context length.\n\nAn improved version of \\[Mistral 7B Instruct v0.2\\](/models/mistralai/mistral-7b-instruct-v0.2), with the following changes:\n\n- Extended vocabulary to 32768\n- Supports v3 Tokenizer\n- Supports function calling\n\nNOTE: Support for function calling depends on the provider.",
       "cutoff": "See provider docs"
     },
     "microsoft/phi-3-mini-128k-instruct": {
@@ -3593,19 +3606,6 @@
       "description": "GPT-4o (\"o\" for \"omni\") is OpenAI's latest AI model, supporting both text and image inputs with text outputs. It maintains the intelligence level of \\[GPT-4 Turbo\\](/models/openai/gpt-4-turbo) while being twice as fast and 50% more cost-effective. GPT-4o also offers improved performance in processing non-English languages and enhanced visual capabilities.\n\nFor benchmarking against other models, it was briefly called \\[\"im-also-a-good-gpt2-chatbot\"\\](https://twitter.com/LiamFedus/status/1790064963966370209)\n\n#multimodal",
       "cutoff": "See provider docs"
     },
-    "meta-llama/llama-guard-2-8b": {
-      "provider": "OpenRouter",
-      "company": "Meta-Llama",
-      "model": "meta-llama/llama-guard-2-8b",
-      "input": 2e-07,
-      "output": 2e-07,
-      "context": 8192,
-      "modality_in": "Text",
-      "modality_out": "Text",
-      "functions": "Yes",
-      "description": "This safeguard model has 8B parameters and is based on the Llama 3 family. Just like is predecessor, \\[LlamaGuard 1\\](https://huggingface.co/meta-llama/LlamaGuard-7b), it can do both prompt and response classification.\n\nLlamaGuard 2 acts as a normal LLM would, generating text that indicates whether the given input/output is safe/unsafe. If deemed unsafe, it will also share the content categories violated.\n\nFor best results, please use raw prompt input or the `/completions` endpoint, instead of the chat API.\n\nIt has demonstrated strong performance compared to leading closed-source models in human evaluations.\n\nTo read more about the model release, \\[click here\\](https://ai.meta.com/blog/meta-llama-3/). Usage of this model is subject to \\[Meta's Acceptable Use Policy\\](https://llama.meta.com/llama3/use-policy/).",
-      "cutoff": "See provider docs"
-    },
     "openai/gpt-4o-2024-05-13": {
       "provider": "OpenRouter",
       "company": "Openai",
@@ -3617,6 +3617,19 @@
       "modality_out": "Text",
       "functions": "Yes",
       "description": "GPT-4o (\"o\" for \"omni\") is OpenAI's latest AI model, supporting both text and image inputs with text outputs. It maintains the intelligence level of \\[GPT-4 Turbo\\](/models/openai/gpt-4-turbo) while being twice as fast and 50% more cost-effective. GPT-4o also offers improved performance in processing non-English languages and enhanced visual capabilities.\n\nFor benchmarking against other models, it was briefly called \\[\"im-also-a-good-gpt2-chatbot\"\\](https://twitter.com/LiamFedus/status/1790064963966370209)\n\n#multimodal",
+      "cutoff": "See provider docs"
+    },
+    "meta-llama/llama-guard-2-8b": {
+      "provider": "OpenRouter",
+      "company": "Meta-Llama",
+      "model": "meta-llama/llama-guard-2-8b",
+      "input": 2e-07,
+      "output": 2e-07,
+      "context": 8192,
+      "modality_in": "Text",
+      "modality_out": "Text",
+      "functions": "Yes",
+      "description": "This safeguard model has 8B parameters and is based on the Llama 3 family. Just like is predecessor, \\[LlamaGuard 1\\](https://huggingface.co/meta-llama/LlamaGuard-7b), it can do both prompt and response classification.\n\nLlamaGuard 2 acts as a normal LLM would, generating text that indicates whether the given input/output is safe/unsafe. If deemed unsafe, it will also share the content categories violated.\n\nFor best results, please use raw prompt input or the `/completions` endpoint, instead of the chat API.\n\nIt has demonstrated strong performance compared to leading closed-source models in human evaluations.\n\nTo read more about the model release, \\[click here\\](https://ai.meta.com/blog/meta-llama-3/). Usage of this model is subject to \\[Meta's Acceptable Use Policy\\](https://llama.meta.com/llama3/use-policy/).",
       "cutoff": "See provider docs"
     },
     "meta-llama/llama-3-70b-instruct": {
@@ -3814,19 +3827,6 @@
       "description": "This is Mistral AI's flagship model, Mistral Large 2 (version `mistral-large-2407`). It's a proprietary weights-available model and excels at reasoning, code, JSON, chat, and more. Read the launch announcement \\[here\\](https://mistral.ai/news/mistral-large-2407/).\n\nIt supports dozens of languages including French, German, Spanish, Italian, Portuguese, Arabic, Hindi, Russian, Chinese, Japanese, and Korean, along with 80+ coding languages including Python, Java, C, C++, JavaScript, and Bash. Its long context window allows precise information recall from large documents.",
       "cutoff": "See provider docs"
     },
-    "openai/gpt-3.5-turbo-0613": {
-      "provider": "OpenRouter",
-      "company": "Openai",
-      "model": "openai/gpt-3.5-turbo-0613",
-      "input": 1e-06,
-      "output": 2e-06,
-      "context": 4095,
-      "modality_in": "Text",
-      "modality_out": "Text",
-      "functions": "Yes",
-      "description": "GPT-3.5 Turbo is OpenAI's fastest model. It can understand and generate natural language or code, and is optimized for chat and traditional completion tasks.\n\nTraining data up to Sep 2021.",
-      "cutoff": "See provider docs"
-    },
     "openai/gpt-4-turbo-preview": {
       "provider": "OpenRouter",
       "company": "Openai",
@@ -3838,6 +3838,19 @@
       "modality_out": "Text",
       "functions": "Yes",
       "description": "The preview GPT-4 model with improved instruction following, JSON mode, reproducible outputs, parallel function calling, and more. Training data: up to Dec 2023.\n\n**Note:** heavily rate limited by OpenAI while in preview.",
+      "cutoff": "See provider docs"
+    },
+    "openai/gpt-3.5-turbo-0613": {
+      "provider": "OpenRouter",
+      "company": "Openai",
+      "model": "openai/gpt-3.5-turbo-0613",
+      "input": 1e-06,
+      "output": 2e-06,
+      "context": 4095,
+      "modality_in": "Text",
+      "modality_out": "Text",
+      "functions": "Yes",
+      "description": "GPT-3.5 Turbo is OpenAI's fastest model. It can understand and generate natural language or code, and is optimized for chat and traditional completion tasks.\n\nTraining data up to Sep 2021.",
       "cutoff": "See provider docs"
     },
     "nousresearch/nous-hermes-2-mixtral-8x7b-dpo": {
@@ -3853,19 +3866,6 @@
       "description": "Nous Hermes 2 Mixtral 8x7B DPO is the new flagship Nous Research model trained over the \\[Mixtral 8x7B MoE LLM\\](/models/mistralai/mixtral-8x7b).\n\nThe model was trained on over 1,000,000 entries of primarily \\[GPT-4\\](/models/openai/gpt-4) generated data, as well as other high quality data from open datasets across the AI landscape, achieving state of the art performance on a variety of tasks.\n\n#moe",
       "cutoff": "See provider docs"
     },
-    "mistralai/mistral-tiny": {
-      "provider": "OpenRouter",
-      "company": "Mistralai",
-      "model": "mistralai/mistral-tiny",
-      "input": 2.5e-07,
-      "output": 2.5e-07,
-      "context": 32768,
-      "modality_in": "Text",
-      "modality_out": "Text",
-      "functions": "Yes",
-      "description": "Note: This model is being deprecated. Recommended replacement is the newer \\[Ministral 8B\\](/mistral/ministral-8b)\n\nThis model is currently powered by Mistral-7B-v0.2, and incorporates a \"better\" fine-tuning than \\[Mistral 7B\\](/models/mistralai/mistral-7b-instruct-v0.1), inspired by community work. It's best used for large batch processing tasks where cost is a significant factor but reasoning capabilities are not crucial.",
-      "cutoff": "See provider docs"
-    },
     "mistralai/mistral-small": {
       "provider": "OpenRouter",
       "company": "Mistralai",
@@ -3879,17 +3879,17 @@
       "description": "With 22 billion parameters, Mistral Small v24.09 offers a convenient mid-point between (Mistral NeMo 12B)\\[/mistralai/mistral-nemo\\] and (Mistral Large 2)\\[/mistralai/mistral-large\\], providing a cost-effective solution that can be deployed across various platforms and environments. It has better reasoning, exhibits more capabilities, can produce and reason about code, and is multiligual, supporting English, French, German, Italian, and Spanish.",
       "cutoff": "See provider docs"
     },
-    "mistralai/mistral-7b-instruct-v0.2": {
+    "mistralai/mistral-tiny": {
       "provider": "OpenRouter",
       "company": "Mistralai",
-      "model": "mistralai/mistral-7b-instruct-v0.2",
-      "input": 2e-07,
-      "output": 2e-07,
+      "model": "mistralai/mistral-tiny",
+      "input": 2.5e-07,
+      "output": 2.5e-07,
       "context": 32768,
       "modality_in": "Text",
       "modality_out": "Text",
       "functions": "Yes",
-      "description": "A high-performing, industry-standard 7.3B parameter model, with optimizations for speed and context length.\n\nAn improved version of \\[Mistral 7B Instruct\\](/modelsmistralai/mistral-7b-instruct-v0.1), with the following changes:\n\n- 32k context window (vs 8k context in v0.1)\n- Rope-theta = 1e6\n- No Sliding-Window Attention",
+      "description": "Note: This model is being deprecated. Recommended replacement is the newer \\[Ministral 8B\\](/mistral/ministral-8b)\n\nThis model is currently powered by Mistral-7B-v0.2, and incorporates a \"better\" fine-tuning than \\[Mistral 7B\\](/models/mistralai/mistral-7b-instruct-v0.1), inspired by community work. It's best used for large batch processing tasks where cost is a significant factor but reasoning capabilities are not crucial.",
       "cutoff": "See provider docs"
     },
     "mistralai/mixtral-8x7b-instruct": {
@@ -4048,6 +4048,19 @@
       "description": "One of the highest performing and most popular fine-tunes of Llama 2 13B, with rich descriptions and roleplay. #merge",
       "cutoff": "See provider docs"
     },
+    "openai/gpt-4-0314": {
+      "provider": "OpenRouter",
+      "company": "Openai",
+      "model": "openai/gpt-4-0314",
+      "input": 3e-05,
+      "output": 6e-05,
+      "context": 8191,
+      "modality_in": "Text",
+      "modality_out": "Text",
+      "functions": "Yes",
+      "description": "GPT-4-0314 is the first version of GPT-4 released, with a context length of 8,192 tokens, and was supported until June 14. Training data: up to Sep 2021.",
+      "cutoff": "See provider docs"
+    },
     "openai/gpt-4": {
       "provider": "OpenRouter",
       "company": "Openai",
@@ -4072,19 +4085,6 @@
       "modality_out": "Text",
       "functions": "Yes",
       "description": "GPT-3.5 Turbo is OpenAI's fastest model. It can understand and generate natural language or code, and is optimized for chat and traditional completion tasks.\n\nTraining data up to Sep 2021.",
-      "cutoff": "See provider docs"
-    },
-    "openai/gpt-4-0314": {
-      "provider": "OpenRouter",
-      "company": "Openai",
-      "model": "openai/gpt-4-0314",
-      "input": 3e-05,
-      "output": 6e-05,
-      "context": 8191,
-      "modality_in": "Text",
-      "modality_out": "Text",
-      "functions": "Yes",
-      "description": "GPT-4-0314 is the first version of GPT-4 released, with a context length of 8,192 tokens, and was supported until June 14. Training data: up to Sep 2021.",
       "cutoff": "See provider docs"
     }
   }

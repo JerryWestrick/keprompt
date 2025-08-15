@@ -55,6 +55,34 @@ def matches_pattern(text: str, pattern: str) -> bool:
         return True
     return pattern.lower() in text.lower()
 
+def print_companies():
+    """Print all available companies (model creators)"""
+    companies = sorted(set(model.company for model in AiRegistry.models.values()))
+    
+    table = Table(title="Available Companies (Model Creators)")
+    table.add_column("Company", style="cyan", no_wrap=True)
+    table.add_column("Model Count", style="green", justify="right")
+    
+    for company in companies:
+        model_count = sum(1 for model in AiRegistry.models.values() if model.company == company)
+        table.add_row(company, str(model_count))
+    
+    console.print(table)
+
+def print_providers():
+    """Print all available providers (API services)"""
+    providers = sorted(set(model.provider for model in AiRegistry.models.values()))
+    
+    table = Table(title="Available Providers (API Services)")
+    table.add_column("Provider", style="cyan", no_wrap=True)
+    table.add_column("Model Count", style="green", justify="right")
+    
+    for provider in providers:
+        model_count = sum(1 for model in AiRegistry.models.values() if model.provider == provider)
+        table.add_row(provider, str(model_count))
+    
+    console.print(table)
+
 def print_models(model_pattern: str = "", company_pattern: str = "", provider_pattern: str = ""):
     # Filter models based on patterns
     filtered_models = {
@@ -199,7 +227,7 @@ def get_cmd_args() -> argparse.Namespace:
     parser.add_argument('-f', '--functions', action='store_true', help='List functions available to AI and exit')
     parser.add_argument('-p', '--prompts', nargs='?', const='*', help='List Prompts')
     parser.add_argument('-c', '--code', nargs='?', const='*', help='List code in Prompts')
-    parser.add_argument('-l', '--list', nargs='?', const='*', help='List Prompt file')
+    parser.add_argument('-l', '--list', nargs='?', const='*', help='List Prompt files, or specify: company/companies, provider/providers')
     parser.add_argument('-e', '--execute', nargs='?', const='*', help='Execute one or more Prompts')
     parser.add_argument('-k', '--key', action='store_true', help='Ask for (new) Company Key')
     parser.add_argument('--log', metavar='IDENTIFIER', nargs='?', const='', help='Enable structured logging to prompts/logs-<identifier>/ directory (if no identifier provided, uses prompt name)')
@@ -208,7 +236,7 @@ def get_cmd_args() -> argparse.Namespace:
     parser.add_argument('--init', action='store_true', help='Initialize prompts and functions directories')
     parser.add_argument('--check-builtins', action='store_true', help='Check for built-in function updates')
     parser.add_argument('--update-builtins', action='store_true', help='Update built-in functions')
-    parser.add_argument('--update-models', metavar='PROVIDER', help='Update model definitions for specified provider (e.g., OpenRouter)')
+    parser.add_argument('--update-models', metavar='PROVIDER', help='Update model definitions for specified provider (e.g., OpenRouter) or "All" for all providers')
     parser.add_argument('--conversation', metavar='NAME', help='Load/save conversation state')
     parser.add_argument('--answer', metavar='TEXT', help='Continue conversation with user response')
 
@@ -361,23 +389,43 @@ def main():
         return
 
     if args.update_models:
-        # Update model definitions for specified provider
-        provider_name = args.update_models
+        # Update model definitions for specified provider or all providers
+        provider_input = args.update_models
         
-        try:
-            # Get the handler class for the provider
-            handler_class = AiRegistry.get_handler(provider_name)
+        if provider_input.lower() == 'all':
+            # Update all providers
+            providers = sorted(AiRegistry.handlers.keys())
+            console.print(f"[bold cyan]Updating models for all {len(providers)} providers...[/bold cyan]")
             
-            # Call the create_models_json method
-            console.print(f"[bold cyan]Updating models for {provider_name}...[/bold cyan]")
-            handler_class.create_models_json(provider_name)
-            console.print(f"[bold green]Successfully updated models for {provider_name}![/bold green]")
+            success_count = 0
+            for provider_name in providers:
+                try:
+                    handler_class = AiRegistry.get_handler(provider_name)
+                    console.print(f"[bold cyan]Updating models for {provider_name}...[/bold cyan]")
+                    handler_class.create_models_json(provider_name)
+                    console.print(f"[bold green]Successfully updated models for {provider_name}![/bold green]")
+                    success_count += 1
+                except Exception as e:
+                    console.print(f"[bold red]Error updating models for {provider_name}: {e}[/bold red]")
             
-        except ValueError as e:
-            console.print(f"[bold red]Error: {e}[/bold red]")
-            console.print(f"[yellow]Available providers: {', '.join(sorted(AiRegistry.handlers.keys()))}[/yellow]")
-        except Exception as e:
-            console.print(f"[bold red]Error updating models for {provider_name}: {e}[/bold red]")
+            console.print(f"[bold cyan]Update complete: {success_count}/{len(providers)} providers updated successfully[/bold cyan]")
+        else:
+            # Update single provider
+            provider_name = provider_input
+            try:
+                # Get the handler class for the provider
+                handler_class = AiRegistry.get_handler(provider_name)
+                
+                # Call the create_models_json method
+                console.print(f"[bold cyan]Updating models for {provider_name}...[/bold cyan]")
+                handler_class.create_models_json(provider_name)
+                console.print(f"[bold green]Successfully updated models for {provider_name}![/bold green]")
+                
+            except ValueError as e:
+                console.print(f"[bold red]Error: {e}[/bold red]")
+                console.print(f"[yellow]Available providers: {', '.join(sorted(AiRegistry.handlers.keys()))}[/yellow]")
+            except Exception as e:
+                console.print(f"[bold red]Error updating models for {provider_name}: {e}[/bold red]")
         return
 
     if args.key:
@@ -471,15 +519,24 @@ def main():
         return
 
     if args.list:
-        glob_files = glob_prompt(args.list)
-        if debug: log.info(f"--list '{args.list}' returned {len(glob_files)} files: {glob_files}")
-
-        if glob_files:
-            print_prompt_lines(glob_files)
+        # Check if user wants to list companies or providers
+        if args.list.lower() in ['company', 'companies']:
+            print_companies()
+            return
+        elif args.list.lower() in ['provider', 'providers']:
+            print_providers()
+            return
         else:
-            pname = prompt_pattern(args.list)
-            log.error(f"[bold red]No Prompt files found with {pname}[/bold red]", extra={"markup": True})
-        return
+            # Existing prompt file listing logic
+            glob_files = glob_prompt(args.list)
+            if debug: log.info(f"--list '{args.list}' returned {len(glob_files)} files: {glob_files}")
+
+            if glob_files:
+                print_prompt_lines(glob_files)
+            else:
+                pname = prompt_pattern(args.list)
+                log.error(f"[bold red]No Prompt files found with {pname}[/bold red]", extra={"markup": True})
+            return
 
     if args.code:
         glob_files = glob_prompt(args.code)
