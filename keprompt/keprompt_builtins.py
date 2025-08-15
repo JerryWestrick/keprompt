@@ -85,7 +85,7 @@ def askuser(question: str) -> str:
 def wwwget(url: str) -> str:
     """Retrieve webpage content."""
     try:
-        return get_webpage_content(url)
+        return f"<<{get_webpage_content(url)}>>"
     except Exception as err:
         return f"ERROR: URL not returned: {url} - {err}"
 

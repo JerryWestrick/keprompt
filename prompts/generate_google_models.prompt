@@ -1,0 +1,37 @@
+.# Generate Google Gemini model registry
+.llm "model":"gpt-4o"
+.system You are building a comprehensive Google Gemini model registry. 
+Build JSON incrementally as I provide data sources.
+You will note the token cost is per token not per million!!!!
+Here is an example entry you are to extract all models provided.
+
+
+Target format:
+{
+  "metadata": {
+    "provider": "Google", 
+    "last_updated": "2025-01-13T20:28:00Z",
+    "total_models": 8
+  },
+  "models": {
+    "gemini-1.5-pro": {
+      "company": "Google",
+      "provider": "Google", 
+      "model": "gemini-1.5-pro",
+      "input": 1.25e-06,    
+      "output": 5.0e-06,    
+      "context": 2000000,
+      "modality_in": "Text+Vision",
+      "modality_out": "Text", 
+      "functions": "Yes",
+      "description": "Most capable model for complex reasoning",
+      "cutoff": "See docs"
+    },
+    ...
+  }
+}
+
+.user Gather a list of entries, each entry with name, description, modality_in, modlity_out from the webpage: https://ai.google.dev/gemini-api/docs/models
+then  add input and output price in $/PerToken (converted from $/1M Token) from pricing from the page https://ai.google.dev/pricing
+and finaly use provided tool 'writefile' to write json to file "./prompts/models/Google.json"
+.exec

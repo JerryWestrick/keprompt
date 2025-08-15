@@ -1,0 +1,5 @@
+.# Test OpenRouter integration
+.llm {"model": "openai/gpt-4o"}
+.system You are a helpful assistant.
+.user Hello! Please respond with a brief greeting to confirm OpenRouter integration is working.
+.exec

@@ -1,6 +1,9 @@
-# CompanyAi.py
+# AiProvider.py
 import abc
-from typing import List, Dict, Any, TYPE_CHECKING
+import os
+import json as json_module
+from typing import List, Dict, Any, TYPE_CHECKING, Optional
+from datetime import datetime
 
 import requests
 from rich import json
@@ -17,7 +20,7 @@ if TYPE_CHECKING:
     from .AiPrompt import AiMessage, AiPrompt, AiCall, AiResult
 
 
-class AiCompany(abc.ABC):
+class AiProvider(abc.ABC):
 
     def __init__(self, prompt: 'AiPrompt'):
         self.prompt = prompt
@@ -27,17 +30,17 @@ class AiCompany(abc.ABC):
 
     @abc.abstractmethod
     def prepare_request(self, messages: List[Dict]) -> Dict:
-        """Override to create company-specific request format"""
+        """Override to create provider-specific request format"""
         pass
 
     @abc.abstractmethod
     def get_api_url(self) -> str:
-        """Override to provide company API endpoint"""
+        """Override to provide provider API endpoint"""
         pass
 
     @abc.abstractmethod
     def get_headers(self) -> Dict:
-        """Override to provide company-specific headers"""
+        """Override to provide provider-specific headers"""
         pass
 
     @abc.abstractmethod
@@ -46,8 +49,74 @@ class AiCompany(abc.ABC):
 
     @abc.abstractmethod
     def to_ai_message(self, response: Dict) -> 'AiMessage':
-        """Convert full API response to AiMessage. Each company implements their response parsing."""
+        """Convert full API response to AiMessage. Each provider implements their response parsing."""
         pass
+
+    @classmethod
+    @abc.abstractmethod
+    def create_models_json(cls, provider_name: str) -> None:
+        """Create/update the models JSON file for this provider"""
+        pass
+
+    @classmethod
+    def register_models(cls, provider_name: str) -> None:
+        """Load models from JSON file, create if missing"""
+        json_path = f"prompts/models/{provider_name}.json"
+        
+        if not os.path.exists(json_path):
+            # Create directory if it doesn't exist
+            os.makedirs(os.path.dirname(json_path), exist_ok=True)
+            cls.create_models_json(provider_name)
+        
+        models = cls.load_models_from_json(json_path)
+        
+        # Import here to avoid circular imports
+        from .AiRegistry import AiRegistry
+        AiRegistry.register_models_from_dict(model_definitions=models)
+
+    @classmethod
+    def load_models_from_json(cls, json_path: str) -> Dict[str, Dict]:
+        """Load and validate models from JSON file"""
+        try:
+            with open(json_path, 'r', encoding='utf-8') as f:
+                data = json_module.load(f)
+            
+            # Validate structure
+            if not isinstance(data, dict) or 'models' not in data:
+                raise ValueError("Invalid JSON structure: missing 'models' key")
+            
+            return data['models']
+            
+        except (FileNotFoundError, json_module.JSONDecodeError, ValueError) as e:
+            console.print(f"[red]Error loading models from {json_path}: {e}[/red]")
+            raise
+
+    @classmethod
+    def _write_json_file(cls, provider_name: str, models: Dict[str, Dict]) -> None:
+        """Write models to JSON file with metadata"""
+        json_path = f"prompts/models/{provider_name}.json"
+        
+        # Create directory if it doesn't exist
+        os.makedirs(os.path.dirname(json_path), exist_ok=True)
+        
+        data = {
+            "metadata": {
+                "provider": provider_name,
+                "last_updated": datetime.now().isoformat(),
+                "total_models": len(models)
+            },
+            "models": models
+        }
+        
+        try:
+            with open(json_path, 'w', encoding='utf-8') as f:
+                json_module.dump(data, f, indent=2, ensure_ascii=False)
+            
+            console.print(f"[green]Successfully wrote {len(models)} models to {json_path}[/green]")
+            
+        except Exception as e:
+            console.print(f"[red]Error writing models to {json_path}: {e}[/red]")
+            raise
 
     def call_llm(self, label: str) -> List['AiMessage']:
         do_again = True
@@ -58,7 +127,7 @@ class AiCompany(abc.ABC):
         call_id = getattr(self.prompt, '_current_call_id', None)
         
         # Log the LLM call using structured logging
-        call_msg = f"Calling {self.prompt.company}::{self.prompt.model}"
+        call_msg = f"Calling {self.prompt.provider}::{self.prompt.model}"
         self.prompt.vm.logger.log_llm_call(call_msg, call_id)
         
         # Format the statement line with the API call info for execution log
@@ -155,13 +224,13 @@ class AiCompany(abc.ABC):
         call_id = getattr(self.prompt, '_current_call_id', None)
 
         # Log API request data using structured logging
-        self.prompt.vm.logger.log_llm_call(f"Sending request to {self.prompt.company}::{self.prompt.model}", call_id)
+        self.prompt.vm.logger.log_llm_call(f"Sending request to {self.prompt.provider}::{self.prompt.model}", call_id)
 
         # Make the API request without progress bar
         response = requests.post(url=url, headers=headers, json=data)
 
         if response.status_code != 200:
-            raise Exception(f"{self.prompt.company}::{self.prompt.model} API error: {response.text}")
+            raise Exception(f"{self.prompt.provider}::{self.prompt.model} API error: {response.text}")
 
         resp_obj = response.json()
 
@@ -181,7 +250,7 @@ class AiCompany(abc.ABC):
         retval = response.json()
 
         # Log API response using structured logging
-        self.prompt.vm.logger.log_llm_call(f"Received response from {self.prompt.company}::{self.prompt.model}", call_id)
+        self.prompt.vm.logger.log_llm_call(f"Received response from {self.prompt.provider}::{self.prompt.model}", call_id)
 
         # Update token counts
         self.prompt.toks_in += retval.get("usage", {}).get("input_tokens", 0)

@@ -1,0 +1,22 @@
+{
+"metadata": {
+"provider": "Google",
+"last_updated": "2025-01-13T20:28:00Z",
+"total_models": 1
+},
+"models": {
+"gemini-1.5-pro": {
+"company": "Google",
+"provider": "Google",
+"model": "gemini-1.5-pro",
+"input": 1.25e-06,
+"output": 5.0e-06,
+"context": 2000000,
+"modality_in": "Text+Vision",
+"modality_out": "Text",
+"functions": "Yes",
+"description": "Most capable model for complex reasoning",
+"cutoff": "See docs"
+}
+}
+}

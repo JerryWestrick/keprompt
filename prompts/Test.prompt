@@ -1,7 +1,5 @@
 .# Make snake program with gpt-4o
-.llm "model": "gpt-4o"
-.system
-You are to provide short concise answers.
-.user
-Generate the python code implementing the game of snake, and write the code to the file snake.py using the provided writefile function.
-.exec
+.llm "model": "openai/gpt-oss-120b"
+.cmd wwwget(url=https://ai.google.dev/gemini-api/docs/models)
+.print <<last_response>>
+.exit

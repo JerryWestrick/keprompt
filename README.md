@@ -19,6 +19,8 @@ KePrompt provides a flexible framework for crafting, executing, and iterating on
 - **User-Defined Functions**: Create custom functions in any programming language that LLMs can call
 - **Language Agnostic Extensions**: Write functions in Python, Shell, Go, Rust, or any executable language
 - **Function Override System**: Replace built-in functions with custom implementations
+- **Conversation Management**: Persistent conversations that can be saved, loaded, and continued across sessions
+- **Model Discovery**: Advanced filtering by model name, company, and provider for easy model selection
 - **API Key Management**: Secure storage of API keys via system keyring
 - **Rich Terminal Output**: Terminal-friendly visuals with color-coded responses
 - **Structured Logging**: Advanced logging system with multiple modes (production, log, debug)
@@ -79,7 +81,7 @@ keprompt -e hello --debug
 ## Command Line Options
 
 ```
-keprompt [-h] [-v] [--param key value] [-m] [-s] [-f] [-p [PROMPTS]] [-c [CODE]] [-l [LIST]] [-e [EXECUTE]] [-k] [--log [IDENTIFIER]] [--debug] [-r] [--init] [--check-builtins] [--update-builtins]
+keprompt [-h] [-v] [--param key value] [-m [PATTERN]] [--company PATTERN] [--provider PATTERN] [-s] [-f] [-p [PROMPTS]] [-c [CODE]] [-l [LIST]] [-e [EXECUTE]] [-k] [--log [IDENTIFIER]] [--debug] [-r] [--init] [--check-builtins] [--update-builtins] [--conversation NAME] [--answer TEXT]
 ```
 
 | Option | Description |
@@ -87,7 +89,9 @@ keprompt [-h] [-v] [--param key value] [-m] [-s] [-f] [-p [PROMPTS]] [-c [CODE]]
 | `-h, --help` | Show help message and exit |
 | `-v, --version` | Show version information and exit |
 | `--param key value` | Add key/value pairs for substitution in prompts |
-| `-m, --models` | List all available LLM models with pricing and capabilities |
+| `-m, --models [PATTERN]` | List all available LLM models with pricing and capabilities (optionally filter by model name pattern) |
+| `--company PATTERN` | Filter models by company name pattern (use with -m) |
+| `--provider PATTERN` | Filter models by provider name pattern (use with -m) |
 | `-s, --statements` | List all supported prompt statement types |
 | `-f, --functions` | List all available functions (built-in + user-defined) |
 | `-p, --prompts [PATTERN]` | List available prompt files (default: all) |
@@ -101,6 +105,8 @@ keprompt [-h] [-v] [--param key value] [-m] [-s] [-f] [-p [PROMPTS]] [-c [CODE]]
 | `--init` | Initialize prompts and functions directories |
 | `--check-builtins` | Check for built-in function updates |
 | `--update-builtins` | Update built-in functions |
+| `--conversation NAME` | Load/save conversation state with the specified name |
+| `--answer TEXT` | Continue an existing conversation with a user response |
 
 ## Prompt Language
 
@@ -276,6 +282,105 @@ echo '{"param": "value"}' | ./prompts/functions/my_function function_name
 keprompt -e my_prompt --debug
 ```
 
+## Conversation Management
+
+keprompt supports persistent conversations that can be saved, loaded, and continued across multiple sessions. This is particularly useful for multi-turn interactions and maintaining context.
+
+### Starting a New Conversation
+
+```bash
+# Start a new conversation and save it
+keprompt -e my_prompt --conversation my_chat
+
+# Start with logging enabled
+keprompt -e my_prompt --conversation my_chat --debug
+```
+
+### Continuing an Existing Conversation
+
+```bash
+# Continue a conversation with a user response
+keprompt --conversation my_chat --answer "That's interesting, tell me more about the second point."
+
+# Continue with logging
+keprompt --conversation my_chat --answer "Can you elaborate?" --debug
+```
+
+### Conversation Storage
+
+Conversations are automatically saved in the `conversations/` directory as JSON files containing:
+- Complete message history
+- Model configuration
+- Variable states
+- Execution context
+
+### Example Conversation Workflow
+
+```bash
+# 1. Start initial conversation
+cat > prompts/research.prompt << 'EOF'
+.llm {"model": "claude-3-5-sonnet-20241022"}
+.system You are a research assistant. Provide detailed, well-structured responses.
+.user I'm researching renewable energy. Can you give me an overview of the main types?
+.exec
+EOF
+
+keprompt -e research --conversation energy_research --debug
+
+# 2. Continue the conversation
+keprompt --conversation energy_research --answer "Can you focus specifically on solar energy efficiency improvements in the last 5 years?"
+
+# 3. Further continuation
+keprompt --conversation energy_research --answer "What are the main challenges still facing solar adoption?"
+```
+
+## Model Filtering
+
+keprompt provides powerful filtering capabilities for exploring available models:
+
+### Basic Model Listing
+
+```bash
+# List all models
+keprompt -m
+
+# Filter by model name pattern
+keprompt -m gpt
+keprompt -m "*sonnet*"
+```
+
+### Advanced Filtering
+
+```bash
+# Filter by company
+keprompt -m --company anthropic
+keprompt -m --company openai
+
+# Filter by provider
+keprompt -m --provider openai
+keprompt -m --provider anthropic
+
+# Combine filters
+keprompt -m gpt --company openai --provider openai
+keprompt -m --company anthropic --provider anthropic
+```
+
+### Filter Examples
+
+```bash
+# Show only Claude models
+keprompt -m --company anthropic
+
+# Show only GPT-4 variants
+keprompt -m gpt-4
+
+# Show all Gemini models
+keprompt -m --company google
+
+# Show models from specific provider
+keprompt -m --provider mistral
+```
+
 ## Supported LLM Providers
 
 - **Anthropic**: Claude models (Haiku, Sonnet, Opus)
@@ -419,6 +524,47 @@ keprompt -e "test*"
 keprompt -p "*gpt*"
 ```
 
+### Model Discovery and Filtering
+
+```bash
+# Explore available models
+keprompt -m
+
+# Find specific models
+keprompt -m claude
+keprompt -m gpt-4
+keprompt -m "*mini*"
+
+# Filter by company
+keprompt -m --company anthropic
+keprompt -m --company openai
+keprompt -m --company google
+
+# Filter by provider
+keprompt -m --provider anthropic
+keprompt -m --provider openai
+
+# Combine filters for precise results
+keprompt -m sonnet --company anthropic
+keprompt -m gpt --company openai --provider openai
+```
+
+### Conversation Workflows
+
+```bash
+# Start a research conversation
+keprompt -e research_prompt --conversation research_session --debug
+
+# Continue with follow-up questions
+keprompt --conversation research_session --answer "Can you provide more details on the third point?"
+
+# Continue with specific requests
+keprompt --conversation research_session --answer "Please create a summary table of the key findings."
+
+# Start a new conversation thread
+keprompt -e analysis_prompt --conversation analysis_session
+```
+
 ### Function Management
 
 ```bash
@@ -433,6 +579,19 @@ keprompt --update-builtins
 
 # Remove backup files
 keprompt -r
+```
+
+### Combining Features
+
+```bash
+# Execute with conversation, logging, and variables
+keprompt -e my_prompt --conversation project_chat --debug --param topic "AI Ethics"
+
+# Continue conversation with logging
+keprompt --conversation project_chat --answer "What are the implications?" --log project_analysis
+
+# Filter models and save results
+keprompt -m --company anthropic > available_claude_models.txt
 ```
 
 ## Best Practices

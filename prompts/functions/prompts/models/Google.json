@@ -1,0 +1,81 @@
+{
+  "metadata": {
+    "provider": "Google",
+    "last_updated": "2025-07-23T20:28:00Z",
+    "total_models": 10
+  },
+  "models": {
+    "gemini-2.5-pro": {
+      "name": "Gemini 2.5 Pro",
+      "description": "Our most powerful thinking model with maximum response accuracy and state-of-the-art performance.",
+      "modality_in": "Audio, images, video, text",
+      "modality_out": "Text",
+      "input": 1.25e-06,
+      "output": 5.0e-06
+    },
+    "gemini-2.5-flash": {
+      "name": "Gemini 2.5 Flash",
+      "description": "Best model in terms of price-performance, offering well-rounded capabilities.",
+      "modality_in": "Audio, images, video, text",
+      "modality_out": "Text",
+      "input": 3.0e-07,
+      "output": 2.5e-06
+    },
+    "gemini-2.5-flash-lite": {
+      "name": "Gemini 2.5 Flash-Lite",
+      "description": "Optimized for cost-efficiency and high throughput.",
+      "modality_in": "Text, image, video, audio",
+      "modality_out": "Text",
+      "input": 1.0e-07,
+      "output": 4.0e-07
+    },
+    "gemini-live-2.5-flash-preview": {
+      "name": "Gemini 2.5 Flash Live",
+      "description": "Enable low-latency bidirectional voice and video interactions.",
+      "modality_in": "Audio, video, text",
+      "modality_out": "Text, audio",
+      "input": 5.0e-07,
+      "output": 2.0e-06
+    },
+    "gemini-2.0-flash": {
+      "name": "Gemini 2.0 Flash",
+      "description": "Next-gen features, superior speed, and a 1M token context window.",
+      "modality_in": "Audio, images, video, text",
+      "modality_out": "Text",
+      "input": 1.0e-07,
+      "output": 4.0e-07
+    },
+    "gemini-2.0-flash-preview-image-generation": {
+      "name": "Gemini 2.0 Flash Preview Image Generation",
+      "description": "Improved image generation features, including generating and editing images conversationally.",
+      "modality_in": "Audio, images, video, text",
+      "modality_out": "Text, images",
+      "input": 3.5e-07,
+      "output": 1.5e-06
+    },
+    "gemini-live-2.0-flash-native": {
+      "name": "Gemini 2.0 Flash-Lite",
+      "description": "Optimized for cost efficiency and low latency.",
+      "modality_in": "Text, image, video, audio, PDF",
+      "modality_out": "Text",
+      "input": 7.5e-08,
+      "output": 3.0e-07
+    },
+    "gemini-1.5-flash": {
+      "name": "Gemini 1.5 Flash",
+      "description": "Gemini 1.5 Flash is a fast and versatile multimodal model for scaling across diverse tasks.",
+      "modality_in": "Audio, images, video, text",
+      "modality_out": "Text",
+      "input": 7.5e-08,
+      "output": 3.0e-07
+    },
+    "gemini-1.5-pro": {
+      "name": "Gemini 1.5 Pro",
+      "description": "Most capable model for complex reasoning with extensive input capabilities.",
+      "modality_in": "Audio, images, video, text",
+      "modality_out": "Text",
+      "input": 1.25e-06,
+      "output": 5.0e-06
+    }
+  }
+}

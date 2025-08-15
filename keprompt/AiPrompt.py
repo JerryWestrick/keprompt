@@ -186,7 +186,7 @@ class AiPrompt:
         self.system_message: Optional[str] = None
         self.toks_in: int = 0
         self.toks_out: int = 0
-        self.company: str = ""
+        self.provider: str = ""
         self.model: str = ""
         self.api_key: str = ""
         self.vm = vm
@@ -240,7 +240,7 @@ class AiPrompt:
         handler = AiRegistry.create_handler(prompt=self)
 
         if not handler:
-            raise ValueError(f"No handler registered for {self.company}")
+            raise ValueError(f"No handler registered for {self.provider}")
 
         retval = handler.call_llm(label=label)
 
@@ -248,7 +248,7 @@ class AiPrompt:
 
     def _process_response(self, data: dict) -> AiMessage:
         msg_parts: List[AiMessagePart] = []
-        company = self.company
+        company = self.provider
 
         if company == "Anthropic":
             self.toks_out += data.get("usage", {}).get("output_tokens", 0)

@@ -3,7 +3,7 @@ import json
 from rich.console import Console
 
 from .AiRegistry import AiRegistry
-from .AiCompany import AiCompany
+from .AiProvider import AiProvider
 from .AiPrompt import AiMessage, AiTextPart, AiCall, AiResult, AiPrompt
 from .keprompt_functions import DefinedFunctions, DefinedToolsArray
 
@@ -11,7 +11,7 @@ console = Console()
 terminal_width = console.size.width
 
 
-class AiGoogle(AiCompany):
+class AiGoogle(AiProvider):
     def prepare_request(self, messages: List[Dict]) -> Dict:
         request = {
             "contents": messages,
@@ -61,31 +61,63 @@ class AiGoogle(AiCompany):
 
         return google_messages
 
+    @classmethod
+    def create_models_json(cls, provider_name: str) -> None:
+        """Create/update the models JSON file for Google using keprompt generation"""
+        import subprocess
+        import os
+        
+        console.print(f"[cyan]Generating {provider_name} models using keprompt...[/cyan]")
+        
+        try:
+            # Execute the keprompt generation script
+            result = subprocess.run([
+                "python", "-m", "keprompt", "--execute", 
+                "prompts/generate_google_models.prompt"
+            ], capture_output=True, text=True, cwd=os.getcwd())
+            
+            if result.returncode == 0:
+                console.print(f"[green]Successfully generated {provider_name} models using keprompt![/green]")
+                # Check if the file was created
+                if os.path.exists(f"prompts/models/{provider_name}.json"):
+                    console.print(f"[green]Verified {provider_name}.json was created[/green]")
+                else:
+                    console.print(f"[yellow]File not found, using manual fallback[/yellow]")
+                    cls._write_json_file(provider_name, Google_Models)
+            else:
+                console.print(f"[yellow]Keprompt generation failed: {result.stderr}[/yellow]")
+                console.print(f"[yellow]Using manual fallback definitions[/yellow]")
+                cls._write_json_file(provider_name, Google_Models)
+                
+        except Exception as e:
+            console.print(f"[yellow]Generation failed ({e}), using manual fallback[/yellow]")
+            cls._write_json_file(provider_name, Google_Models)
+
 
 # Register handler and models
-AiRegistry.register_handler(company_name="Google", handler_class=AiGoogle)
+AiRegistry.register_handler(provider_name="Google", handler_class=AiGoogle)
 
 # Google model definitions and pricing
 # Official pricing source: https://ai.google.dev/pricing
 # Last updated: January 2025
 Google_Models = {
     # Latest Gemini 2.5 models
-    "gemini-2.5-pro": {"company": "Google", "model": "gemini-2.5-pro", "input": 0.00000125, "output": 0.00001, "context": 1000000, "modality_in": "Text+Vision+Audio", "modality_out": "Text", "functions": "Yes", "description": "State-of-the-art multipurpose model, excels at coding and complex reasoning", "cutoff": "See docs"},
-    "gemini-2.5-flash": {"company": "Google", "model": "gemini-2.5-flash", "input": 0.0000003, "output": 0.0000025, "context": 1000000, "modality_in": "Text+Vision+Audio", "modality_out": "Text", "functions": "Yes", "description": "First hybrid reasoning model with thinking budgets", "cutoff": "See docs"},
-    "gemini-2.5-flash-lite": {"company": "Google", "model": "gemini-2.5-flash-lite", "input": 0.0000001, "output": 0.0000004, "context": 1000000, "modality_in": "Text+Vision+Audio", "modality_out": "Text", "functions": "Yes", "description": "Smallest and most cost effective model, built for at scale usage", "cutoff": "See docs"},
+    "gemini-2.5-pro": {"company": "Google", "provider": "Google", "model": "gemini-2.5-pro", "input": 0.00000125, "output": 0.00001, "context": 1000000, "modality_in": "Text+Vision+Audio", "modality_out": "Text", "functions": "Yes", "description": "State-of-the-art multipurpose model, excels at coding and complex reasoning", "cutoff": "See docs"},
+    "gemini-2.5-flash": {"company": "Google", "provider": "Google", "model": "gemini-2.5-flash", "input": 0.0000003, "output": 0.0000025, "context": 1000000, "modality_in": "Text+Vision+Audio", "modality_out": "Text", "functions": "Yes", "description": "First hybrid reasoning model with thinking budgets", "cutoff": "See docs"},
+    "gemini-2.5-flash-lite": {"company": "Google", "provider": "Google", "model": "gemini-2.5-flash-lite", "input": 0.0000001, "output": 0.0000004, "context": 1000000, "modality_in": "Text+Vision+Audio", "modality_out": "Text", "functions": "Yes", "description": "Smallest and most cost effective model, built for at scale usage", "cutoff": "See docs"},
     
     # Gemini 2.0 models
-    "gemini-2.0-flash": {"company": "Google", "model": "gemini-2.0-flash", "input": 0.0000001, "output": 0.0000004, "context": 1000000, "modality_in": "Text+Vision+Audio", "modality_out": "Text+Image", "functions": "Yes", "description": "Most balanced multimodal model, built for the era of Agents", "cutoff": "See docs"},
-    "gemini-2.0-flash-lite": {"company": "Google", "model": "gemini-2.0-flash-lite", "input": 0.000000075, "output": 0.0000003, "context": 1000000, "modality_in": "Text", "modality_out": "Text", "functions": "Yes", "description": "Smallest and most cost effective model", "cutoff": "See docs"},
+    "gemini-2.0-flash": {"company": "Google", "provider": "Google", "model": "gemini-2.0-flash", "input": 0.0000001, "output": 0.0000004, "context": 1000000, "modality_in": "Text+Vision+Audio", "modality_out": "Text+Image", "functions": "Yes", "description": "Most balanced multimodal model, built for the era of Agents", "cutoff": "See docs"},
+    "gemini-2.0-flash-lite": {"company": "Google", "provider": "Google", "model": "gemini-2.0-flash-lite", "input": 0.000000075, "output": 0.0000003, "context": 1000000, "modality_in": "Text", "modality_out": "Text", "functions": "Yes", "description": "Smallest and most cost effective model", "cutoff": "See docs"},
     
     # Legacy Gemini 1.5 models (still available)
-    "gemini-1.5-pro": {"company": "Google", "model": "gemini-1.5-pro", "input": 0.00000125, "output": 0.000005, "context": 2000000, "modality_in": "Text+Vision", "modality_out": "Text", "functions": "Yes", "description": "Highest intelligence Gemini 1.5 series model", "cutoff": "See docs"},
-    "gemini-1.5-flash": {"company": "Google", "model": "gemini-1.5-flash", "input": 0.000000075, "output": 0.0000003, "context": 1000000, "modality_in": "Text+Vision", "modality_out": "Text", "functions": "Yes", "description": "Fastest multimodal model with great performance", "cutoff": "See docs"},
-    "gemini-1.5-flash-8b": {"company": "Google", "model": "gemini-1.5-flash-8b", "input": 0.0000000375, "output": 0.00000015, "context": 1000000, "modality_in": "Text+Vision", "modality_out": "Text", "functions": "Yes", "description": "Smallest model for lower intelligence use cases", "cutoff": "See docs"}
+    "gemini-1.5-pro": {"company": "Google", "provider": "Google", "model": "gemini-1.5-pro", "input": 0.00000125, "output": 0.000005, "context": 2000000, "modality_in": "Text+Vision", "modality_out": "Text", "functions": "Yes", "description": "Highest intelligence Gemini 1.5 series model", "cutoff": "See docs"},
+    "gemini-1.5-flash": {"company": "Google", "provider": "Google", "model": "gemini-1.5-flash", "input": 0.000000075, "output": 0.0000003, "context": 1000000, "modality_in": "Text+Vision", "modality_out": "Text", "functions": "Yes", "description": "Fastest multimodal model with great performance", "cutoff": "See docs"},
+    "gemini-1.5-flash-8b": {"company": "Google", "provider": "Google", "model": "gemini-1.5-flash-8b", "input": 0.0000000375, "output": 0.00000015, "context": 1000000, "modality_in": "Text+Vision", "modality_out": "Text", "functions": "Yes", "description": "Smallest model for lower intelligence use cases", "cutoff": "See docs"}
 
 }
 
-AiRegistry.register_models_from_dict(model_definitions=Google_Models)
+AiGoogle.register_models("Google")
 
 # Prepare Google tools array
 GoogleToolsArray = [

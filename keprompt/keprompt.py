@@ -49,8 +49,38 @@ def print_functions():
 
     console.print(table)
 
-def print_models():
-    table = Table(title="Available Models")
+def matches_pattern(text: str, pattern: str) -> bool:
+    """Case-insensitive pattern matching"""
+    if not pattern:
+        return True
+    return pattern.lower() in text.lower()
+
+def print_models(model_pattern: str = "", company_pattern: str = "", provider_pattern: str = ""):
+    # Filter models based on patterns
+    filtered_models = {
+        name: model for name, model in AiRegistry.models.items()
+        if matches_pattern(name, model_pattern) and
+           matches_pattern(model.company, company_pattern) and  
+           matches_pattern(model.provider, provider_pattern)
+    }
+    
+    if not filtered_models:
+        console.print("[bold red]No models match the specified filters.[/bold red]")
+        return
+    
+    # Build title with active filters
+    title_parts = ["Available Models"]
+    if model_pattern:
+        title_parts.append(f"Model: *{model_pattern}*")
+    if company_pattern:
+        title_parts.append(f"Company: *{company_pattern}*")
+    if provider_pattern:
+        title_parts.append(f"Provider: *{provider_pattern}*")
+    
+    title = " | ".join(title_parts)
+    
+    table = Table(title=title)
+    table.add_column("Provider", style="cyan", no_wrap=True)
     table.add_column("Company", style="cyan", no_wrap=True)
     table.add_column("Model", style="green")
     table.add_column("Max Token", style="magenta", justify="right")
@@ -62,41 +92,36 @@ def print_models():
     table.add_column("Cutoff", style="dim", no_wrap=True)
     table.add_column("Description", style="white")
 
-    # Sort by LLM name, then model.
-    sortable_keys = [f"{AiRegistry.models[model_name].company}:{model_name}" for model_name in AiRegistry.models.keys()]
+    # Sort by Provider, then Company, then model name
+    sortable_keys = [f"{filtered_models[model_name].provider}:{filtered_models[model_name].company}:{model_name}" for model_name in filtered_models.keys()]
     sortable_keys.sort()
 
+    last_provider = ''
     last_company = ''
     for k in sortable_keys:
-        company, model_name = k.split(':', maxsplit=1)
-        model = AiRegistry.get_model(model_name)
-        if company != last_company:
-            table.add_row(
-                company,
-                model_name,
-                str(model.context),
-                f"{model.input*1_000_000:06.4f}",
-                f"{model.output*1_000_000:06.4f}",
-                model.modality_in,
-                model.modality_out,
-                model.functions,
-                model.cutoff,
-                model.description
-            )
-            last_company = company
-        else:
-            table.add_row(
-                "",
-                model_name,
-                str(model.context),
-                f"{model.input*1_000_000:06.4f}",
-                f"{model.output*1_000_000:06.4f}",
-                model.modality_in,
-                model.modality_out,
-                model.functions,
-                model.cutoff,
-                model.description
-            )
+        provider, company, model_name = k.split(':', maxsplit=2)
+        model = filtered_models[model_name]
+        
+        # Show provider and company only when they change
+        display_provider = provider if provider != last_provider else ""
+        display_company = company if company != last_company or provider != last_provider else ""
+        
+        table.add_row(
+            display_provider,
+            display_company,
+            model_name,
+            str(model.context),
+            f"{model.input*1_000_000:06.4f}",
+            f"{model.output*1_000_000:06.4f}",
+            model.modality_in,
+            model.modality_out,
+            model.functions,
+            model.cutoff,
+            model.description
+        )
+        
+        last_provider = provider
+        last_company = company
 
     console.print(table)
 
@@ -167,7 +192,9 @@ def get_cmd_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Prompt Engineering Tool.")
     parser.add_argument('-v', '--version', action='store_true', help='Show version information and exit')
     parser.add_argument('--param', nargs=2, action='append',metavar=('key', 'value'),help='Add key/value pairs')
-    parser.add_argument('-m', '--models', action='store_true', help='List company models information and exit')
+    parser.add_argument('-m', '--models', nargs='?', const='', help='List models (optionally filter by model name pattern)')
+    parser.add_argument('--company', help='Filter models by company name pattern')
+    parser.add_argument('--provider', help='Filter models by provider name pattern')
     parser.add_argument('-s', '--statements', action='store_true', help='List supported prompt statement types and exit')
     parser.add_argument('-f', '--functions', action='store_true', help='List functions available to AI and exit')
     parser.add_argument('-p', '--prompts', nargs='?', const='*', help='List Prompts')
@@ -181,6 +208,7 @@ def get_cmd_args() -> argparse.Namespace:
     parser.add_argument('--init', action='store_true', help='Initialize prompts and functions directories')
     parser.add_argument('--check-builtins', action='store_true', help='Check for built-in function updates')
     parser.add_argument('--update-builtins', action='store_true', help='Update built-in functions')
+    parser.add_argument('--update-models', metavar='PROVIDER', help='Update model definitions for specified provider (e.g., OpenRouter)')
     parser.add_argument('--conversation', metavar='NAME', help='Load/save conversation state')
     parser.add_argument('--answer', metavar='TEXT', help='Continue conversation with user response')
 
@@ -252,9 +280,13 @@ def main():
                         log.error(f"Error removing {file_path}: {e}")
         return
 
-    if args.models:
+    if args.models is not None or args.company or args.provider:
         # Print the models table and exit
-        print_models()
+        print_models(
+            model_pattern=args.models or "",
+            company_pattern=args.company or "",
+            provider_pattern=args.provider or ""
+        )
         return
 
     if args.statements:
@@ -326,6 +358,26 @@ def main():
         # Install new built-ins
         loader._install_builtin_functions()
         console.print("[bold green]Built-in functions updated successfully![/bold green]")
+        return
+
+    if args.update_models:
+        # Update model definitions for specified provider
+        provider_name = args.update_models
+        
+        try:
+            # Get the handler class for the provider
+            handler_class = AiRegistry.get_handler(provider_name)
+            
+            # Call the create_models_json method
+            console.print(f"[bold cyan]Updating models for {provider_name}...[/bold cyan]")
+            handler_class.create_models_json(provider_name)
+            console.print(f"[bold green]Successfully updated models for {provider_name}![/bold green]")
+            
+        except ValueError as e:
+            console.print(f"[bold red]Error: {e}[/bold red]")
+            console.print(f"[yellow]Available providers: {', '.join(sorted(AiRegistry.handlers.keys()))}[/yellow]")
+        except Exception as e:
+            console.print(f"[bold red]Error updating models for {provider_name}: {e}[/bold red]")
         return
 
     if args.key:

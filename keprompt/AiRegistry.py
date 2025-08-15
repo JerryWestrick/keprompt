@@ -1,11 +1,12 @@
 from typing import Type
-from .AiCompany import AiCompany
+from .AiProvider import AiProvider
 from dataclasses import dataclass
 from typing import Dict, Any
 
 @dataclass
 class AiModel:
-    company: str
+    provider: str    # API service (was "company")
+    company: str     # Model creator (was "provider")
     model: str
     input: float
     output: float
@@ -26,26 +27,26 @@ class AiModel:
 
 
 class AiRegistry:
-    handlers: Dict[str, Type['AiCompany']] = {}
+    handlers: Dict[str, Type['AiProvider']] = {}
     models: Dict[str, AiModel] = {}
     _initialized: bool = False
 
     @classmethod
-    def register_handler(cls, company_name: str, handler_class: Type['AiCompany']) -> None:
-        cls.handlers[company_name] = handler_class
+    def register_handler(cls, provider_name: str, handler_class: Type['AiProvider']) -> None:
+        cls.handlers[provider_name] = handler_class
 
     @classmethod
-    def create_handler(cls, prompt) -> 'AiCompany':
+    def create_handler(cls, prompt) -> 'AiProvider':
         """Create and return appropriate AI handler instance for given model"""
         model = cls.get_model(prompt.model)
-        handler_class = cls.get_handler(model.company)
+        handler_class = cls.get_handler(model.provider)
         return handler_class(prompt=prompt)
 
     @classmethod
-    def get_handler(cls, company_name: str) -> Type['AiCompany']:
-        handler = cls.handlers.get(company_name)
+    def get_handler(cls, provider_name: str) -> Type['AiProvider']:
+        handler = cls.handlers.get(provider_name)
         if not handler:
-            raise ValueError(f"No handler registered for {company_name}")
+            raise ValueError(f"No handler registered for {provider_name}")
         return handler
 
     @classmethod

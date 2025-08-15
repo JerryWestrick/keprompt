@@ -91,7 +91,7 @@ class VM:
         self.file_console = None  # Console for file, initialized in execute
         self.model: AiModel = None
         self.model_name: str = ""
-        self.company: str = ""
+        self.provider: str = ""
         self.system_value: str = ""
         self.toks_in = 0
         self.cost_in = 0
@@ -346,15 +346,15 @@ class VM:
             raise StmtSyntaxError(f"Not Defined Error: Model {self.model_name} is not defined")
         self.model = AiRegistry.get_model(self.model_name)
 
-        if self.model.company == '':
-            raise StmtSyntaxError(f"Bad Model Definition error: company not defined for model {self.model_name}")
-        self.company = self.model.company
+        if self.model.provider == '':
+            raise StmtSyntaxError(f"Bad Model Definition error: provider not defined for model {self.model_name}")
+        self.provider = self.model.provider
 
         # copy parms to vdict
         for k, v in parms.items():
             self.vdict[k] = v
 
-        self.vdict['company'] = self.company
+        self.vdict['provider'] = self.provider
         self.vdict['filename'] = self.filename
         self.vdict['model'] = self.model
 
@@ -752,8 +752,11 @@ class StmtCmd(StmtPrompt):
             vm.print(f"Error executing {function_name}({function_args})): {str(err)}")
             raise err
 
-        last_msg = vm.prompt.messages[-1]
-        last_msg.content.append(AiTextPart(vm=vm, text=text))
+        if len(vm.prompt.messages):
+            last_msg = vm.prompt.messages[-1]
+            last_msg.content.append(AiTextPart(vm=vm, text=text))
+        vm.set_variable('last_response', text) # set last_response to result 
+
 
 
 class StmtComment(StmtPrompt):
@@ -887,11 +890,11 @@ class StmtExec(StmtPrompt):
             vm.logger.log_llm_tokens_and_cost(call_id, tokens_in, tokens_out, cost_in, cost_out)
 
         # Log the exec completion to statements.log (only this one, not the initial empty one)
-        exec_completion_msg = f"{vm.company}::{vm.model_name} {call_id} completed in {elapsed_time:.2f} seconds"
+        exec_completion_msg = f"{vm.provider}::{vm.model_name} {call_id} completed in {elapsed_time:.2f} seconds"
         vm.logger.log_statement(self.msg_no, self.keyword, exec_completion_msg)
 
         # Format the execution timing to match the table structure
-        timing_msg = f"{vm.company}::{vm.model_name} completed in {elapsed_time:.2f} seconds"
+        timing_msg = f"{vm.provider}::{vm.model_name} completed in {elapsed_time:.2f} seconds"
         # Use same width calculation as other timing lines
         content_len = vm.logger.terminal_width - 14  # Same as statement lines
         padded_content = f"{timing_msg:<{content_len}}"
@@ -899,7 +902,7 @@ class StmtExec(StmtPrompt):
         vm.logger.log_execution(final_line)
         
         # Log the response using structured logging
-        vm.logger.log_llm_call(f"Response from {vm.company} API completed", call_id)
+        vm.logger.log_llm_call(f"Response from {vm.provider} API completed", call_id)
 
         vm.log_conversation(call_id)
 
@@ -1030,14 +1033,14 @@ class StmtLlm(StmtPrompt):
 
         # Now we that we have loaded the LLM,  we will load the API_KEY
         try:
-            api_key = keyring.get_password('keprompt', username=vm.company)
+            api_key = keyring.get_password('keprompt', username=vm.provider)
         except keyring.errors.PasswordDeleteError:
-            vm.logger.log_error(f"Error accessing keyring ('keprompt', username={vm.company})")
+            vm.logger.log_error(f"Error accessing keyring ('keprompt', username={vm.provider})")
             api_key = None
 
         if api_key is None:
-            api_key = console.input(f"Please enter your {vm.company} API key: ")
-            keyring.set_password("keprompt", username=vm.company, password=api_key)
+            api_key = console.input(f"Please enter your {vm.provider} API key: ")
+            keyring.set_password("keprompt", username=vm.provider, password=api_key)
         if not api_key:
             vm.logger.log_error("API key cannot be empty.")
             sys.exit(1)
@@ -1045,7 +1048,7 @@ class StmtLlm(StmtPrompt):
         vm.llm['API_KEY'] = api_key
         vm.api_key = api_key
         vm.prompt.api_key = vm.api_key
-        vm.prompt.company = vm.company
+        vm.prompt.provider = vm.provider
         vm.prompt.model = vm.model_name
 
 

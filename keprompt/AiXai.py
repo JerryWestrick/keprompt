@@ -3,7 +3,7 @@ import json
 from rich.console import Console
 
 from .AiRegistry import AiRegistry
-from .AiCompany import AiCompany
+from .AiProvider import AiProvider
 from .AiPrompt import AiMessage, AiTextPart, AiCall
 from .keprompt_functions import DefinedToolsArray
 
@@ -11,7 +11,7 @@ console = Console()
 terminal_width = console.size.width
 
 
-class AiXai(AiCompany):
+class AiXai(AiProvider):
     def prepare_request(self, messages: List[Dict]) -> Dict:
         return {"model": self.prompt.model,"messages": messages,"tools": DefinedToolsArray,"tool_choice": "auto"}
 
@@ -64,22 +64,144 @@ class AiXai(AiCompany):
 
         return xai_messages
 
+    @classmethod
+    def create_models_json(cls, provider_name: str) -> None:
+        """Create/update the models JSON file for XAI (manual definitions only)"""
+        console.print(f"[yellow]XAI API has limited model info, using manual definitions[/yellow]")
+        # Use the hardcoded models as the source
+        cls._write_json_file(provider_name, XAI_Models)
+
 
 # Register handler and models
-AiRegistry.register_handler(company_name="XAI", handler_class=AiXai)
+AiRegistry.register_handler(provider_name="XAI", handler_class=AiXai)
 
 # XAI model definitions and pricing
-# Official pricing source: https://x.ai/api
+# Official pricing sources:
+# - https://x.ai/api
+# - https://docs.x.ai/docs/models
 # Last updated: January 2025
+
+# PRICING SCHEMES EXPLAINED:
+# 1. TEXT MODELS: Standard per-token pricing (input/output per 1M tokens)
+# 2. IMAGE GENERATION: Per-image pricing ($0.07 per image)
+# 3. VISION MODELS: Text input pricing + image processing capabilities
+# 4. LARGE CONTEXT: Higher pricing for contexts >128K tokens ($6/$30 vs $3/$15)
+
 XAI_Models = {
-    # Latest Grok models
-    "grok-4": {"company": "XAI", "model": "grok-4", "input": 0.000003, "output": 0.000015, "context": 256000, "modality_in": "Text+Vision", "modality_out": "Text", "functions": "Yes", "description": "The world's best model", "cutoff": "See docs"},
-    "grok-3": {"company": "XAI", "model": "grok-3", "input": 0.000003, "output": 0.000015, "context": 131072, "modality_in": "Text+Vision", "modality_out": "Text", "functions": "Yes", "description": "Flagship enterprise model with advanced reasoning", "cutoff": "See docs"},
-    "grok-3-mini": {"company": "XAI", "model": "grok-3-mini", "input": 0.0000003, "output": 0.0000005, "context": 131072, "modality_in": "Text", "modality_out": "Text", "functions": "Yes", "description": "Lightweight reasoning model for cost-effective applications", "cutoff": "See docs"},
+    # LATEST MODELS - User-friendly aliases
+    "grok-4": {
+        "company": "XAI",
+        "provider": "XAI", 
+        "model": "grok-4", 
+        "input": 3.0 / 1000000,  # $3.00 / 1M tokens
+        "output": 15.0 / 1000000,  # $15.00 / 1M tokens
+        "context": 256000, 
+        "modality_in": "Text+Vision", 
+        "modality_out": "Text", 
+        "functions": "Yes", 
+        "description": "The world's best model with advanced reasoning, coding, and visual processing capabilities", 
+        "cutoff": "2025-07"
+    },
+    "grok-3": {
+        "company": "XAI",
+        "provider": "XAI", 
+        "model": "grok-3", 
+        "input": 3.0 / 1000000,  # $3.00 / 1M tokens
+        "output": 15.0 / 1000000,  # $15.00 / 1M tokens
+        "context": 131072, 
+        "modality_in": "Text+Vision", 
+        "modality_out": "Text", 
+        "functions": "Yes", 
+        "description": "Flagship enterprise model that excels at data extraction, programming, and text summarization", 
+        "cutoff": "2025-02"
+    },
+    "grok-3-mini": {
+        "company": "XAI",
+        "provider": "XAI", 
+        "model": "grok-3-mini", 
+        "input": 0.3 / 1000000,  # $0.30 / 1M tokens
+        "output": 0.5 / 1000000,  # $0.50 / 1M tokens
+        "context": 131072, 
+        "modality_in": "Text", 
+        "modality_out": "Text", 
+        "functions": "Yes", 
+        "description": "Lightweight model that thinks before responding. Excels at quantitative tasks involving math and reasoning", 
+        "cutoff": "2025-02"
+    },
     
-    # Legacy models (still available)
-    "grok-2-1212": {"company": "XAI", "model": "grok-2-1212", "input": 0.000002, "output": 0.000010, "context": 131072, "modality_in": "Text", "modality_out": "Text", "functions": "Yes", "description": "Updated Grok-2 model with improved performance", "cutoff": "See docs"},
-    "grok-2-vision-1212": {"company": "XAI", "model": "grok-2-vision-1212", "input": 0.000002, "output": 0.000010, "context": 131072, "modality_in": "Text+Vision", "modality_out": "Text", "functions": "Yes", "description": "Vision-capable Grok-2 model", "cutoff": "See docs"}
+    # LEGACY MODELS - Still available
+    "grok-2-vision-1212": {
+        "company": "XAI",
+        "provider": "XAI", 
+        "model": "grok-2-vision-1212", 
+        "input": 2.0 / 1000000,  # $2.00 / 1M tokens
+        "output": 10.0 / 1000000,  # $10.00 / 1M tokens
+        "context": 131072, 
+        "modality_in": "Text+Vision", 
+        "modality_out": "Text", 
+        "functions": "Yes", 
+        "description": "Vision-capable Grok-2 model with image understanding", 
+        "cutoff": "2024-12"
+    },
+    "grok-2-1212": {
+        "company": "XAI",
+        "provider": "XAI", 
+        "model": "grok-2-1212", 
+        "input": 2.0 / 1000000,  # $2.00 / 1M tokens
+        "output": 10.0 / 1000000,  # $10.00 / 1M tokens
+        "context": 131072, 
+        "modality_in": "Text", 
+        "modality_out": "Text", 
+        "functions": "Yes", 
+        "description": "Updated Grok-2 model with improved performance", 
+        "cutoff": "2024-12"
+    },
+    "grok-vision-beta": {
+        "company": "XAI",
+        "provider": "XAI", 
+        "model": "grok-vision-beta", 
+        "input": 2.0 / 1000000,  # $2.00 / 1M tokens
+        "output": 10.0 / 1000000,  # $10.00 / 1M tokens
+        "context": 131072, 
+        "modality_in": "Text+Vision", 
+        "modality_out": "Text", 
+        "functions": "Yes", 
+        "description": "Beta vision model for image understanding tasks", 
+        "cutoff": "2024-12"
+    },
+    "grok-beta": {
+        "company": "XAI",
+        "provider": "XAI", 
+        "model": "grok-beta", 
+        "input": 2.0 / 1000000,  # $2.00 / 1M tokens
+        "output": 10.0 / 1000000,  # $10.00 / 1M tokens
+        "context": 131072, 
+        "modality_in": "Text", 
+        "modality_out": "Text", 
+        "functions": "Yes", 
+        "description": "Beta version of Grok model", 
+        "cutoff": "2024-12"
+    },
+    
+    # SPECIALIZED MODELS - Different pricing structure
+    "grok-2-image-1212": {
+        "company": "XAI",
+        "provider": "XAI", 
+        "model": "grok-2-image-1212", 
+        "input": 0.0 / 1000000,  # No text input pricing
+        "output": 0.07,  # $0.07 per image generated
+        "context": 131072, 
+        "modality_in": "Text", 
+        "modality_out": "Images", 
+        "functions": "No", 
+        "description": "Latest image generation model capable of generating multiple images from text prompts", 
+        "cutoff": "2024-12"
+    }
 }
 
-AiRegistry.register_models_from_dict(model_definitions=XAI_Models)
+# Note: Large context pricing (>128K tokens):
+# - Input: $6.00 / 1M tokens (2x standard rate)
+# - Output: $30.00 / 1M tokens (2x standard rate)
+# - Applies to grok-4 when using contexts larger than 128K tokens
+
+AiXai.register_models("XAI")
