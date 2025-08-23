@@ -66,6 +66,28 @@ class AiOpenAi(AiProvider):
 
         return openai_messages
 
+    def extract_token_usage(self, response: Dict) -> tuple[int, int]:
+        """Extract token usage from OpenAI API response."""
+        usage = response.get("usage", {})
+        tokens_in = usage.get("prompt_tokens", 0)
+        tokens_out = usage.get("completion_tokens", 0)
+        return tokens_in, tokens_out
+
+    def calculate_costs(self, tokens_in: int, tokens_out: int) -> tuple[float, float]:
+        """Calculate costs based on OpenAI pricing for the current model."""
+        # Get model pricing from the OpenAI_Models dictionary
+        model_info = OpenAI_Models.get(self.prompt.model, {})
+        
+        # Get pricing per token (already in per-token format in the models dict)
+        input_price_per_token = model_info.get("input", 0.0)
+        output_price_per_token = model_info.get("output", 0.0)
+        
+        # Calculate costs
+        cost_in = tokens_in * input_price_per_token
+        cost_out = tokens_out * output_price_per_token
+        
+        return cost_in, cost_out
+
     @classmethod
     def create_models_json(cls, provider_name: str) -> None:
         """Create/update the models JSON file for OpenAI (manual definitions only)"""

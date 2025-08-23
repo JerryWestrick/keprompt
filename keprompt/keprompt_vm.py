@@ -4,6 +4,7 @@ import logging
 import os
 import sys
 import time
+import uuid
 from typing import cast, List
 
 import keyring
@@ -17,7 +18,7 @@ from .AiPrompt import AiTextPart, AiImagePart, AiCall, AiResult, AiPrompt, AiMes
 from  .keprompt_util import TOP_LEFT, BOTTOM_LEFT, VERTICAL, HORIZONTAL, TOP_RIGHT, RIGHT_TRIANGLE, \
     LEFT_TRIANGLE, \
     HORIZONTAL_LINE, BOTTOM_RIGHT, CIRCLE, backup_file
-from .keprompt_logger import KepromptLogger, LogMode
+from .keprompt_logger import StandardLogger, LogMode
 
 console = Console()
 terminal_width = console.size.width
@@ -68,6 +69,9 @@ class VM:
         self.log_mode = log_mode
         self.ip: int = 0
         
+        # Generate unique prompt instance UUID
+        self.prompt_uuid = str(uuid.uuid4())[:8]  # Use first 8 chars for readability
+        
         # Use the provided global variables (no defaults, no conditionals)
         self.vdict = global_vars.copy()  # Copy to avoid modifying original
         
@@ -83,8 +87,8 @@ class VM:
         else:
             prompt_name = "conversation"
         
-        # Initialize the new structured logger
-        self.logger = KepromptLogger(prompt_name=prompt_name, mode=log_mode, log_identifier=log_identifier)
+        # Initialize the new standard logger
+        self.logger = StandardLogger(prompt_name=prompt_name, mode=log_mode, log_identifier=log_identifier)
         
         # Keep old console for backward compatibility during transition
         self.console = Console(width=terminal_width)  # Console for terminal
@@ -359,38 +363,32 @@ class VM:
         self.vdict['model'] = self.model
 
     def execute(self) -> None:
-        """Execute the statements in the prompt file using the new structured logging system."""
+        """Execute the statements in the prompt file using the new standard logging system."""
         
-        # Use structured logging based on mode
+        # Set initial prompt ID for logging context
+        initial_prompt_id = f"{self.prompt_uuid}-init"
+        self.logger.set_prompt_id(initial_prompt_id)
+        
+        # Log session start
         if self.log_mode in [LogMode.LOG, LogMode.DEBUG]:
-            # Logging/Debug mode - use structured logger with rich UI
             header_name = self.filename or "conversation"
-            self.logger.print_header(header_name)
+            self.logger.log_info(f"Starting execution of {header_name}")
 
-            for stmt_no, stmt in enumerate(self.statements):
-                try:
-                    stmt.execute(self)
-                except Exception as e:
-                    self.logger.log_error(f"Error executing statement {stmt_no}: {str(e)}")
-                    sys.exit(9)
+        # Execute all statements
+        for stmt_no, stmt in enumerate(self.statements):
+            try:
+                stmt.execute(self)
+            except Exception as e:
+                self.logger.log_error(f"Error executing statement {stmt_no}: {str(e)}")
+                sys.exit(9)
 
-                if stmt.keyword == '.exit':
-                    break
+            if stmt.keyword == '.exit':
+                break
 
-            self.logger.print_footer()
+        # Log session end and cleanup
+        if self.log_mode in [LogMode.LOG, LogMode.DEBUG]:
+            self.logger.log_info(f"Completed execution")
             self.logger.close()
-        else:
-            # Production mode - clean execution, minimal output
-            for stmt_no, stmt in enumerate(self.statements):
-                try:
-                    stmt.execute(self)
-                except Exception as e:
-                    # Errors go to stderr in production mode
-                    print(f"Error: {str(e)}", file=sys.stderr)
-                    sys.exit(9)
-
-                if stmt.keyword == '.exit':
-                    break
 
     def print_with_wrap(self, is_response: bool, line: str) -> None:
         line_len = terminal_width - 23
@@ -554,38 +552,31 @@ class VM:
 
     def execute_from(self, start_index: int = 0):
         """Execute statements starting from specified index"""
-        # Use structured logging based on mode
+        # Set initial prompt ID for logging context
+        initial_prompt_id = f"{self.prompt_uuid}-resume"
+        self.logger.set_prompt_id(initial_prompt_id)
+        
+        # Log session start
         if self.log_mode in [LogMode.LOG, LogMode.DEBUG]:
-            # Logging/Debug mode - use structured logger with rich UI
             header_name = self.filename or "conversation"
-            self.logger.print_header(header_name)
+            self.logger.log_info(f"Resuming execution of {header_name} from statement {start_index}")
 
-            for stmt_no in range(start_index, len(self.statements)):
-                stmt = self.statements[stmt_no]
-                try:
-                    stmt.execute(self)
-                except Exception as e:
-                    self.logger.log_error(f"Error executing statement {stmt_no}: {str(e)}")
-                    sys.exit(9)
+        # Execute statements from start_index
+        for stmt_no in range(start_index, len(self.statements)):
+            stmt = self.statements[stmt_no]
+            try:
+                stmt.execute(self)
+            except Exception as e:
+                self.logger.log_error(f"Error executing statement {stmt_no}: {str(e)}")
+                sys.exit(9)
 
-                if stmt.keyword == '.exit':
-                    break
+            if stmt.keyword == '.exit':
+                break
 
-            self.logger.print_footer()
+        # Log session end and cleanup
+        if self.log_mode in [LogMode.LOG, LogMode.DEBUG]:
+            self.logger.log_info(f"Completed resumed execution")
             self.logger.close()
-        else:
-            # Production mode - clean execution, minimal output
-            for stmt_no in range(start_index, len(self.statements)):
-                stmt = self.statements[stmt_no]
-                try:
-                    stmt.execute(self)
-                except Exception as e:
-                    # Errors go to stderr in production mode
-                    print(f"Error: {str(e)}", file=sys.stderr)
-                    sys.exit(9)
-
-                if stmt.keyword == '.exit':
-                    break
 
     def apply_completion_logic(self):
         """Apply completion logic to the current statements"""
@@ -635,7 +626,7 @@ class StmtPrompt:
         return self.console_str()
 
     def execute(self, vm: VM) -> None:
-        vm.logger.print_statement(self.msg_no, self.keyword, self.value)
+        # Use new standard logging methods
         vm.logger.log_statement(self.msg_no, self.keyword, self.value)
 
 
@@ -795,7 +786,7 @@ class StmtDebug(StmtPrompt):
     """
 
     def execute(self, vm: VM) -> None:
-        vm.logger.print_statement(self.msg_no, self.keyword, self.value)
+        super().execute(vm)
 
         if not self.value:
             self.value = '["all"]'
@@ -847,16 +838,19 @@ class StmtExec(StmtPrompt):
             None: The execution modifies the VM's state directly by adding the response to 
                   the prompt context and logging the conversation data.
         """
-        # Print the exec statement for execution.log (but don't log to statements.log yet)
-        vm.logger.print_statement(self.msg_no, self.keyword, self.value)
+        # Log the exec statement
+        super().execute(vm)
         
         header = f"[bold white]{VERTICAL}[/][white]{self.msg_no:02}[/] [cyan]{self.keyword:<8}[/]"
 
         start_time = time.time()
         
-        # Generate unique call identifier
+        # Generate unique call identifier using UUID with exec format
         vm.interaction_no += 1
-        call_id = f"call-{vm.interaction_no:03d}"
+        call_id = f"{vm.prompt_uuid}-exec{vm.interaction_no:03d}"
+        
+        # Set the prompt ID in the logger for all subsequent log entries
+        vm.logger.set_prompt_id(call_id)
         
         responses = vm.prompt.ask(label=header, call_id=call_id)
         elapsed_time = time.time() - start_time
@@ -904,7 +898,8 @@ class StmtExec(StmtPrompt):
         # Log the response using structured logging
         vm.logger.log_llm_call(f"Response from {vm.provider} API completed", call_id)
 
-        vm.log_conversation(call_id)
+        # Note: Conversation logging is now handled incrementally through log_message_exchange
+        # No need to log the entire conversation again here
 
 
 class StmtExit(StmtPrompt):
@@ -924,7 +919,7 @@ class StmtExit(StmtPrompt):
     """
 
     def execute(self, vm: VM) -> None:
-        vm.logger.print_statement(self.msg_no, self.keyword, self.value)
+        super().execute(vm)
         
         # Log total costs when exiting
         if vm.toks_in > 0 or vm.toks_out > 0:
@@ -952,8 +947,8 @@ class StmtInclude(StmtPrompt):
     """
 
     def execute(self, vm: VM) -> None:
+        super().execute(vm)
         filename = vm.substitute(self.value)
-        vm.logger.print_statement(self.msg_no, self.keyword, self.value)
         lines = readfile(filename=filename)
         last_msg = vm.prompt.messages[-1]
         last_msg.content.append(AiTextPart(vm=vm, text=lines))
@@ -977,7 +972,7 @@ class StmtImage(StmtPrompt):
     """
 
     def execute(self, vm: VM) -> None:
-        vm.logger.print_statement(self.msg_no, self.keyword, self.value)
+        super().execute(vm)
         filename = self.value
         vm.prompt.add_message(vm=vm, role="user", content=[AiImagePart(vm=self.vm, filename=filename)])
 
