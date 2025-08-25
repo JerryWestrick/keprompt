@@ -64,6 +64,26 @@ class AiAnthropic(AiProvider):
 
         return company_mesages
 
+    def extract_token_usage(self, response: Dict) -> tuple[int, int]:
+        """Extract token usage from Anthropic API response"""
+        usage = response.get("usage", {})
+        tokens_in = usage.get("input_tokens", 0)
+        tokens_out = usage.get("output_tokens", 0)
+        return tokens_in, tokens_out
+
+    def calculate_costs(self, tokens_in: int, tokens_out: int) -> tuple[float, float]:
+        """Calculate costs based on token usage and model pricing"""
+        from .AiRegistry import AiRegistry
+        
+        try:
+            model = AiRegistry.get_model(self.prompt.model)
+            cost_in = tokens_in * model.input
+            cost_out = tokens_out * model.output
+            return cost_in, cost_out
+        except Exception:
+            # Fallback to zero costs if model not found
+            return 0.0, 0.0
+
     @classmethod
     def create_models_json(cls, provider_name: str) -> None:
         """Create/update the models JSON file for Anthropic (manual definitions only)"""

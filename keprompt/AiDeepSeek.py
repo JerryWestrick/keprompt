@@ -83,6 +83,23 @@ class AiDeepSeek(AiProvider):
 
         return deepseek_messages
 
+    def extract_token_usage(self, response: Dict) -> tuple[int, int]:
+        """Extract token usage from DeepSeek API response"""
+        usage = response.get("usage", {})
+        tokens_in = usage.get("prompt_tokens", 0)
+        tokens_out = usage.get("completion_tokens", 0)
+        return tokens_in, tokens_out
+
+    def calculate_costs(self, tokens_in: int, tokens_out: int) -> tuple[float, float]:
+        """Calculate costs for input and output tokens using model pricing"""
+        model_info = AiRegistry.get_model(self.prompt.model)
+        if not model_info:
+            return 0.0, 0.0
+        
+        cost_in = tokens_in * model_info.get("input", 0.0)
+        cost_out = tokens_out * model_info.get("output", 0.0)
+        return cost_in, cost_out
+
     @classmethod
     def create_models_json(cls, provider_name: str) -> None:
         """Create/update the models JSON file for DeepSeek (manual definitions only)"""

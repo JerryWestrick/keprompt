@@ -61,6 +61,26 @@ class AiGoogle(AiProvider):
 
         return google_messages
 
+    def extract_token_usage(self, response: Dict) -> tuple[int, int]:
+        """Extract token usage from Google API response"""
+        usage = response.get("usageMetadata", {})
+        tokens_in = usage.get("promptTokenCount", 0)
+        tokens_out = usage.get("candidatesTokenCount", 0)
+        return tokens_in, tokens_out
+
+    def calculate_costs(self, tokens_in: int, tokens_out: int) -> tuple[float, float]:
+        """Calculate costs based on token usage and model pricing"""
+        from .AiRegistry import AiRegistry
+        
+        try:
+            model = AiRegistry.get_model(self.prompt.model)
+            cost_in = tokens_in * model.input
+            cost_out = tokens_out * model.output
+            return cost_in, cost_out
+        except Exception:
+            # Fallback to zero costs if model not found
+            return 0.0, 0.0
+
     @classmethod
     def create_models_json(cls, provider_name: str) -> None:
         """Create/update the models JSON file for Google (manual definitions only)"""

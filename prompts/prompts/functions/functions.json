@@ -1,0 +1,124 @@
+{
+  "functions": [
+    {
+      "name": "readfile",
+      "description": "Read the contents of a named file",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "filename": {
+            "type": "string",
+            "description": "The name of the file to read"
+          }
+        },
+        "required": [
+          "filename"
+        ],
+        "additionalProperties": false
+      },
+      "_executable": "prompts/functions/keprompt_builtins"
+    },
+    {
+      "name": "wwwget",
+      "description": "Read a webpage URL and return the contents",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "The URL of the web page to read"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "additionalProperties": false
+      },
+      "_executable": "prompts/functions/keprompt_builtins"
+    },
+    {
+      "name": "writefile",
+      "description": "Write the contents to a named file on the local file system",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "filename": {
+            "type": "string",
+            "description": "The name of the file to write"
+          },
+          "content": {
+            "type": "string",
+            "description": "The content to be written to the file"
+          }
+        },
+        "required": [
+          "filename",
+          "content"
+        ],
+        "additionalProperties": false
+      },
+      "_executable": "prompts/functions/keprompt_builtins"
+    },
+    {
+      "name": "execcmd",
+      "description": "Execute a command on the local system",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "cmd": {
+            "type": "string",
+            "description": "Command to be executed"
+          }
+        },
+        "required": [
+          "cmd"
+        ],
+        "additionalProperties": false
+      },
+      "_executable": "prompts/functions/keprompt_builtins"
+    },
+    {
+      "name": "askuser",
+      "description": "Get clarification by asking the user a question",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "question": {
+            "type": "string",
+            "description": "Question to ask the user"
+          }
+        },
+        "required": [
+          "question"
+        ],
+        "additionalProperties": false
+      },
+      "_executable": "prompts/functions/keprompt_builtins"
+    },
+    {
+      "name": "write_base64_file",
+      "description": "Decode base64 content and write the decoded data to a named file",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "filename": {
+            "type": "string",
+            "description": "The name of the file to write"
+          },
+          "base64_str": {
+            "type": "string",
+            "description": "The base64 encoded content"
+          }
+        },
+        "required": [
+          "filename",
+          "base64_str"
+        ],
+        "additionalProperties": false
+      },
+      "_executable": "prompts/functions/keprompt_builtins"
+    }
+  ],
+  "generated_at": "/home/jerry/keprompt/prompts",
+  "version": "1.0"
+}

@@ -1,0 +1,3 @@
+.llm {"model":"gpt-4o-mini"}
+.user Hello, just say "Hi" back to me.
+.exec

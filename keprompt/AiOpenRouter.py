@@ -43,6 +43,26 @@ class AiOpenRouter(AiProvider):
 
         return AiMessage(vm=self.prompt.vm, role="assistant", content=content)
 
+    def extract_token_usage(self, response: Dict) -> tuple[int, int]:
+        """Extract token usage from OpenRouter API response"""
+        usage = response.get("usage", {})
+        tokens_in = usage.get("prompt_tokens", 0)
+        tokens_out = usage.get("completion_tokens", 0)
+        return tokens_in, tokens_out
+
+    def calculate_costs(self, tokens_in: int, tokens_out: int) -> tuple[float, float]:
+        """Calculate costs based on token usage and model pricing"""
+        from .AiRegistry import AiRegistry
+        
+        try:
+            model = AiRegistry.get_model(self.prompt.model)
+            cost_in = tokens_in * model.input
+            cost_out = tokens_out * model.output
+            return cost_in, cost_out
+        except Exception:
+            # Fallback to zero costs if model not found
+            return 0.0, 0.0
+
     def to_company_messages(self, messages: List[AiMessage]) -> List[Dict]:
         openrouter_messages = []
 
