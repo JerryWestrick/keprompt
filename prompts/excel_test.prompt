@@ -1,0 +1,11 @@
+.# Choose model via --param llm "model"
+.llm "model": "<<llm>>"
+.system
+you are a helpful assistant and will answer user questions
+.user
+read the file excel.csv
+What is the value of X, and Y?
+.print =========== Calling <<llm>> ==================
+.exec
+.print <<last_response>>
+.exit

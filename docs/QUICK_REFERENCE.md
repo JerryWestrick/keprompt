@@ -2,14 +2,14 @@
 
 ## Essential Commands
 
-| Command | Description | Example |
-|---------|-------------|---------|
-| `keprompt -e <name>` | Execute prompt | `keprompt -e hello --debug` |
-| `keprompt -p` | List prompts | `keprompt -p "*research*"` |
-| `keprompt -m` | List models | `keprompt -m gpt --company openai` |
-| `keprompt -f` | List functions | `keprompt -f` |
-| `keprompt -k` | Add API key | `keprompt -k` |
-| `keprompt --init` | Initialize workspace | `keprompt --init` |
+| Command              | Description          | Example                            |
+|----------------------|----------------------|------------------------------------|
+| `keprompt -e <name>` | Execute prompt       | `keprompt -e hello --debug`        |
+| `keprompt -p`        | List prompts         | `keprompt -p "*research*"`         |
+| `keprompt -m`        | List models          | `keprompt -m gpt --company openai` |
+| `keprompt -f`        | List functions       | `keprompt -f`                      |
+| `keprompt -k`        | Add API key          | `keprompt -k`                      |
+| `keprompt --init`    | Initialize workspace | `keprompt --init`                  |
 
 ## Prompt Language Cheat Sheet
 
@@ -24,23 +24,23 @@
 
 ### All Statement Types
 
-| Statement | Purpose | Example |
-|-----------|---------|---------|
-| `.#` | Comment | `.# This is a comment` |
-| `.llm` | Configure model | `.llm {"model": "gpt-4o"}` |
-| `.system` | System message | `.system You are an expert` |
-| `.user` | User message | `.user What is AI?` |
-| `.assistant` | Assistant message | `.assistant I can help with that` |
-| `.text` | Add text to message | `.text Additional context` |
-| `.exec` | Execute prompt | `.exec` |
-| `.cmd` | Call function | `.cmd execcmd(cmd="ls -la")` |
-| `.print` | Output to console | `.print Result: <<last_response>>` |
-| `.set` | Set variable | `.set name "Alice"` |
-| `.debug` | Show debug info | `.debug ["variables"]` |
-| `.include` | Include file | `.include template.txt` |
-| `.image` | Add image | `.image photo.jpg` |
-| `.clear` | Delete files | `.clear ["*.tmp"]` |
-| `.exit` | Stop execution | `.exit` |
+| Statement    | Purpose             | Example                            |
+|--------------|---------------------|------------------------------------|
+| `.#`         | Comment             | `.# This is a comment`             |
+| `.llm`       | Configure model     | `.llm {"model": "gpt-4o"}`         |
+| `.system`    | System message      | `.system You are an expert`        |
+| `.user`      | User message        | `.user What is AI?`                |
+| `.assistant` | Assistant message   | `.assistant I can help with that`  |
+| `.text`      | Add text to message | `.text Additional context`         |
+| `.exec`      | Execute prompt      | `.exec`                            |
+| `.cmd`       | Call function       | `.cmd execcmd(cmd="ls -la")`       |
+| `.print`     | Output to console   | `.print Result: <<last_response>>` |
+| `.set`       | Set variable        | `.set name "Alice"`                |
+| `.debug`     | Show debug info     | `.debug ["variables"]`             |
+| `.include`   | Include file        | `.include template.txt`            |
+| `.image`     | Add image           | `.image photo.jpg`                 |
+| `.clear`     | Delete files        | `.clear ["*.tmp"]`                 |
+| `.exit`      | Stop execution      | `.exit`                            |
 
 ## Variables
 
@@ -60,12 +60,12 @@ keprompt -e prompt --param name "Alice" --param topic "AI"
 
 ## Built-in Functions
 
-| Function | Purpose | Example |
-|----------|---------|---------|
-| `readfile` | Read file | `.include data.txt` |
-| `writefile` | Write file | Instruct AI to create files directly |
-| `wwwget` | Fetch URL | `.cmd wwwget(url="https://example.com")` |
-| `execcmd` | Run command | `.cmd execcmd(cmd="ls -la")` |
+| Function            | Purpose      | Example                                                        |
+|---------------------|--------------|----------------------------------------------------------------|
+| `readfile`          | Read file    | `.include data.txt`                                            |
+| `writefile`         | Write file   | Instruct AI to create files directly                           |
+| `wwwget`            | Fetch URL    | `.cmd wwwget(url="https://example.com")`                       |
+| `execcmd`           | Run command  | `.cmd execcmd(cmd="ls -la")`                                   |
 | `write_base64_file` | Write base64 | `.cmd write_base64_file(filename="img.png", base64_str="...")` |
 
 ## Model Management
@@ -111,11 +111,11 @@ keprompt --conversation session_name --answer "Tell me more"
 
 ## Logging Modes
 
-| Mode | Command | Output |
-|------|---------|--------|
-| Production | `keprompt -e prompt` | Clean output only |
-| Log | `keprompt -e prompt --log` | Structured logs to files |
-| Debug | `keprompt -e prompt --debug` | Rich terminal + logs |
+| Mode       | Command                      | Output                   |
+|------------|------------------------------|--------------------------|
+| Production | `keprompt -e prompt`         | Clean output only        |
+| Log        | `keprompt -e prompt --log`   | Structured logs to files |
+| Debug      | `keprompt -e prompt --debug` | Rich terminal + logs     |
 
 ## File Organization
 
@@ -163,7 +163,7 @@ prompts/
 .exec
 ```
 
-### Multi-step Workflow
+### Multistep Workflow
 ```
 .llm {"model": "gpt-4o"}
 .user Step 1: <<task1>>
@@ -250,13 +250,13 @@ fi
 ## Troubleshooting
 
 ### Common Issues
-| Problem | Solution |
-|---------|----------|
-| "No models found" | Run `keprompt --init` |
-| "API key not found" | Run `keprompt -k` |
-| "Function not found" | Check `keprompt -f`, ensure executable |
-| "Prompt not found" | Check file in `prompts/` with `.prompt` extension |
-| High costs | Use cheaper models like `gpt-4o-mini` |
+| Problem              | Solution                                          |
+|----------------------|---------------------------------------------------|
+| "No models found"    | Run `keprompt --init`                             |
+| "API key not found"  | Run `keprompt -k`                                 |
+| "Function not found" | Check `keprompt -f`, ensure executable            |
+| "Prompt not found"   | Check file in `prompts/` with `.prompt` extension |
+| High costs           | Use cheaper models like `gpt-4o-mini`             |
 
 ### Debug Commands
 ```bash
@@ -278,7 +278,7 @@ keprompt -s    # statement types
 
 ## Cost Management
 
-### Cheap Models for Development
+### Inexpensive Models for Development
 - `gpt-4o-mini` - OpenAI's cheapest
 - `claude-3-haiku-20240307` - Anthropic's cheapest
 - `gemini-1.5-flash` - Google's fast model

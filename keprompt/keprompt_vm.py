@@ -463,7 +463,7 @@ class VM:
             "vm_state": {
                 "ip": self.ip,
                 "model_name": self.model_name,
-                "company": self.company,
+                "company": self.model.company if self.model else "",
                 "interaction_no": self.interaction_no,
                 "created": time.strftime("%Y-%m-%d %H:%M:%S")
             },
@@ -490,25 +490,25 @@ class VM:
         vm_state = conversation_data.get("vm_state", {})
         self.ip = vm_state.get("ip", 0)
         self.model_name = vm_state.get("model_name", "")
-        self.company = vm_state.get("company", "")
         self.interaction_no = vm_state.get("interaction_no", 0)
-        
+
         # Restore LLM configuration if we have model info
         if self.model_name:
             if self.model_name in AiRegistry.models:
                 self.model = AiRegistry.get_model(self.model_name)
                 # Set up basic LLM configuration
                 self.llm = {"model": self.model_name}
-                self.prompt.company = self.company
+                self.prompt.company = self.model.company
                 self.prompt.model = self.model_name
                 
                 # Get API key
                 try:
-                    api_key = keyring.get_password('keprompt', username=self.company)
+                    api_key = keyring.get_password('keprompt', username=self.model.provider)
                     if api_key:
                         self.llm['API_KEY'] = api_key
                         self.api_key = api_key
                         self.prompt.api_key = api_key
+                        self.prompt.provider = self.model.provider
                 except:
                     pass  # API key will be requested when needed
         
@@ -884,11 +884,11 @@ class StmtExec(StmtPrompt):
             vm.logger.log_llm_tokens_and_cost(call_id, tokens_in, tokens_out, cost_in, cost_out)
 
         # Log the exec completion to statements.log (only this one, not the initial empty one)
-        exec_completion_msg = f"{vm.provider}::{vm.model_name} {call_id} completed in {elapsed_time:.2f} seconds"
+        exec_completion_msg = f"{vm.model.provider}::{vm.model_name} {call_id} completed in {elapsed_time:.2f} seconds"
         vm.logger.log_statement(self.msg_no, self.keyword, exec_completion_msg)
 
         # Format the execution timing to match the table structure
-        timing_msg = f"{vm.provider}::{vm.model_name} completed in {elapsed_time:.2f} seconds"
+        timing_msg = f"{vm.model.provider}::{vm.model_name} completed in {elapsed_time:.2f} seconds"
         # Use same width calculation as other timing lines
         content_len = vm.logger.terminal_width - 14  # Same as statement lines
         padded_content = f"{timing_msg:<{content_len}}"
@@ -896,7 +896,7 @@ class StmtExec(StmtPrompt):
         vm.logger.log_execution(final_line)
         
         # Log the response using structured logging
-        vm.logger.log_llm_call(f"Response from {vm.provider} API completed", call_id)
+        vm.logger.log_llm_call(f"Response from {vm.model.provider} API completed", call_id)
 
         # Note: Conversation logging is now handled incrementally through log_message_exchange
         # No need to log the entire conversation again here
@@ -1028,14 +1028,14 @@ class StmtLlm(StmtPrompt):
 
         # Now we that we have loaded the LLM,  we will load the API_KEY
         try:
-            api_key = keyring.get_password('keprompt', username=vm.provider)
+            api_key = keyring.get_password('keprompt', username=vm.model.provider)
         except keyring.errors.PasswordDeleteError:
-            vm.logger.log_error(f"Error accessing keyring ('keprompt', username={vm.provider})")
+            vm.logger.log_error(f"Error accessing keyring ('keprompt', username={vm.model.provider})")
             api_key = None
 
         if api_key is None:
-            api_key = console.input(f"Please enter your {vm.provider} API key: ")
-            keyring.set_password("keprompt", username=vm.provider, password=api_key)
+            api_key = console.input(f"Please enter your {vm.model.provider} API key: ")
+            keyring.set_password("keprompt", username=vm.model.provider, password=api_key)
         if not api_key:
             vm.logger.log_error("API key cannot be empty.")
             sys.exit(1)
@@ -1043,7 +1043,7 @@ class StmtLlm(StmtPrompt):
         vm.llm['API_KEY'] = api_key
         vm.api_key = api_key
         vm.prompt.api_key = vm.api_key
-        vm.prompt.provider = vm.provider
+        vm.prompt.provider = vm.model.provider
         vm.prompt.model = vm.model_name
 
 

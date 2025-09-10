@@ -317,6 +317,10 @@ class StandardLogger:
         """Log conversation data."""
         self.log_msg(f"Conversation logged: {len(conversation_data.get('messages', []))} messages")
     
+    def log_user_answer(self, answer: str):
+        """Log user answer in conversation mode."""
+        self.log_info(f"User answer: {answer}")
+
     def close(self):
         """Close the logger and cleanup handlers."""
         if self.logger:
