@@ -43,3 +43,4 @@ poetry.lock
 /.venv/
 .idea/keprompt.iml
 .idea/misc.xml
+.env

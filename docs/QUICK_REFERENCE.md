@@ -117,26 +117,6 @@ keprompt --conversation session_name --answer "Tell me more"
 | Log        | `keprompt -e prompt --log`   | Structured logs to files |
 | Debug      | `keprompt -e prompt --debug` | Rich terminal + logs     |
 
-## File Organization
-
-### Recommended Structure
-```
-prompts/
-├── research/
-│   ├── academic.prompt
-│   └── market.prompt
-├── coding/
-│   ├── review.prompt
-│   └── debug.prompt
-├── content/
-│   ├── blog.prompt
-│   └── social.prompt
-├── functions/
-│   ├── my_tools
-│   └── git_helper
-└── templates/
-    └── analysis.prompt
-```
 
 ## Common Patterns
 
