@@ -19,6 +19,7 @@ from  .keprompt_util import TOP_LEFT, BOTTOM_LEFT, VERTICAL, HORIZONTAL, TOP_RIG
     LEFT_TRIANGLE, \
     HORIZONTAL_LINE, BOTTOM_RIGHT, CIRCLE, backup_file
 from .keprompt_logger import StandardLogger, LogMode
+from .cost_tracker import track_prompt_execution
 
 console = Console()
 terminal_width = console.size.width
@@ -898,6 +899,48 @@ class StmtExec(StmtPrompt):
         # Log the response using structured logging
         vm.logger.log_llm_call(f"Response from {vm.model.provider} API completed", call_id)
 
+        # Track cost data to SQLite database (always-on cost tracking)
+        # Get token information from the first hasattr block above
+        if hasattr(vm.prompt, 'last_tokens_in') and hasattr(vm.prompt, 'last_tokens_out'):
+            # Get prompt name (strip path and extension)
+            prompt_name = "conversation"
+            if vm.filename:
+                prompt_name = os.path.splitext(os.path.basename(vm.filename))[0]
+            
+            # Get execution mode
+            execution_mode = "production"
+            if vm.log_mode == LogMode.DEBUG:
+                execution_mode = "debug"
+            elif vm.log_mode == LogMode.LOG:
+                execution_mode = "log"
+            
+            # Get model configuration parameters
+            temperature = vm.llm.get('temperature') if vm.llm else None
+            max_tokens = vm.llm.get('max_tokens') if vm.llm else None
+            
+            # Track the execution
+            try:
+                track_prompt_execution(
+                    prompt_name=prompt_name,
+                    session_id=vm.prompt_uuid,
+                    call_id=call_id,
+                    model=vm.model_name,
+                    provider=vm.provider,
+                    tokens_in=tokens_in,
+                    tokens_out=tokens_out,
+                    cost_in=cost_in,
+                    cost_out=cost_out,
+                    elapsed_time=elapsed_time,
+                    execution_mode=execution_mode,
+                    parameters=vm.vdict.copy(),  # Copy current parameters
+                    success=True,  # If we got here, execution succeeded
+                    temperature=temperature,
+                    max_tokens=max_tokens
+                )
+            except Exception as e:
+                # Don't fail execution if cost tracking fails
+                print(f"Warning: Cost tracking failed: {e}", file=sys.stderr)
+
         # Note: Conversation logging is now handled incrementally through log_message_exchange
         # No need to log the entire conversation again here
 
@@ -1189,8 +1232,11 @@ class StmtSet(StmtPrompt):
         if not var_name:
             raise StmtSyntaxError(f".set syntax error: variable name cannot be empty")
         
+        # Substitute variables in the value before storing
+        substituted_value = vm.substitute(var_value)
+        
         # Store the variable using centralized method with automatic logging
-        vm.set_variable(var_name, var_value)
+        vm.set_variable(var_name, substituted_value)
 
 
 

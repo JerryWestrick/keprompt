@@ -354,6 +354,12 @@ class AiProvider(abc.ABC):
         cost_in, cost_out = self.calculate_costs(tokens_in, tokens_out)
         total_cost = cost_in + cost_out
         
+        # Store current call token information for cost tracking
+        self.prompt.last_tokens_in = tokens_in
+        self.prompt.last_tokens_out = tokens_out
+        self.prompt.last_cost_in = cost_in
+        self.prompt.last_cost_out = cost_out
+        
         # Count messages sent
         msg_count = len(data.get('messages', []))
         

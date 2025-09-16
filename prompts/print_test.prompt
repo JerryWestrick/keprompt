@@ -7,14 +7,15 @@
 
 .user What is 2 + 2? Answer with just the number.
 .exec
-
-.print Math result: <<last_response>>
+.print <<last_response>>
+.set Math <<last_response>>
 
 .user What is the capital of France? Answer with just the city name.
 .exec
 
-.print Geography result: <<last_response>>
+.print <<last_response>>
+.set Capital <<last_response>>
 
-.print Final summary: Math=<<last_response>>, but we need the previous math result too
+.print 2 + 2 = <<Math>> even in <<Capital>>
 
 .exit
