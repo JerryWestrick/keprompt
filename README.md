@@ -8,7 +8,7 @@ KePrompt lets you work with multiple AI providers (OpenAI, Anthropic, Google, an
 
 - **One tool, many AIs**: Switch between GPT-4, Claude, Gemini, and others with a single command
 - **Simple prompt language**: Write prompts using an easy-to-learn syntax
-- **Cost tracking**: Monitor token usage and costs across all providers
+- **Comprehensive cost tracking**: Automatic SQLite-based tracking of all API usage with detailed reporting
 - **Conversation management**: Save and resume multi-turn conversations
 - **Function calling**: Extend prompts with file operations, web requests, and custom functions
 - **Production ready**: Built-in logging, error handling, and debugging tools
@@ -185,6 +185,52 @@ keprompt -m "*sonnet*"
 # Show pricing for all GPT models
 keprompt -m gpt --company openai
 ```
+
+## Cost Tracking & Analysis
+
+KePrompt automatically tracks all API usage with comprehensive cost analysis. No configuration required!
+
+### Automatic Tracking
+Every `.exec` statement is automatically tracked to `prompts/costs.db` with:
+- **Tokens**: Input/output token counts
+- **Costs**: Precise cost calculations per provider
+- **Timing**: Execution duration for performance analysis
+- **Metadata**: Model, provider, session IDs, parameters
+- **Context**: Project name, git commit, environment
+
+### Cost Reporting Commands
+```bash
+# View recent API calls
+python -m keprompt.cost_cli recent --limit 10
+
+# Cost summary for last 7 days
+python -m keprompt.cost_cli summary --days 7
+
+# Breakdown by prompt
+python -m keprompt.cost_cli by-prompt --days 30
+
+# Breakdown by model
+python -m keprompt.cost_cli by-model --days 7
+
+# Export to CSV for analysis
+python -m keprompt.cost_cli export costs.csv --days 30
+```
+
+### Example Output
+```
+Recent Cost Entries
+┏━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━┳━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━━━┓
+┃ Project  ┃ Prompt     ┃ Provider ┃ Model       ┃ TokIn ┃ TokOut ┃      Cost ┃ Time        ┃
+┡━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━╇━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━━━┩
+│ myapp    │ analyze    │ OpenAI   │ gpt-4o      │  1250 │    340 │ $0.018500 │ 09-15 14:23 │
+│ myapp    │ research   │ Anthropic│ claude-3-5  │   890 │    220 │ $0.012400 │ 09-15 14:20 │
+└──────────┴────────────┴──────────┴─────────────┴───────┴────────┴───────────┴─────────────┘
+```
+
+### Project Organization
+- **Auto-detection**: Uses current directory name as project
+- **Manual override**: Set `KEPROMPT_PROJECT` environment variable
+- **Multi-project**: Each project has its own `prompts/costs.db`
 
 ## Conversation Management
 
