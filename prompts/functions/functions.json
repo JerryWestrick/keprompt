@@ -78,24 +78,6 @@
       "_executable": "prompts/functions/keprompt_builtins"
     },
     {
-      "name": "askuser",
-      "description": "Get clarification by asking the user a question",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "question": {
-            "type": "string",
-            "description": "Question to ask the user"
-          }
-        },
-        "required": [
-          "question"
-        ],
-        "additionalProperties": false
-      },
-      "_executable": "prompts/functions/keprompt_builtins"
-    },
-    {
       "name": "write_base64_file",
       "description": "Decode base64 content and write the decoded data to a named file",
       "parameters": {

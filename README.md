@@ -44,6 +44,7 @@ Choose your AI provider and enter your API key (stored securely in your system k
 ### 4. Create your first prompt
 ```bash
 cat > prompts/hello.prompt << 'EOF'
+.prompt "name":"Hello Assistant", "version":"1.0.0", "params":{"model":"gpt-4o-mini"}
 .# My first keprompt file
 .llm {"model": "gpt-4o-mini"}
 .system You are a helpful assistant.
@@ -57,6 +58,11 @@ EOF
 keprompt -e hello --debug
 ```
 
+.include <<filename>>
+Provide a summary, key points, and any recommendations.
+.exec
+EOF
+```
 🎉 **You should see the AI's response!** The `--debug` flag shows detailed execution information.
 
 ## Your First Real Prompt
@@ -65,10 +71,16 @@ Let's create something more useful - a file analyzer:
 
 ```bash
 cat > prompts/analyze.prompt << 'EOF'
+.prompt "name":"File Analyzer", "version":"1.0.0", "params":{"model":"gpt-4o", "filename":"file_to_analyze"}
 .# Analyze any text file
 .llm {"model": "gpt-4o"}
 .system You are a expert text analyst. Provide clear, actionable insights.
 .user Please analyze this file:
+.include <<filename>>
+Provide a summary, key points, and any recommendations.
+.exec
+EOF
+```
 ===
 .include <<filename>>
 ===
@@ -92,12 +104,46 @@ keprompt -e analyze --param filename "README.md" --debug
 ### The Prompt Language
 | Command | Purpose | Example |
 |---------|---------|---------|
+| `.prompt` | **REQUIRED** - Define prompt metadata | `.prompt "name":"My Prompt", "version":"1.0.0"` |
 | `.llm` | Configure AI model | `.llm {"model": "gpt-4o"}` |
 | `.system` | Set system message | `.system You are a helpful assistant` |
 | `.user` | Add user message | `.user What is the weather like?` |
 | `.exec` | Send to AI and get response | `.exec` |
 | `.cmd` | Call a function | `.cmd readfile(filename="data.txt")` |
 | `.print` | Output to console | `.print The result is: <<last_response>>` |
+
+### Prompt Metadata (Required)
+
+**Every prompt file must start with a `.prompt` statement** that defines metadata:
+
+```bash
+.prompt "name":"My Prompt Name", "version":"1.0.0", "params":{"model":"gpt-4o-mini"}
+```
+
+**Required fields:**
+- `name`: Human-readable prompt name (used in cost tracking)
+- `version`: Semantic version for tracking changes
+
+**Optional fields:**
+- `params`: Default parameters and documentation
+
+**Examples:**
+```bash
+# Simple prompt
+.prompt "name":"Hello World", "version":"1.0.0"
+
+# With parameters
+.prompt "name":"Code Reviewer", "version":"2.1.0", "params":{"model":"gpt-4o", "language":"python"}
+
+# Research assistant
+.prompt "name":"Research Assistant", "version":"1.5.0", "params":{"model":"claude-3-5-sonnet-20241022", "depth":"comprehensive"}
+```
+
+**Benefits:**
+- **Cost tracking**: Semantic names in reports instead of filenames
+- **Version control**: Track prompt evolution and performance
+- **Documentation**: Self-documenting prompts with parameter info
+- **Organization**: Professional prompt management
 
 ### Variables
 Use `<<variable>>` syntax for substitution:
@@ -121,6 +167,7 @@ keprompt -e greeting --param name "Alice" --param date "Monday"
 ### Research Assistant
 ```bash
 cat > prompts/research.prompt << 'EOF'
+.prompt "name":"Research Assistant", "version":"1.0.0", "params":{"model":"claude-3-5-sonnet-20241022", "topic":"research_topic"}
 .llm {"model": "claude-3-5-sonnet-20241022"}
 .system You are a research assistant. Provide thorough, well-sourced information.
 .user Research this topic: <<topic>>
@@ -135,6 +182,7 @@ keprompt -e research --param topic "Artificial_Intelligence"
 ### Code Review
 ```bash
 cat > prompts/review.prompt << 'EOF'
+.prompt "name":"Code Reviewer", "version":"1.0.0", "params":{"model":"gpt-4o", "codefile":"path/to/file"}
 .llm {"model": "gpt-4o"}
 .system You are a senior software engineer. Provide constructive code reviews.
 .user Please review this code file:
@@ -151,6 +199,7 @@ keprompt -e review --param codefile "src/main.py"
 ### Content Generation
 ```bash
 cat > prompts/blog.prompt << 'EOF'
+.prompt "name":"Blog Writer", "version":"1.0.0", "params":{"model":"gpt-4o", "topic":"subject", "audience":"target_audience", "tone":"writing_tone", "length":"word_count"}
 .llm {"model": "gpt-4o"}
 .system You are a professional content writer.
 .user Write the file named "blog_<<topic>.md with: 
@@ -248,6 +297,42 @@ keprompt --conversation my_session --answer "Tell me more about the second point
 ```bash
 keprompt --conversation my_session --answer "Can you provide examples?" --debug
 ```
+
+### View and Manage Conversations (New in v1.4.0)
+
+**List all conversations with cost tracking:**
+```bash
+keprompt --list-conversations
+```
+
+**View detailed conversation history:**
+```bash
+keprompt --view-conversation my_session
+```
+
+**Features:**
+- **Professional overview**: Tabular list with model info, message counts, and total costs
+- **Enhanced readability**: LaTeX math formatting cleaned up for easy reading
+- **Cost integration**: Automatic cost tracking linked to original prompts
+- **Smart text wrapping**: Long content properly formatted and wrapped
+- **Complete history**: Full conversation flow with role-based formatting
+
+**Example conversation list:**
+```
+                                 Available Conversations                                 
+┏━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┓
+┃ Name         ┃ Model                    ┃ Messages ┃ Last Updated        ┃ Total Cost ┃
+┡━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━┩
+│ math-tutor   │ gpt-4o-mini              │       12 │ 2025-09-17 09:31:36 │  $0.000458 │
+│ research-ai  │ claude-3-5-sonnet        │        8 │ 2025-09-17 08:15:22 │  $0.012340 │
+└──────────────┴──────────────────────────┴──────────┴─────────────────────┴────────────┘
+```
+
+**Perfect for:**
+- **Educational content**: Math equations and formulas displayed clearly
+- **Debugging**: Review conversation flow and variable states
+- **Cost analysis**: Track conversation costs and optimize usage
+- **Content review**: Easy-to-read conversation histories
 
 ## Custom Functions
 

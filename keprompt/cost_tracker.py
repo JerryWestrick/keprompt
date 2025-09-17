@@ -78,6 +78,11 @@ class CostTracker:
             project TEXT,                       -- Project/category (app-provided)
             parameters TEXT,                    -- JSON of parameters (captured from vm.vdict)
             
+            -- Prompt versioning fields (from .prompt statement)
+            prompt_semantic_name TEXT,          -- Semantic name from .prompt statement
+            prompt_version TEXT,                -- Version from .prompt statement
+            expected_params TEXT,               -- Expected parameters from .prompt statement (JSON)
+            
             -- Execution tracking (always populated)
             success BOOLEAN NOT NULL DEFAULT 1, -- Execution success
             error_message TEXT,                 -- Error details if failed
@@ -97,6 +102,9 @@ class CostTracker:
         
         self.conn.execute(create_sql)
         
+        # Add new columns if they don't exist (for existing databases)
+        self._migrate_schema()
+        
         # Create indexes for efficient querying
         indexes = [
             "CREATE INDEX IF NOT EXISTS idx_timestamp ON cost_tracking(timestamp)",
@@ -108,6 +116,28 @@ class CostTracker:
         
         for index_sql in indexes:
             self.conn.execute(index_sql)
+        
+        self.conn.commit()
+    
+    def _migrate_schema(self):
+        """Add new columns to existing database if they don't exist."""
+        # Check if new columns exist and add them if they don't
+        cursor = self.conn.execute("PRAGMA table_info(cost_tracking)")
+        existing_columns = {row[1] for row in cursor.fetchall()}
+        
+        new_columns = [
+            ("prompt_semantic_name", "TEXT"),
+            ("prompt_version", "TEXT"), 
+            ("expected_params", "TEXT")
+        ]
+        
+        for column_name, column_type in new_columns:
+            if column_name not in existing_columns:
+                try:
+                    self.conn.execute(f"ALTER TABLE cost_tracking ADD COLUMN {column_name} {column_type}")
+                except sqlite3.Error as e:
+                    # Log but don't fail - column might already exist
+                    print(f"Note: Could not add column {column_name}: {e}", file=os.sys.stderr)
         
         self.conn.commit()
     
@@ -168,7 +198,11 @@ class CostTracker:
                        error_message: Optional[str] = None,
                        context_length: Optional[int] = None,
                        temperature: Optional[float] = None,
-                       max_tokens: Optional[int] = None) -> None:
+                       max_tokens: Optional[int] = None,
+                       prompt_semantic_name: Optional[str] = None,
+                       prompt_version: Optional[str] = None,
+                       expected_params: Optional[Dict[str, Any]] = None,
+                       **kwargs) -> None:
         """
         Track a prompt execution with cost and metadata.
         
@@ -197,12 +231,30 @@ class CostTracker:
         # Calculate total cost
         total_cost = cost_in + cost_out
         
-        # Prepare parameters as JSON string
+        # Prepare parameters as JSON string with special handling for various object types
         parameters_json = None
         if parameters:
             try:
-                parameters_json = json.dumps(parameters)
+                # Create a serializable copy of parameters
+                serializable_params = {}
+                for key, value in parameters.items():
+                    if hasattr(value, '__class__') and value.__class__.__name__ == 'AiModel':
+                        # Use the new __str__ method for AiModel objects
+                        serializable_params[key] = str(value)
+                    elif hasattr(value, '__class__') and 'Path' in value.__class__.__name__:
+                        # Handle PosixPath, WindowsPath, etc.
+                        serializable_params[key] = str(value)
+                    elif isinstance(value, (str, int, float, bool, type(None))):
+                        # Keep simple types as-is
+                        serializable_params[key] = value
+                    else:
+                        # Convert other objects to string representation
+                        # This handles any remaining object types gracefully
+                        serializable_params[key] = str(value)
+                
+                parameters_json = json.dumps(serializable_params)
             except (TypeError, ValueError):
+                # Fallback to string representation
                 parameters_json = str(parameters)
         
         # Collect metadata
@@ -217,17 +269,19 @@ class CostTracker:
         INSERT INTO cost_tracking (
             prompt_name, version, timestamp, tokens_in, tokens_out, estimated_costs, elapsed_time,
             model, provider, cost_in, cost_out, session_id, call_id,
-            project, parameters, success, error_message,
-            context_length, temperature, max_tokens,
+            project, parameters, prompt_semantic_name, prompt_version, expected_params,
+            success, error_message, context_length, temperature, max_tokens,
             hostname, environment, git_commit, execution_mode
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         
         values = (
             prompt_name, __version__, timestamp, tokens_in, tokens_out, total_cost, elapsed_time,
             model, provider, cost_in, cost_out, session_id, call_id,
-            project, parameters_json, success, error_message,
-            context_length, temperature, max_tokens,
+            project, parameters_json, 
+            prompt_semantic_name, prompt_version, 
+            json.dumps(expected_params) if expected_params else None,
+            success, error_message, context_length, temperature, max_tokens,
             hostname, environment, git_commit, execution_mode
         )
         

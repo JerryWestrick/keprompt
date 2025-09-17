@@ -155,41 +155,58 @@ def print_recent_costs(limit: int = 10):
         console.print("Run a prompt to start tracking costs.")
         return
     
-    costs = get_recent_costs(limit)
+    # Updated query to use semantic name and include version
+    db_path = get_costs_db_path()
+    conn = sqlite3.connect(str(db_path))
     
-    if not costs:
-        console.print("[yellow]No cost data found[/yellow]")
+    query = """
+    SELECT 
+        project,
+        COALESCE(prompt_semantic_name, prompt_name) as display_name,
+        prompt_version,
+        provider,
+        model,
+        tokens_in,
+        tokens_out,
+        estimated_costs,
+        strftime('%m-%d %H:%M', timestamp) as time
+    FROM cost_tracking 
+    ORDER BY timestamp DESC 
+    LIMIT ?
+    """
+    
+    cursor = conn.execute(query, (limit,))
+    rows = cursor.fetchall()
+    conn.close()
+    
+    if not rows:
+        console.print("[yellow]No cost entries found.[/yellow]")
         return
     
-    table = Table(title=f"Recent {limit} Cost Entries")
-    table.add_column("Project", style="cyan")
-    table.add_column("Prompt", style="cyan")
-    table.add_column("Provider", style="blue")
-    table.add_column("Model", style="green")
-    table.add_column("TokIn", justify="right", style="yellow")
-    table.add_column("TokOut", justify="right", style="yellow")
-    table.add_column("Cost", justify="right", style="red")
-    table.add_column("Time", style="dim")
+    # Create table with updated column order: Project, Prompt, Version, Provider, Model, TokIn, TokOut, Cost, Time
+    table = Table(title="Recent Cost Entries")
+    table.add_column("Project", style="cyan", no_wrap=True)
+    table.add_column("Prompt", style="green", no_wrap=True)
+    table.add_column("Version", style="blue", no_wrap=True)
+    table.add_column("Provider", style="magenta", no_wrap=True)
+    table.add_column("Model", style="yellow", no_wrap=True)
+    table.add_column("TokIn", style="cyan", justify="right")
+    table.add_column("TokOut", style="cyan", justify="right")
+    table.add_column("Cost", style="red", justify="right")
+    table.add_column("Time", style="dim", no_wrap=True)
     
-    for row in costs:
-        prompt_name, model, provider, tokens_in, tokens_out, cost, timestamp, project = row
-        
-        # Format timestamp
-        try:
-            dt = datetime.fromisoformat(timestamp)
-            time_str = dt.strftime("%m-%d %H:%M")
-        except:
-            time_str = timestamp[:16] if timestamp else ""
-        
+    for row in rows:
+        project, display_name, version, provider, model, tokens_in, tokens_out, cost, time = row
         table.add_row(
-            project or "",
-            prompt_name or "",
-            provider or "",
-            model or "",
-            str(tokens_in) if tokens_in else "0",
-            str(tokens_out) if tokens_out else "0",
-            f"${cost:.6f}" if cost else "$0.000000",
-            time_str
+            project or "unknown",
+            display_name or "unknown",
+            version or "unknown",
+            provider,
+            model,
+            str(tokens_in),
+            str(tokens_out),
+            f"${cost:.6f}",
+            time
         )
     
     console.print(table)
@@ -261,6 +278,96 @@ def print_costs_by_prompt(days: int = 7):
         )
     
     console.print(table)
+
+
+def print_costs_for_prompt(prompt_name: str, days: int = 30):
+    """Print cost details for a specific prompt."""
+    console = Console()
+    
+    if not check_database_exists():
+        console.print("[red]No cost tracking database found at prompts/costs.db[/red]")
+        return
+    
+    db_path = get_costs_db_path()
+    conn = sqlite3.connect(str(db_path))
+    
+    # Calculate date threshold
+    threshold = datetime.now() - timedelta(days=days)
+    threshold_str = threshold.isoformat()
+    
+    # Query for specific prompt using semantic name or filename
+    query = """
+    SELECT 
+        COALESCE(prompt_semantic_name, prompt_name) as display_name,
+        prompt_version,
+        provider,
+        model,
+        tokens_in,
+        tokens_out,
+        estimated_costs,
+        strftime('%m-%d %H:%M', timestamp) as time,
+        session_id
+    FROM cost_tracking 
+    WHERE (COALESCE(prompt_semantic_name, prompt_name) LIKE ? OR prompt_name LIKE ?)
+      AND timestamp >= ?
+    ORDER BY timestamp DESC
+    """
+    
+    cursor = conn.execute(query, (f"%{prompt_name}%", f"%{prompt_name}%", threshold_str))
+    rows = cursor.fetchall()
+    conn.close()
+    
+    if not rows:
+        console.print(f"[yellow]No cost data found for prompt '{prompt_name}' in the last {days} days[/yellow]")
+        console.print("Try using a partial name or check available prompts with: python -m keprompt.cost_cli by-prompt")
+        return
+    
+    # Calculate totals
+    total_calls = len(rows)
+    total_tokens_in = sum(row[4] for row in rows if row[4])
+    total_tokens_out = sum(row[5] for row in rows if row[5])
+    total_cost = sum(row[6] for row in rows if row[6])
+    
+    # Create summary table
+    summary_table = Table(title=f"Cost Summary for '{prompt_name}' - Last {days} Days")
+    summary_table.add_column("Metric", style="cyan")
+    summary_table.add_column("Value", style="green")
+    
+    summary_table.add_row("Total Calls", str(total_calls))
+    summary_table.add_row("Total Input Tokens", f"{total_tokens_in:,}")
+    summary_table.add_row("Total Output Tokens", f"{total_tokens_out:,}")
+    summary_table.add_row("Total Cost", f"${total_cost:.6f}")
+    if total_calls > 0:
+        summary_table.add_row("Average Cost per Call", f"${total_cost/total_calls:.6f}")
+    
+    console.print(summary_table)
+    console.print()
+    
+    # Create detailed table
+    detail_table = Table(title="Detailed Cost Entries")
+    detail_table.add_column("Prompt", style="green", no_wrap=True)
+    detail_table.add_column("Version", style="blue", no_wrap=True)
+    detail_table.add_column("Provider", style="magenta", no_wrap=True)
+    detail_table.add_column("Model", style="yellow", no_wrap=True)
+    detail_table.add_column("TokIn", style="cyan", justify="right")
+    detail_table.add_column("TokOut", style="cyan", justify="right")
+    detail_table.add_column("Cost", style="red", justify="right")
+    detail_table.add_column("Time", style="dim", no_wrap=True)
+    
+    for row in rows:
+        display_name, version, provider, model, tokens_in, tokens_out, cost, time, session_id = row
+        detail_table.add_row(
+            display_name or "unknown",
+            version or "unknown",
+            provider,
+            model,
+            str(tokens_in) if tokens_in else "0",
+            str(tokens_out) if tokens_out else "0",
+            f"${cost:.6f}" if cost else "$0.000000",
+            time
+        )
+    
+    console.print(detail_table)
 
 
 def print_costs_by_model(days: int = 7):
@@ -367,6 +474,11 @@ def main():
     model_parser = subparsers.add_parser('by-model', help='Show costs by model')
     model_parser.add_argument('--days', type=int, default=7, help='Number of days to analyze (default: 7)')
     
+    # Prompt command - show costs for specific prompt
+    prompt_detail_parser = subparsers.add_parser('prompt', help='Show costs for a specific prompt')
+    prompt_detail_parser.add_argument('name', help='Prompt name (supports partial matching)')
+    prompt_detail_parser.add_argument('--days', type=int, default=30, help='Number of days to analyze (default: 30)')
+    
     # Export command
     export_parser = subparsers.add_parser('export', help='Export cost data to CSV')
     export_parser.add_argument('filename', help='Output CSV filename')
@@ -386,6 +498,8 @@ def main():
         print_costs_by_prompt(args.days)
     elif args.command == 'by-model':
         print_costs_by_model(args.days)
+    elif args.command == 'prompt':
+        print_costs_for_prompt(args.name, args.days)
     elif args.command == 'export':
         export_costs_csv(args.filename, args.days)
 

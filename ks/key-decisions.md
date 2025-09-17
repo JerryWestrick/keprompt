@@ -117,3 +117,26 @@ Build cost tracking directly into the core execution engine rather than as an op
 - **Complexity**: Additional code and maintenance burden
 - **Accuracy**: Must keep pricing data current across providers
 - **Performance**: Additional logging and calculation overhead
+
+## Required Prompt Metadata System
+
+### Decision
+Require every prompt file to start with a `.prompt` statement containing structured metadata (name, version, parameters).
+
+### Rationale
+- **Professional Prompt Management**: Semantic names instead of filenames in reports and logs
+- **Version Tracking**: Enable tracking of prompt evolution and performance over time
+- **Cost Engineering**: Associate costs with meaningful prompt names for better analysis
+- **Documentation**: Self-documenting prompts with parameter specifications
+- **Organization**: Consistent metadata structure across all prompts
+
+### Trade-offs
+- **Migration Effort**: Existing prompt files must be updated to include `.prompt` statements
+- **Validation Overhead**: VM must validate metadata on every execution
+- **Learning Curve**: Users must learn the metadata format requirements
+
+### Implementation
+- **Enforcement**: VM parsing fails if `.prompt` statement is missing or invalid
+- **Database Integration**: Semantic names and versions stored in cost tracking database
+- **CLI Enhancement**: Cost analysis commands use semantic names for reporting
+- **Backward Compatibility**: Fallback to filename for older cost entries without metadata

@@ -36,7 +36,17 @@ keprompt -e customer_support --param message "Help me" --param user_id "123"
 - **Variable Substitution**: `<<variable>>` syntax for dynamic content
 - **Function Calls**: `.cmd function_name(param=value)` for external operations
 
+### Required Prompt Metadata
+**Every prompt file must start with a `.prompt` statement** containing structured metadata:
+```
+.prompt "name":"Semantic Name", "version":"1.0.0", "params":{"model":"gpt-4o-mini"}
+```
+- **name**: Human-readable prompt name (used in cost tracking and reports)
+- **version**: Semantic version for tracking prompt evolution
+- **params**: Optional parameter documentation and defaults
+
 ### Key Statements
+- `.prompt` - **REQUIRED** - Define prompt metadata (name, version, parameters)
 - `.llm {"model": "gpt-4o"}` - Configure AI model and parameters
 - `.system` - Set system/assistant instructions
 - `.user` - Add user message to conversation

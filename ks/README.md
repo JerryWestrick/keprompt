@@ -16,6 +16,10 @@ The `ks/` (knowledge store) directory provides concise, AI-optimized documentati
 ### Design Context
 - **[key-decisions.md](key-decisions.md)** - Important architectural choices and their rationale
 - **[development-patterns.md](development-patterns.md)** - Common integration patterns and workflows
+- **[directory-architecture.md](directory-architecture.md)** - Project directory structure analysis and recommendations
+
+### Feature Documentation
+- **[conversation-management.md](conversation-management.md)** - Professional conversation viewing system (v1.4.0)
 
 ## Quick Context Restoration
 

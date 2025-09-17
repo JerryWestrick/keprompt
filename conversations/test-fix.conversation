@@ -1,0 +1,144 @@
+{
+  "vm_state": {
+    "ip": 0,
+    "model_name": "gpt-4o-mini",
+    "company": "OpenAI",
+    "interaction_no": 3,
+    "created": "2025-09-17 09:31:36"
+  },
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Hello, just say \"Hi\" back to me."
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool",
+          "id": "call_1kuwUrMD3gL7ExYjWsQcCbFD",
+          "name": "hello",
+          "arguments": {
+            "name": "User"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "call_1kuwUrMD3gL7ExYjWsQcCbFD",
+          "content": "Hello, User! This is a custom function."
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "Hi!"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Test the improved AiModel serialization"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool",
+          "id": "call_xqbrzsgcgPSKaqxc2mp8ANxs",
+          "name": "execcmd",
+          "arguments": {
+            "cmd": "echo 'Testing improved AiModel serialization'"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "call_xqbrzsgcgPSKaqxc2mp8ANxs",
+          "content": "Testing improved AiModel serialization"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "Testing improved AiModel serialization."
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Now test the relationship tracking"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool",
+          "id": "call_hyV3leMhSo4tSIKptf0qFUqy",
+          "name": "execcmd",
+          "arguments": {
+            "cmd": "echo 'Testing relationship tracking'"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "call_hyV3leMhSo4tSIKptf0qFUqy",
+          "content": "Testing relationship tracking"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "Testing relationship tracking."
+        }
+      ]
+    }
+  ],
+  "variables": {
+    "Prefix": "<<",
+    "Postfix": ">>",
+    "Debug": false,
+    "Verbose": false,
+    "model": "AiModel(name='gpt-4o-mini', provider='OpenAI', company='OpenAI', input=6e-07, output=2.4e-06, context=128000)",
+    "provider": "OpenAI",
+    "filename": "prompts/simple_test.prompt",
+    "last_response": "Testing relationship tracking."
+  }
+}

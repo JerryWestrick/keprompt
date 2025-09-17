@@ -60,6 +60,7 @@ async def async_keprompt_call(prompt_name, **params):
 
 ### Basic Prompt Structure
 ```
+.prompt "name":"Descriptive Prompt Name", "version":"1.0.0", "params":{"model":"gpt-4o-mini", "context":"input_context", "user_input":"user_request"}
 .# Prompt description and purpose
 .llm {"model": "gpt-4o-mini", "temperature": 0.3}
 .system You are a helpful assistant specialized in [domain].
@@ -271,3 +272,80 @@ def build_prompt_params(base_params, context):
     params['user_context'] = json.dumps(context.get('user', {}))
     
     return params
+
+## Cost Analysis Patterns
+
+### Cost Monitoring Integration
+```python
+import subprocess
+import json
+
+def get_prompt_costs(prompt_name, days=7):
+    """Get cost analysis for a specific prompt"""
+    result = subprocess.run([
+        'python', '-m', 'keprompt.cost_cli', 'prompt', prompt_name, '--days', str(days)
+    ], capture_output=True, text=True)
+    
+    if result.returncode == 0:
+        return result.stdout
+    else:
+        raise Exception(f"Cost analysis failed: {result.stderr}")
+
+def get_recent_costs(limit=10):
+    """Get recent cost entries with semantic names"""
+    result = subprocess.run([
+        'python', '-m', 'keprompt.cost_cli', 'recent', '--limit', str(limit)
+    ], capture_output=True, text=True)
+    
+    return result.stdout if result.returncode == 0 else None
+```
+
+### Cost-Aware Prompt Selection
+```python
+def select_model_by_budget(prompt_complexity, budget_per_call):
+    """Select appropriate model based on budget constraints"""
+    model_costs = {
+        'gpt-4o-mini': 0.000150,      # per 1K tokens (input)
+        'gpt-4o': 0.0025,             # per 1K tokens (input)
+        'claude-3-haiku': 0.00025,    # per 1K tokens (input)
+        'claude-3-5-sonnet': 0.003,   # per 1K tokens (input)
+    }
+    
+    # Estimate tokens based on complexity
+    estimated_tokens = prompt_complexity * 1000
+    
+    # Select cheapest model within budget
+    for model, cost_per_1k in sorted(model_costs.items(), key=lambda x: x[1]):
+        estimated_cost = (estimated_tokens / 1000) * cost_per_1k
+        if estimated_cost <= budget_per_call:
+            return model
+    
+    return 'gpt-4o-mini'  # Fallback to cheapest
+
+# Usage in prompt parameter building
+def build_cost_aware_params(base_params, budget=0.01):
+    params = base_params.copy()
+    complexity = params.get('complexity', 1)  # 1-5 scale
+    params['model'] = select_model_by_budget(complexity, budget)
+    return params
+```
+
+### Prompt Version Performance Tracking
+```python
+def compare_prompt_versions(prompt_name, version1, version2, days=30):
+    """Compare performance between prompt versions"""
+    # This would require extending the cost CLI to filter by version
+    # For now, manual analysis of cost data
+    
+    cost_data = get_prompt_costs(prompt_name, days)
+    
+    # Parse cost data to extract version-specific metrics
+    # Implementation would depend on cost CLI output format
+    
+    return {
+        'version1_avg_cost': 0.0,  # Calculated from data
+        'version2_avg_cost': 0.0,  # Calculated from data
+        'performance_delta': 0.0,  # Percentage difference
+        'recommendation': 'Use version X for better cost efficiency'
+    }
+```

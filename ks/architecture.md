@@ -5,8 +5,9 @@
 ### 1. Prompt Virtual Machine (VM)
 - **Location**: `keprompt/keprompt_vm.py`
 - **Purpose**: Parses and executes `.prompt` files line by line
-- **Key Features**: Variable substitution, statement execution, conversation state management
-- **Statements**: `.llm`, `.user`, `.system`, `.exec`, `.cmd`, `.print`, `.set`, `.include`, etc.
+- **Key Features**: Variable substitution, statement execution, conversation state management, prompt metadata validation
+- **Statements**: `.prompt` (required), `.llm`, `.user`, `.system`, `.exec`, `.cmd`, `.print`, `.set`, `.include`, etc.
+- **New Components**: `StmtPromptMeta` class for metadata parsing and validation
 
 ### 2. AI Provider Abstraction Layer
 - **Location**: `keprompt/AiProvider.py` (base class), `keprompt/Ai*.py` (implementations)
@@ -31,6 +32,14 @@
 - **Purpose**: Structured logging for debugging and production monitoring
 - **Modes**: Production, Debug, Log-to-file
 - **Captures**: Token usage, costs, function calls, conversation flow
+
+### 6. Cost Tracking & Analysis
+- **Location**: `keprompt/cost_tracker.py`, `keprompt/cost_cli.py`
+- **Purpose**: Comprehensive cost tracking and analysis with semantic prompt names
+- **Database**: SQLite database at `prompts/costs.db` with automatic schema migration
+- **Features**: Semantic name tracking, version tracking, detailed cost analysis
+- **CLI Commands**: `recent`, `summary`, `by-prompt`, `by-model`, `prompt <name>`, `export`
+- **Integration**: Automatic cost capture on every `.exec` statement execution
 
 ## Data Flow
 

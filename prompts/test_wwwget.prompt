@@ -1,3 +1,4 @@
+.prompt "name":"Web Scraping Test", "version":"1.0.0", "params":{"model":"gpt-4o"}
 .# Generate Google Gemini model registry
 .llm "model":"gpt-4o"
 .system You are building a comprehensive Google Gemini model registry. 

@@ -18,6 +18,17 @@ class AiModel:
     cutoff: str = "2024-04"
     link: str = ""
 
+    def __str__(self) -> str:
+        """Return a useful string representation for debugging and logging."""
+        return f"AiModel(name='{self.model}', provider='{self.provider}', company='{self.company}', input={self.input}, output={self.output}, context={self.context})"
+
+    def __repr__(self) -> str:
+        """Return a detailed representation for debugging."""
+        return (f"AiModel(provider='{self.provider}', company='{self.company}', model='{self.model}', "
+                f"input={self.input}, output={self.output}, context={self.context}, "
+                f"modality_in='{self.modality_in}', modality_out='{self.modality_out}', "
+                f"functions='{self.functions}', cutoff='{self.cutoff}')")
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'AiModel':
         return cls(**data)

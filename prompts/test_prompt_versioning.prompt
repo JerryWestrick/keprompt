@@ -1,0 +1,5 @@
+.prompt "name":"test_analyzer", "version":"1.0.0", "params":{"model":"gpt-4o-mini", "topic":"testing"}
+.llm "model": "gpt-4o-mini"
+.system You are a helpful assistant for testing prompt versioning.
+.user Please analyze the topic: <<topic>> and provide a brief summary.
+.exec

@@ -2,14 +2,16 @@
 
 ## Essential Commands
 
-| Command              | Description          | Example                            |
-|----------------------|----------------------|------------------------------------|
-| `keprompt -e <name>` | Execute prompt       | `keprompt -e hello --debug`        |
-| `keprompt -p`        | List prompts         | `keprompt -p "*research*"`         |
-| `keprompt -m`        | List models          | `keprompt -m gpt --company openai` |
-| `keprompt -f`        | List functions       | `keprompt -f`                      |
-| `keprompt -k`        | Add API key          | `keprompt -k`                      |
-| `keprompt --init`    | Initialize workspace | `keprompt --init`                  |
+| Command                        | Description              | Example                                    |
+|--------------------------------|--------------------------|--------------------------------------------|
+| `keprompt -e <name>`           | Execute prompt           | `keprompt -e hello --debug`                |
+| `keprompt -p`                  | List prompts             | `keprompt -p "*research*"`                 |
+| `keprompt -m`                  | List models              | `keprompt -m gpt --company openai`         |
+| `keprompt -f`                  | List functions           | `keprompt -f`                              |
+| `keprompt -k`                  | Add API key              | `keprompt -k`                              |
+| `keprompt --init`              | Initialize workspace     | `keprompt --init`                          |
+| `keprompt --list-conversations`| List all conversations   | `keprompt --list-conversations`            |
+| `keprompt --view-conversation` | View conversation detail | `keprompt --view-conversation my_session` |
 
 ## Prompt Language Cheat Sheet
 
@@ -105,9 +107,26 @@ keprompt -e prompt --conversation session_name --debug
 keprompt --conversation session_name --answer "Tell me more"
 ```
 
+### View Conversations (New in v1.4.0)
+```bash
+# List all conversations with costs
+keprompt --list-conversations
+
+# View detailed conversation history
+keprompt --view-conversation session_name
+```
+
+### Conversation Features
+- **Professional overview**: Tabular list with model info, message counts, and total costs
+- **Enhanced readability**: LaTeX math formatting cleaned up for easy reading
+- **Cost integration**: Automatic cost tracking linked to original prompts
+- **Smart text wrapping**: Long content properly formatted and wrapped
+- **Complete history**: Full conversation flow with role-based formatting
+
 ### Conversation Files
 - Stored in: `conversations/`
 - Format: `session_name.conversation`
+- JSON format with messages, variables, and metadata
 
 ## Logging Modes
 

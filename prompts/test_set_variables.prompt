@@ -1,3 +1,4 @@
+.prompt "name":"Variable Substitution Test", "version":"1.0.0", "params":{"prefix":"{{", "postfix":"}}", "model":"gpt-4o-mini"}
 .# Test the new .set statement and configurable variable substitution
 .set Prefix {{
 .set Postfix }}

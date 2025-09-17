@@ -1,3 +1,4 @@
+.prompt "name":"OpenRouter Integration Test", "version":"1.0.0", "params":{"model":"openai/gpt-oss-120b"}
 .# Test OpenRouter integration
 .llm {"model": "openai/gpt-4o"}
 .system You are a helpful assistant.

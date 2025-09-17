@@ -105,6 +105,11 @@ class VM:
         self.total = 0
         self.api_key: str = ''
         self.interaction_no: int = 0
+        
+        # Prompt metadata fields for versioning and cost tracking
+        self.prompt_name: str = ""
+        self.prompt_version: str = ""
+        self.expected_params: dict = {}
 
     def print(self, *args, **kwargs):
         """Print method to output to both console and file."""
@@ -283,6 +288,20 @@ class VM:
         # Delete all trailing blank lines
         while lines[-1][0].strip() == '': lines.pop()
 
+        # Check that first non-empty line is a .prompt statement
+        first_statement_found = False
+        for line in lines:
+            line = line.strip()
+            if not line:  # skip blank lines
+                continue
+            if not first_statement_found:
+                first_statement_found = True
+                if not line.startswith('.prompt '):
+                    raise StmtSyntaxError(
+                        f"{VERTICAL} [red]Error: First statement in {self.filename} must be a .prompt statement with name and version.[/]\n"
+                        f"Example: .prompt \"name\":\"My Prompt\", \"version\":\"1.0.0\"\n\n")
+                break
+
         for lno, line in enumerate(lines):
             try:
                 line = line.strip()  # remove trailing blanks
@@ -314,6 +333,12 @@ class VM:
             except Exception as e:
                 raise StmtSyntaxError(
                     f"{VERTICAL} [red]Error parsing file {self.filename}:{lno} error: {str(e)}.[/]\n\n")
+
+        # Validate that we have a .prompt statement and it was processed
+        if not self.statements or self.statements[0].keyword != '.prompt':
+            raise StmtSyntaxError(
+                f"{VERTICAL} [red]Error: {self.filename} must start with a .prompt statement.[/]\n"
+                f"Example: .prompt \"name\":\"My Prompt\", \"version\":\"1.0.0\"\n\n")
 
         # Apply completion logic based on last statement
         if self.statements:
@@ -445,18 +470,25 @@ class VM:
         conversation_path = Path(f"conversations/{conversation_filename}.conversation")
         conversation_path.parent.mkdir(exist_ok=True)
         
-        # Create a JSON-serializable copy of variables
+        # Create a JSON-serializable copy of variables with improved object handling
         serializable_vars = {}
         for key, value in self.vdict.items():
-            try:
-                # Test if the value is JSON serializable
-                json.dumps(value)
+            if hasattr(value, '__class__') and value.__class__.__name__ == 'AiModel':
+                # Use the new __str__ method for AiModel objects
+                serializable_vars[key] = str(value)
+            elif hasattr(value, '__class__') and 'Path' in value.__class__.__name__:
+                # Handle PosixPath, WindowsPath, etc.
+                serializable_vars[key] = str(value)
+            elif isinstance(value, (str, int, float, bool, type(None))):
+                # Keep simple types as-is
                 serializable_vars[key] = value
-            except (TypeError, ValueError):
-                # Skip non-serializable objects like AiModel
-                if hasattr(value, '__class__'):
-                    serializable_vars[key] = f"<{value.__class__.__name__} object>"
-                else:
+            else:
+                # Test if the value is JSON serializable
+                try:
+                    json.dumps(value)
+                    serializable_vars[key] = value
+                except (TypeError, ValueError):
+                    # Convert other objects to string representation
                     serializable_vars[key] = str(value)
         
         # Save VM state with universal messages format
@@ -935,7 +967,10 @@ class StmtExec(StmtPrompt):
                     parameters=vm.vdict.copy(),  # Copy current parameters
                     success=True,  # If we got here, execution succeeded
                     temperature=temperature,
-                    max_tokens=max_tokens
+                    max_tokens=max_tokens,
+                    prompt_semantic_name=vm.prompt_name,
+                    prompt_version=vm.prompt_version,
+                    expected_params=vm.expected_params
                 )
             except Exception as e:
                 # Don't fail execution if cost tracking fails
@@ -1196,6 +1231,54 @@ class StmtPrint(StmtPrompt):
         print(output_text)  # Add newline for clean output
 
 
+class StmtPromptMeta(StmtPrompt):
+    """
+    Handles the execution of a prompt metadata statement in the VM.
+
+    This class represents a `.prompt` keyword statement in the prompt file. It 
+    defines metadata about the prompt including name, version, and expected parameters.
+    This statement must be the first statement in a prompt file and version is required.
+
+    Attributes:
+        msg_no (int): The message number in the execution sequence.
+        keyword (str): The keyword associated with the statement (e.g., '.prompt').
+        value (str): JSON-like format: "name":"value", "version":"1.0.0", "params":{...}
+
+    Methods:
+        execute(vm: VM): Parses prompt metadata and stores it in VM for cost tracking.
+    """
+
+    def execute(self, vm: VM) -> None:
+        # Log the prompt statement execution to development channels (STDERR)
+        super().execute(vm)
+        
+        # Parse JSON-like content
+        if not self.value.strip():
+            raise StmtSyntaxError(f".prompt syntax error: metadata required")
+        
+        # Wrap in braces to make valid JSON
+        json_content = "{" + self.value + "}"
+        
+        try:
+            prompt_data = json.loads(json_content)
+        except json.JSONDecodeError as e:
+            raise StmtSyntaxError(f".prompt syntax error: invalid JSON format: {e}")
+        
+        # Validate required fields
+        if "name" not in prompt_data:
+            raise StmtSyntaxError(f".prompt syntax error: missing required 'name' field")
+        if "version" not in prompt_data:
+            raise StmtSyntaxError(f".prompt syntax error: missing required 'version' field")
+        
+        # Store prompt metadata in VM for cost tracking
+        vm.prompt_name = prompt_data["name"]
+        vm.prompt_version = prompt_data["version"]
+        vm.expected_params = prompt_data.get("params", {})
+        
+        # Log the prompt metadata
+        vm.logger.log_info(f"Prompt metadata: {vm.prompt_name} v{vm.prompt_version}")
+
+
 class StmtSet(StmtPrompt):
     """
     Handles the execution of a set statement in the VM.
@@ -1254,6 +1337,7 @@ StatementTypes: dict[str, type(StmtPrompt)] = {
     '.include': StmtInclude,
     '.llm': StmtLlm,
     '.print': StmtPrint,
+    '.prompt': StmtPromptMeta,
     '.set': StmtSet,
     '.system': StmtSystem,
     '.text': StmtText,

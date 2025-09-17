@@ -239,6 +239,8 @@ def get_cmd_args() -> argparse.Namespace:
     parser.add_argument('--update-models', metavar='PROVIDER', help='Update model definitions for specified provider (e.g., OpenRouter) or "All" for all providers')
     parser.add_argument('--conversation', metavar='NAME', help='Load/save conversation state')
     parser.add_argument('--answer', metavar='TEXT', help='Continue conversation with user response')
+    parser.add_argument('--view-conversation', metavar='NAME', help='View conversation history and details')
+    parser.add_argument('--list-conversations', action='store_true', help='List all available conversations')
 
     return parser.parse_args()
 
@@ -254,6 +256,251 @@ def prompt_pattern(prompt_name: str) -> str:
 def glob_prompt(prompt_name: str) -> list[Path]:
     prompt_p = prompt_pattern(prompt_name)
     return sorted(Path('.').glob(str(prompt_p)))
+
+def list_conversations():
+    """List all available conversations with summary information"""
+    import json
+    import sqlite3
+    from datetime import datetime
+    
+    conversations_dir = Path('conversations')
+    if not conversations_dir.exists():
+        console.print("[bold yellow]No conversations directory found.[/bold yellow]")
+        return
+    
+    conversation_files = list(conversations_dir.glob('*.conversation'))
+    if not conversation_files:
+        console.print("[bold yellow]No conversations found.[/bold yellow]")
+        return
+    
+    # Create table for conversation list
+    table = Table(title="Available Conversations")
+    table.add_column("Name", style="cyan", no_wrap=True)
+    table.add_column("Model", style="green", no_wrap=True)
+    table.add_column("Messages", style="blue", justify="right")
+    table.add_column("Last Updated", style="magenta")
+    table.add_column("Total Cost", style="yellow", justify="right")
+    
+    # Get cost data from database if available
+    cost_data = {}
+    try:
+        if os.path.exists('prompts/costs.db'):
+            conn = sqlite3.connect('prompts/costs.db')
+            cursor = conn.execute("""
+                SELECT prompt_semantic_name, COUNT(*) as calls, SUM(estimated_costs) as total_cost
+                FROM cost_tracking 
+                WHERE prompt_semantic_name IS NOT NULL AND prompt_semantic_name != ''
+                GROUP BY prompt_semantic_name
+            """)
+            for row in cursor.fetchall():
+                cost_data[row[0]] = {'calls': row[1], 'total_cost': row[2]}
+            conn.close()
+    except:
+        pass  # Continue without cost data if database unavailable
+    
+    for conv_file in sorted(conversation_files):
+        try:
+            with open(conv_file, 'r') as f:
+                data = json.load(f)
+            
+            name = conv_file.stem
+            vm_state = data.get('vm_state', {})
+            messages = data.get('messages', [])
+            
+            model = vm_state.get('model_name', 'Unknown')
+            message_count = len(messages)
+            created = vm_state.get('created', 'Unknown')
+            
+            # Try to get semantic name for cost lookup
+            variables = data.get('variables', {})
+            semantic_name = None
+            
+            # Try to extract semantic name from original filename
+            original_filename = variables.get('filename', '')
+            if original_filename and isinstance(original_filename, str) and original_filename.endswith('.prompt'):
+                try:
+                    with open(original_filename, 'r') as f:
+                        first_line = f.readline().strip()
+                        if first_line.startswith('.prompt '):
+                            json_content = "{" + first_line[8:] + "}"
+                            prompt_data = json.loads(json_content)
+                            semantic_name = prompt_data.get("name", "")
+                except:
+                    pass
+            
+            # Get cost information
+            total_cost = "N/A"
+            if semantic_name and semantic_name in cost_data:
+                total_cost = f"${cost_data[semantic_name]['total_cost']:.6f}"
+            
+            table.add_row(name, model, str(message_count), created, total_cost)
+            
+        except Exception as e:
+            table.add_row(conv_file.stem, "Error", "?", "?", f"Error: {str(e)}")
+    
+    console.print(table)
+
+def view_conversation(conversation_name: str):
+    """View detailed conversation history and information"""
+    import json
+    import sqlite3
+    from datetime import datetime
+    
+    conv_file = Path(f'conversations/{conversation_name}.conversation')
+    if not conv_file.exists():
+        console.print(f"[bold red]Conversation '{conversation_name}' not found.[/bold red]")
+        return
+    
+    try:
+        with open(conv_file, 'r') as f:
+            data = json.load(f)
+    except Exception as e:
+        console.print(f"[bold red]Error reading conversation: {e}[/bold red]")
+        return
+    
+    vm_state = data.get('vm_state', {})
+    messages = data.get('messages', [])
+    variables = data.get('variables', {})
+    
+    # Display conversation summary
+    console.print(f"\n[bold cyan]Conversation: {conversation_name}[/bold cyan]")
+    console.print("─" * 60)
+    
+    summary_table = Table(show_header=False, box=None)
+    summary_table.add_column("Field", style="cyan", width=15)
+    summary_table.add_column("Value", style="white")
+    
+    summary_table.add_row("Model:", vm_state.get('model_name', 'Unknown'))
+    summary_table.add_row("Company:", vm_state.get('company', 'Unknown'))
+    summary_table.add_row("Messages:", str(len(messages)))
+    summary_table.add_row("Interactions:", str(vm_state.get('interaction_no', 0)))
+    summary_table.add_row("Created:", vm_state.get('created', 'Unknown'))
+    
+    # Try to get semantic name and cost information
+    semantic_name = None
+    original_filename = variables.get('filename', '')
+    if original_filename and isinstance(original_filename, str) and original_filename.endswith('.prompt'):
+        summary_table.add_row("Original Prompt:", os.path.basename(original_filename))
+        try:
+            with open(original_filename, 'r') as f:
+                first_line = f.readline().strip()
+                if first_line.startswith('.prompt '):
+                    json_content = "{" + first_line[8:] + "}"
+                    prompt_data = json.loads(json_content)
+                    semantic_name = prompt_data.get("name", "")
+                    if semantic_name:
+                        summary_table.add_row("Semantic Name:", semantic_name)
+                        summary_table.add_row("Version:", prompt_data.get("version", ""))
+        except:
+            pass
+    
+    # Get cost information from database
+    if semantic_name:
+        try:
+            if os.path.exists('prompts/costs.db'):
+                conn = sqlite3.connect('prompts/costs.db')
+                cursor = conn.execute("""
+                    SELECT COUNT(*) as calls, SUM(estimated_costs) as total_cost, 
+                           SUM(tokens_in) as total_tokens_in, SUM(tokens_out) as total_tokens_out
+                    FROM cost_tracking 
+                    WHERE prompt_semantic_name = ?
+                """, (semantic_name,))
+                row = cursor.fetchone()
+                if row and row[0] > 0:
+                    summary_table.add_row("Total Calls:", str(row[0]))
+                    summary_table.add_row("Total Cost:", f"${row[1]:.6f}")
+                    summary_table.add_row("Total Tokens In:", str(row[2]))
+                    summary_table.add_row("Total Tokens Out:", str(row[3]))
+                conn.close()
+        except:
+            pass
+    
+    console.print(summary_table)
+    console.print()
+    
+    # Display conversation messages
+    console.print("[bold cyan]Conversation History:[/bold cyan]")
+    console.print("─" * 60)
+    
+    for i, message in enumerate(messages, 1):
+        role = message.get('role', 'unknown')
+        content = message.get('content', [])
+        
+        # Role styling
+        role_style = {
+            'user': '[bold blue]User[/bold blue]',
+            'assistant': '[bold green]Assistant[/bold green]',
+            'system': '[bold magenta]System[/bold magenta]',
+            'tool': '[bold yellow]Tool[/bold yellow]'
+        }.get(role, f'[bold white]{role.title()}[/bold white]')
+        
+        console.print(f"\n{i:2d}. {role_style}:")
+        
+        # Display content
+        for part in content:
+            part_type = part.get('type', 'unknown')
+            
+            if part_type == 'text':
+                text = part.get('text', '')
+                # Clean up LaTeX formatting for better readability
+                text = text.replace('\\(', '').replace('\\)', '')
+                text = text.replace('\\[', '\n    ').replace('\\]', '\n    ')
+                text = text.replace('\\displaystyle', '')
+                text = text.replace('\\frac{', '(').replace('}{', ')/(').replace('}', ')')
+                text = text.replace('\\;', ' ')
+                text = text.replace('\\qquad', '   ')
+                
+                # Split long text into readable chunks
+                lines = text.split('\n')
+                for line in lines:
+                    line = line.strip()
+                    if line:
+                        # Wrap very long lines
+                        if len(line) > 80:
+                            words = line.split(' ')
+                            current_line = "    "
+                            for word in words:
+                                if len(current_line + word) > 80:
+                                    console.print(current_line.rstrip(), style="white")
+                                    current_line = "    " + word + " "
+                                else:
+                                    current_line += word + " "
+                            if current_line.strip():
+                                console.print(current_line.rstrip(), style="white")
+                        else:
+                            console.print(f"    {line}", style="white")
+                
+            elif part_type == 'tool':
+                tool_name = part.get('name', 'unknown')
+                tool_args = part.get('arguments', {})
+                console.print(f"    [dim]🔧 Called: {tool_name}({tool_args})[/dim]")
+                
+            elif part_type == 'tool_result':
+                result_content = part.get('content', '')
+                console.print(f"    [dim]📤 Result: {result_content}[/dim]")
+                
+            else:
+                console.print(f"    [dim]({part_type}: {part})[/dim]")
+    
+    # Display current variables (if any interesting ones)
+    interesting_vars = {k: v for k, v in variables.items() 
+                       if k not in ['Prefix', 'Postfix', 'Debug', 'Verbose'] and not k.startswith('_')}
+    
+    if interesting_vars:
+        console.print(f"\n[bold cyan]Current Variables:[/bold cyan]")
+        console.print("─" * 60)
+        var_table = Table(show_header=False, box=None)
+        var_table.add_column("Variable", style="cyan", width=20)
+        var_table.add_column("Value", style="white")
+        
+        for key, value in interesting_vars.items():
+            # Truncate long values
+            str_value = str(value)
+            if len(str_value) > 80:
+                str_value = str_value[:77] + "..."
+            var_table.add_row(key, str_value)
+        
+        console.print(var_table)
 
 def create_global_variables():
     """Create global variables dictionary with explicit hard-coded defaults"""
@@ -431,6 +678,15 @@ def main():
     if args.key:
         get_new_api_key()
 
+    # Handle conversation viewing commands
+    if args.list_conversations:
+        list_conversations()
+        return
+
+    if args.view_conversation:
+        view_conversation(args.view_conversation)
+        return
+
     # Handle conversation mode
     if args.conversation:
         # Ensure 'conversations' directory exists
@@ -466,6 +722,26 @@ def main():
             if not loaded:
                 console.print(f"[bold red]Error: Conversation '{conversation_name}' not found[/bold red]")
                 sys.exit(1)
+            
+            # For conversation continuations, try to inherit prompt metadata from the conversation
+            # Look for the original prompt name in the variables to get metadata
+            original_filename = step.vdict.get('filename')
+            if original_filename and isinstance(original_filename, str) and original_filename.endswith('.prompt'):
+                # Try to extract prompt metadata from the original file
+                try:
+                    with open(original_filename, 'r') as f:
+                        first_line = f.readline().strip()
+                        if first_line.startswith('.prompt '):
+                            # Parse the .prompt statement to get metadata
+                            import json
+                            json_content = "{" + first_line[8:] + "}"  # Remove '.prompt ' and wrap in braces
+                            prompt_data = json.loads(json_content)
+                            step.prompt_name = prompt_data.get("name", "")
+                            step.prompt_version = prompt_data.get("version", "")
+                            step.expected_params = prompt_data.get("params", {})
+                except:
+                    # If we can't read the original file, continue without metadata
+                    pass
             
             # Log the user answer in execution log
             step.logger.log_user_answer(args.answer)

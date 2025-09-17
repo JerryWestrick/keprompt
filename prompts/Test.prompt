@@ -1,3 +1,4 @@
+.prompt "name":"Web Scraper Test", "version":"1.0.0", "params":{"model":"openai/gpt-oss-120b"}
 .# Make snake program with gpt-4o
 .llm "model": "openai/gpt-oss-120b"
 .cmd wwwget(url=https://ai.google.dev/gemini-api/docs/models)
