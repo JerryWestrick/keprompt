@@ -182,10 +182,14 @@ class FunctionLoader:
             
         try:
             # Execute: echo 'json_args' | ./executable function_name
-            executable_name = Path(executable).name
+            # Use the project root directory as working directory, not the functions directory
+            # This allows relative paths to resolve correctly from the project root
+            project_root = self.functions_dir.parent.parent  # Go up from prompts/functions to project root
+            executable_path = self.functions_dir / Path(executable).name  # Full path to executable
+            
             result = subprocess.run(
-                [f"./{executable_name}", function_name],
-                cwd=self.functions_dir,
+                [str(executable_path), function_name],
+                cwd=project_root,
                 input=json.dumps(arguments),
                 capture_output=True,
                 text=True,

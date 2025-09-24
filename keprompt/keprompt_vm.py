@@ -39,7 +39,7 @@ def print_prompt_code(prompt_files: list[str]) -> None:
     table.add_column("Params", style="dark_green bold")
 
     for prompt_file in prompt_files:
-        # console.print(f"{prompt_file}")
+        # co-*nsole.print(f"{prompt_file}")
         try:
             # Create minimal global variables for parsing
             from .keprompt import create_global_variables
@@ -65,9 +65,11 @@ class StmtSyntaxError(Exception):
 class VM:
     """Class to hold Prompt Virtual Machine execution state"""
 
-    def __init__(self, filename: str, global_vars: dict[str, any], log_mode: LogMode = LogMode.PRODUCTION, log_identifier: str = None):
+    def __init__(self, filename: str, global_vars: dict[str, any], log_mode: LogMode = LogMode.PRODUCTION, log_identifier: str = None, vm_debug: bool = False, exec_debug: bool = False):
         self.filename = filename
         self.log_mode = log_mode
+        self.vm_debug = vm_debug
+        self.exec_debug = exec_debug
         self.ip: int = 0
         
         # Generate unique prompt instance UUID
@@ -403,7 +405,24 @@ class VM:
         # Execute all statements
         for stmt_no, stmt in enumerate(self.statements):
             try:
+                # VM DEBUG: Log before executing statement (only when --vm-debug flag is used)
+                if self.vm_debug:
+                    print(f"VM-DEBUG BEFORE EXEC: IP={stmt_no}, Statement={stmt.keyword} '{stmt.value[:50]}{'...' if len(stmt.value) > 50 else ''}'", file=sys.stderr)
+                    print(f"VM-DEBUG BEFORE EXEC: Total statements={len(self.statements)}", file=sys.stderr)
+                    for i, s in enumerate(self.statements):
+                        marker = " <-- CURRENT" if i == stmt_no else ""
+                        print(f"VM-DEBUG   [{i:02d}] {s.keyword} '{s.value[:30]}{'...' if len(s.value) > 30 else ''}'{marker}", file=sys.stderr)
+                
                 stmt.execute(self)
+                
+                # VM DEBUG: Log after executing statement (only when --vm-debug flag is used)
+                if self.vm_debug:
+                    print(f"VM-DEBUG AFTER EXEC: IP={stmt_no}, Statement={stmt.keyword} completed", file=sys.stderr)
+                    print(f"VM-DEBUG AFTER EXEC: Total statements={len(self.statements)}", file=sys.stderr)
+                    for i, s in enumerate(self.statements):
+                        marker = " <-- JUST EXECUTED" if i == stmt_no else ""
+                        print(f"VM-DEBUG   [{i:02d}] {s.keyword} '{s.value[:30]}{'...' if len(s.value) > 30 else ''}'{marker}", file=sys.stderr)
+                    
             except Exception as e:
                 self.logger.log_error(f"Error executing statement {stmt_no}: {str(e)}")
                 sys.exit(9)

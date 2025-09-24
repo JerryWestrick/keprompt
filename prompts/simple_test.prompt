@@ -1,4 +1,7 @@
 .prompt "name":"Simple Hello Test", "version":"1.0.0", "params":{"model":"gpt-4o-mini"}
 .llm {"model":"gpt-4o-mini"}
-.user Hello, just say "Hi" back to me.
+.system This is system text...
+and this is also system text
+.user This is user text
+and this is user text also
 .exec

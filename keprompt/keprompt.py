@@ -232,6 +232,8 @@ def get_cmd_args() -> argparse.Namespace:
     parser.add_argument('-k', '--key', action='store_true', help='Ask for (new) Company Key')
     parser.add_argument('--log', metavar='IDENTIFIER', nargs='?', const='', help='Enable structured logging to prompts/logs-<identifier>/ directory (if no identifier provided, uses prompt name)')
     parser.add_argument('--debug', action='store_true', help='Enable structured logging + rich output to STDERR')
+    parser.add_argument('--vm-debug', action='store_true', help='Enable detailed VM statement execution debugging')
+    parser.add_argument('--debug-conversation', action='store_true', help='Save execution to timestamped debug conversation for analysis')
     parser.add_argument('-r', '--remove', action='store_true', help='remove all .~nn~. files from sub directories')
     parser.add_argument('--init', action='store_true', help='Initialize prompts and functions directories')
     parser.add_argument('--check-builtins', action='store_true', help='Check for built-in function updates')
@@ -341,10 +343,11 @@ def list_conversations():
     console.print(table)
 
 def view_conversation(conversation_name: str):
-    """View detailed conversation history and information"""
+    """View detailed conversation history and information with execution analysis"""
     import json
     import sqlite3
     from datetime import datetime
+    from collections import Counter
     
     conv_file = Path(f'conversations/{conversation_name}.conversation')
     if not conv_file.exists():
@@ -362,8 +365,13 @@ def view_conversation(conversation_name: str):
     messages = data.get('messages', [])
     variables = data.get('variables', {})
     
+    # Check if this is a debug conversation
+    is_debug_conversation = '_debug_' in conversation_name
+    
     # Display conversation summary
     console.print(f"\n[bold cyan]Conversation: {conversation_name}[/bold cyan]")
+    if is_debug_conversation:
+        console.print("[yellow]🔍 Debug Conversation - Execution Analysis Available[/yellow]")
     console.print("─" * 60)
     
     summary_table = Table(show_header=False, box=None)
@@ -375,6 +383,31 @@ def view_conversation(conversation_name: str):
     summary_table.add_row("Messages:", str(len(messages)))
     summary_table.add_row("Interactions:", str(vm_state.get('interaction_no', 0)))
     summary_table.add_row("Created:", vm_state.get('created', 'Unknown'))
+    
+    # Analyze function calls if this is a debug conversation
+    if is_debug_conversation:
+        function_calls = []
+        duplicate_calls = []
+        
+        for message in messages:
+            if message.get('role') == 'assistant':
+                content = message.get('content', [])
+                for part in content:
+                    if part.get('type') == 'tool':
+                        func_name = part.get('name', 'unknown')
+                        func_args = part.get('arguments', {})
+                        call_signature = f"{func_name}({func_args})"
+                        function_calls.append((func_name, func_args, call_signature))
+        
+        # Find duplicates
+        call_counts = Counter(call[2] for call in function_calls)
+        duplicates = {call: count for call, count in call_counts.items() if count > 1}
+        
+        if function_calls:
+            summary_table.add_row("Function Calls:", str(len(function_calls)))
+            summary_table.add_row("Unique Calls:", str(len(call_counts)))
+            if duplicates:
+                summary_table.add_row("Duplicate Calls:", f"{len(duplicates)} patterns")
     
     # Try to get semantic name and cost information
     semantic_name = None
@@ -417,6 +450,56 @@ def view_conversation(conversation_name: str):
     
     console.print(summary_table)
     console.print()
+    
+    # Show detailed duplicate analysis for debug conversations
+    if is_debug_conversation and function_calls:
+        console.print("[bold yellow]🔍 Function Call Analysis:[/bold yellow]")
+        console.print("─" * 60)
+        
+        if duplicates:
+            console.print("[bold red]⚠️  Duplicate Function Calls Detected:[/bold red]")
+            dup_table = Table(show_header=True)
+            dup_table.add_column("Function Call", style="cyan")
+            dup_table.add_column("Count", style="red", justify="right")
+            dup_table.add_column("Impact", style="yellow")
+            
+            for call_sig, count in duplicates.items():
+                # Determine impact
+                if 'readfile' in call_sig:
+                    impact = "Redundant file reads"
+                elif 'writefile' in call_sig:
+                    impact = "Duplicate file writes"
+                elif 'execcmd' in call_sig:
+                    impact = "Repeated commands"
+                else:
+                    impact = "Unnecessary execution"
+                
+                dup_table.add_row(call_sig, str(count), impact)
+            
+            console.print(dup_table)
+            console.print()
+        
+        # Show function call sequence
+        console.print("[bold cyan]📋 Function Call Sequence:[/bold cyan]")
+        seq_table = Table(show_header=True)
+        seq_table.add_column("#", style="dim", width=3)
+        seq_table.add_column("Function", style="green")
+        seq_table.add_column("Arguments", style="blue")
+        seq_table.add_column("Status", style="white")
+        
+        for idx, (func_name, func_args, call_sig) in enumerate(function_calls, 1):
+            # Check if this is a duplicate
+            status = "🔄 DUPLICATE" if call_counts[call_sig] > 1 else "✅ Unique"
+            
+            # Format arguments for display
+            args_str = str(func_args)
+            if len(args_str) > 50:
+                args_str = args_str[:47] + "..."
+            
+            seq_table.add_row(str(idx), func_name, args_str, status)
+        
+        console.print(seq_table)
+        console.print()
     
     # Display conversation messages
     console.print("[bold cyan]Conversation History:[/bold cyan]")
@@ -684,7 +767,14 @@ def main():
         return
 
     if args.view_conversation:
-        view_conversation(args.view_conversation)
+        # Check if textual is available for TUI mode
+        try:
+            from .conversation_viewer import view_conversation_tui
+            view_conversation_tui(args.view_conversation)
+        except ImportError:
+            # Fall back to Rich-based viewer if textual is not available
+            console.print("[yellow]Textual not available, using basic viewer[/yellow]")
+            view_conversation(args.view_conversation)
         return
 
     # Handle conversation mode
@@ -716,7 +806,7 @@ def main():
             from .keprompt_vm import make_statement
             from .AiPrompt import AiTextPart
             
-            step = VM(None, global_variables, log_mode=log_mode, log_identifier=log_identifier)  # No prompt file
+            step = VM(None, global_variables, log_mode=log_mode, log_identifier=log_identifier, vm_debug=args.vm_debug, exec_debug=args.debug_conversation)  # No prompt file
             loaded = step.load_conversation(conversation_name)
             
             if not loaded:
@@ -767,7 +857,7 @@ def main():
             
             if glob_files:
                 for prompt_file in glob_files:
-                    step = VM(prompt_file, global_variables, log_mode=log_mode, log_identifier=log_identifier)
+                    step = VM(prompt_file, global_variables, log_mode=log_mode, log_identifier=log_identifier, vm_debug=args.vm_debug, exec_debug=args.debug_conversation)
                     step.parse_prompt()
                     step.execute()
                     
@@ -847,9 +937,32 @@ def main():
                 else:
                     log_mode = LogMode.PRODUCTION
                 
-                step = VM(prompt_file, global_variables, log_mode=log_mode, log_identifier=log_identifier)
-                step.parse_prompt()
-                step.execute()
+                # If --debug-conversation is enabled, automatically save to conversation
+                if args.debug_conversation:
+                    # Ensure 'conversations' directory exists
+                    if not os.path.exists('conversations'):
+                        os.makedirs('conversations')
+                    
+                    # Create debug conversation name with timestamp
+                    import time
+                    prompt_name = os.path.splitext(os.path.basename(prompt_file))[0]
+                    timestamp = time.strftime("%Y%m%d_%H%M%S")
+                    debug_conversation_name = f"{prompt_name}_debug_{timestamp}"
+                    
+                    console.print(f"[cyan]--debug-conversation enabled: Saving execution to conversation '{debug_conversation_name}'[/cyan]")
+                    
+                    step = VM(prompt_file, global_variables, log_mode=log_mode, log_identifier=log_identifier, vm_debug=args.vm_debug, exec_debug=args.debug_conversation)
+                    step.parse_prompt()
+                    step.execute()
+                    
+                    # Save the conversation for analysis
+                    step.save_conversation(debug_conversation_name)
+                    
+                    console.print(f"[green]Debug conversation saved! View with: keprompt --view-conversation {debug_conversation_name}[/green]")
+                else:
+                    step = VM(prompt_file, global_variables, log_mode=log_mode, log_identifier=log_identifier, vm_debug=args.vm_debug, exec_debug=args.debug_conversation)
+                    step.parse_prompt()
+                    step.execute()
         else:
             pname = prompt_pattern(args.execute)
             log.error(f"[bold red]No Prompt files found with {pname}[/bold red]", extra={"markup": True})

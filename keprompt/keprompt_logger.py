@@ -248,9 +248,50 @@ class StandardLogger:
         duration_str = f" ({duration:.3f} secs)" if duration > 0 else ""
         self.log_func(f"{function_name}({args}) -> {result}{duration_str}")
         
-        # If the result contains an error, also write to stderr
+        # If the result contains an error, also write to stderr with improved formatting
         if isinstance(result, str) and ("Error executing" in result or "ERROR:" in result):
-            print(f"Function Error: {function_name}({args}) -> {result}", file=sys.stderr)
+            # Extract and format file-related errors more clearly
+            if function_name == "readfile" and "filename" in args:
+                filename = args["filename"]
+                # Extract the core error message from nested exceptions
+                if "No such file or directory" in result:
+                    print(f"File Error: Cannot read file '{filename}' - File not found", file=sys.stderr)
+                elif "Permission denied" in result:
+                    print(f"File Error: Cannot read file '{filename}' - Permission denied", file=sys.stderr)
+                else:
+                    # For other file errors, show the filename prominently
+                    print(f"File Error: Cannot read file '{filename}' - {self._extract_core_error(result)}", file=sys.stderr)
+            else:
+                # For non-file functions, use the original format but clean it up
+                clean_result = self._extract_core_error(result)
+                print(f"Function Error: {function_name}({args}) -> {clean_result}", file=sys.stderr)
+    
+    def _extract_core_error(self, error_message: str) -> str:
+        """Extract the core error message from nested exception text."""
+        # Remove redundant "Error executing function" prefixes
+        if "Error executing function" in error_message:
+            parts = error_message.split("Error executing function")
+            if len(parts) > 1:
+                error_message = parts[-1].strip(": '")
+        
+        # Remove redundant "Function 'X' failed:" prefixes
+        if "' failed:" in error_message:
+            parts = error_message.split("' failed:")
+            if len(parts) > 1:
+                error_message = parts[-1].strip()
+        
+        # Remove redundant "Error:" prefixes
+        if error_message.startswith("Error:"):
+            error_message = error_message[6:].strip()
+        
+        # Clean up multiple "Error accessing file" messages
+        if "Error accessing file" in error_message and error_message.count("Error accessing file") > 1:
+            # Find the last occurrence which usually has the most complete info
+            parts = error_message.split("Error accessing file")
+            if len(parts) > 1:
+                error_message = "Error accessing file" + parts[-1]
+        
+        return error_message.strip()
     
     def log_execution_flow(self, direction: str, message: str):
         """Log execution flow (Call-01 <--, Call-01 -->)."""

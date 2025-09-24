@@ -1,6 +1,7 @@
 # AiProvider.py
 import abc
 import os
+import sys
 import json as json_module
 from typing import List, Dict, Any, TYPE_CHECKING, Optional
 from datetime import datetime
@@ -157,6 +158,9 @@ class AiProvider(abc.ABC):
 
             company_messages = self.to_company_messages(self.prompt.messages)
             
+            # EXEC DEBUG: When enabled, execution details are automatically saved to conversation
+            # for analysis with --view-conversation command
+            
             # Log detailed message exchange - what we're sending
             self.prompt.vm.logger.log_message_exchange("send", company_messages, call_id)
             
@@ -175,11 +179,15 @@ class AiProvider(abc.ABC):
             self.prompt.messages.append(response_msg)
             responses.append(response_msg)
             
+            # EXEC DEBUG: LLM responses are automatically captured in conversation for analysis
+            
             tool_msg = self.call_functions(response_msg)
             if tool_msg:
                 do_again = True
                 self.prompt.messages.append(tool_msg)
                 responses.append(tool_msg)
+                
+                # EXEC DEBUG: Function results are automatically captured in conversation for analysis
                 
                 # Don't log tool_response to messages.log - it's not sent to OpenAI
                 # The tool results will be included in the next "send" message
@@ -189,6 +197,8 @@ class AiProvider(abc.ABC):
                 all_messages = self.to_company_messages(self.prompt.messages)
                 self.prompt.vm.logger.log_message_exchange("received", all_messages, call_id)
                 self._display_llm_text_response(response_msg, call_label)
+                
+                # EXEC DEBUG: Execution completion is automatically captured in conversation for analysis
 
         return responses
 
@@ -205,9 +215,6 @@ class AiProvider(abc.ABC):
             if not isinstance(part, AiCall): continue
 
             try:
-                # Log function execution using structured logging
-                self.prompt.vm.logger.log_function_call(part.name, part.arguments, "executing")
-
                 # Track function execution timing
                 func_start_time = time.time()
                 result = DefinedFunctions[part.name](**part.arguments)
@@ -217,11 +224,15 @@ class AiProvider(abc.ABC):
                 self.prompt.vm.logger.log_function_call(part.name, part.arguments, result)
 
                 # Store function call info for debug output
-                # Format arguments for display (truncate long values)
+                # Format arguments for display (truncate long values, but preserve full filenames)
                 display_args = {}
                 for k, v in part.arguments.items():
                     if isinstance(v, str) and len(v) > 50:
-                        display_args[k] = v[:47] + "..."
+                        # Don't truncate filename arguments for file operations
+                        if part.name in ['readfile', 'writefile', 'write_base64_file'] and k == 'filename':
+                            display_args[k] = v  # Show full filename
+                        else:
+                            display_args[k] = v[:47] + "..."
                     else:
                         display_args[k] = v
                 
@@ -241,7 +252,11 @@ class AiProvider(abc.ABC):
                 display_args = {}
                 for k, v in part.arguments.items():
                     if isinstance(v, str) and len(v) > 50:
-                        display_args[k] = v[:47] + "..."
+                        # Don't truncate filename arguments for file operations
+                        if part.name in ['readfile', 'writefile', 'write_base64_file'] and k == 'filename':
+                            display_args[k] = v  # Show full filename
+                        else:
+                            display_args[k] = v[:47] + "..."
                     else:
                         display_args[k] = v
                 
@@ -270,7 +285,10 @@ class AiProvider(abc.ABC):
                     for k, v in func_info['args'].items():
                         if isinstance(v, str):
                             # For string values, show them with proper formatting
-                            if len(str(v)) > 40:
+                            # Don't truncate filenames in the summary display
+                            if func_info['name'] in ['readfile', 'writefile', 'write_base64_file'] and k == 'filename':
+                                display_val = str(v)  # Show full filename
+                            elif len(str(v)) > 40:
                                 display_val = str(v)[:37] + "..."
                             else:
                                 display_val = str(v)

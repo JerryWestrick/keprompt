@@ -25,7 +25,8 @@ def readfile(filename: str) -> str:
         with open(filename, 'r', encoding='utf-8') as file:
             return file.read()
     except Exception as err:
-        raise Exception(f"Error accessing file '{filename}': {err}")
+        abs_path = os.path.abspath(filename)
+        raise Exception(f"Error accessing file '{filename}' (resolved to '{abs_path}'): {err}")
 
 def writefile(filename: str, content: str) -> str:
     """Write content to a file with versioning."""
