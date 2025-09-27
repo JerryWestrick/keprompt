@@ -1,4 +1,7 @@
 keyring>=24.0.0
+peewee>=3.16.0
+python-dotenv>=1.0.0
 rich>=13.0.0
 requests>=2.31.0
 textual>=0.41.0
+toml>=0.10.2

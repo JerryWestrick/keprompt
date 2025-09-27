@@ -23,7 +23,7 @@ class CostTracker:
     SQLite-based cost tracking system for KePrompt.
     
     Automatically tracks AI API costs, tokens, and execution metadata
-    to prompts/costs.db database file.
+    to prompts/sessions.db database file.
     """
     
     def __init__(self, prompts_dir: str = "prompts"):
@@ -31,10 +31,10 @@ class CostTracker:
         Initialize cost tracker.
         
         Args:
-            prompts_dir: Directory containing prompts (where costs.db will be created)
+            prompts_dir: Directory containing prompts (where sessions.db will be created)
         """
         self.prompts_dir = Path(prompts_dir)
-        self.db_path = self.prompts_dir / "costs.db"
+        self.db_path = self.prompts_dir / "sessions.db"
         self.conn = None
         self._ensure_database()
     

@@ -74,44 +74,12 @@ class AiGoogle(AiProvider):
         
         try:
             model = AiRegistry.get_model(self.prompt.model)
-            cost_in = tokens_in * model.input
-            cost_out = tokens_out * model.output
+            cost_in = tokens_in * model.input_cost
+            cost_out = tokens_out * model.output_cost
             return cost_in, cost_out
         except Exception:
             # Fallback to zero costs if model not found
             return 0.0, 0.0
-
-    @classmethod
-    def create_models_json(cls, provider_name: str) -> None:
-        """Create/update the models JSON file for Google (manual definitions only)"""
-        console.print(f"[yellow]Google uses manual definitions to ensure system stability[/yellow]")
-        cls._write_json_file(provider_name, Google_Models)
-
-
-# Register handler and models
-AiRegistry.register_handler(provider_name="Google", handler_class=AiGoogle)
-
-# Google model definitions and pricing
-# Official pricing source: https://ai.google.dev/pricing
-# Last updated: January 2025
-Google_Models = {
-    # Latest Gemini 2.5 models
-    "gemini-2.5-pro": {"company": "Google", "provider": "Google", "model": "gemini-2.5-pro", "input": 0.00000125, "output": 0.00001, "context": 1000000, "modality_in": "Text+Vision+Audio", "modality_out": "Text", "functions": "Yes", "description": "State-of-the-art multipurpose model, excels at coding and complex reasoning", "cutoff": "See docs"},
-    "gemini-2.5-flash": {"company": "Google", "provider": "Google", "model": "gemini-2.5-flash", "input": 0.0000003, "output": 0.0000025, "context": 1000000, "modality_in": "Text+Vision+Audio", "modality_out": "Text", "functions": "Yes", "description": "First hybrid reasoning model with thinking budgets", "cutoff": "See docs"},
-    "gemini-2.5-flash-lite": {"company": "Google", "provider": "Google", "model": "gemini-2.5-flash-lite", "input": 0.0000001, "output": 0.0000004, "context": 1000000, "modality_in": "Text+Vision+Audio", "modality_out": "Text", "functions": "Yes", "description": "Smallest and most cost effective model, built for at scale usage", "cutoff": "See docs"},
-    
-    # Gemini 2.0 models
-    "gemini-2.0-flash": {"company": "Google", "provider": "Google", "model": "gemini-2.0-flash", "input": 0.0000001, "output": 0.0000004, "context": 1000000, "modality_in": "Text+Vision+Audio", "modality_out": "Text+Image", "functions": "Yes", "description": "Most balanced multimodal model, built for the era of Agents", "cutoff": "See docs"},
-    "gemini-2.0-flash-lite": {"company": "Google", "provider": "Google", "model": "gemini-2.0-flash-lite", "input": 0.000000075, "output": 0.0000003, "context": 1000000, "modality_in": "Text", "modality_out": "Text", "functions": "Yes", "description": "Smallest and most cost effective model", "cutoff": "See docs"},
-    
-    # Legacy Gemini 1.5 models (still available)
-    "gemini-1.5-pro": {"company": "Google", "provider": "Google", "model": "gemini-1.5-pro", "input": 0.00000125, "output": 0.000005, "context": 2000000, "modality_in": "Text+Vision", "modality_out": "Text", "functions": "Yes", "description": "Highest intelligence Gemini 1.5 series model", "cutoff": "See docs"},
-    "gemini-1.5-flash": {"company": "Google", "provider": "Google", "model": "gemini-1.5-flash", "input": 0.000000075, "output": 0.0000003, "context": 1000000, "modality_in": "Text+Vision", "modality_out": "Text", "functions": "Yes", "description": "Fastest multimodal model with great performance", "cutoff": "See docs"},
-    "gemini-1.5-flash-8b": {"company": "Google", "provider": "Google", "model": "gemini-1.5-flash-8b", "input": 0.0000000375, "output": 0.00000015, "context": 1000000, "modality_in": "Text+Vision", "modality_out": "Text", "functions": "Yes", "description": "Smallest model for lower intelligence use cases", "cutoff": "See docs"}
-
-}
-
-AiGoogle.register_models("Google")
 
 # Prepare Google tools array
 GoogleToolsArray = [
@@ -122,3 +90,6 @@ GoogleToolsArray = [
     }
     for tool in DefinedToolsArray
 ]
+
+# Register handler only - models loaded from JSON files
+AiRegistry.register_handler(provider_name="Google", handler_class=AiGoogle)

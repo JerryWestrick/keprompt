@@ -19,9 +19,9 @@ from rich.logging import RichHandler
 
 class LogMode(Enum):
     """Logging modes for keprompt."""
+    LOG = "none"
     PRODUCTION = "production"  # Clean STDOUT only
-    LOG = "log"               # Files only, silent execution
-    DEBUG = "debug"           # Files + rich STDERR output
+    DEBUG = "debug"           # Rich STDERR output only
 
 
 # Define custom log levels
@@ -49,10 +49,10 @@ class PromptContextFilter(logging.Filter):
 
 class StandardLogger:
     """
-    Standard logging system for keprompt using Python's logging module.
+    Simplified logging system for keprompt.
     
-    Creates a single log file with format: [timestamp][prompt-id][log-level]> message
-    Supports multi-process safe logging with proper log levels.
+    Supports PRODUCTION (clean STDOUT) and DEBUG (rich STDERR) modes.
+    Session details are now captured in sessions.db and viewable via session_viewer.
     """
     
     def __init__(self, prompt_name: str, mode: LogMode = LogMode.PRODUCTION, log_identifier: str = None):
@@ -61,146 +61,54 @@ class StandardLogger:
         
         Args:
             prompt_name: Name of the prompt (without .prompt extension)
-            mode: Logging mode (production, log, or debug)
-            log_identifier: Custom identifier for log directory (if None, uses prompt_name)
+            mode: Logging mode (production or debug)
+            log_identifier: Unused (kept for compatibility)
         """
         self.prompt_name = prompt_name
         self.mode = mode
-        self.log_identifier = log_identifier if log_identifier else prompt_name
         self.prompt_id = ""  # Will be set when we get the UUID
-        self.base_prompt_id = ""  # Base prompt ID without exec/init suffixes
         
         # Initialize console for STDERR output
         self.console = Console(stderr=True)
         self.terminal_width = self.console.size.width
-        
-        # Track next message number to assign (for sequential numbering)
-        self.next_msg_number = 1
-        
-        # Setup logging if needed
-        self.logger = None
-        self.context_filter = None
-        if self.mode in [LogMode.LOG, LogMode.DEBUG]:
-            self._setup_logging()
-    
-    def _setup_logging(self):
-        """Setup the standard Python logger with dual handlers: Rich for console, clean text for files."""
-        # Create log directory path using the log identifier
-        log_directory = Path(f"prompts/logs-{self.log_identifier}")
-        log_directory.mkdir(parents=True, exist_ok=True)
-        
-        # Create logger
-        self.logger = logging.getLogger(f"keprompt.{self.log_identifier}")
-        self.logger.setLevel(logging.DEBUG)
-        
-        # Clear any existing handlers
-        self.logger.handlers.clear()
-        
-        # Create context filter
-        self.context_filter = PromptContextFilter(self.prompt_id)
-        
-        # 1. File handler - clean text for log files
-        log_file = log_directory / "keprompt.log"
-        file_handler = logging.FileHandler(log_file, mode='a')
-        file_handler.setLevel(logging.DEBUG)
-        
-        # File formatter - clean text without colors
-        file_formatter = logging.Formatter('[%(asctime)s][%(prompt_id)s][%(levelname)s]> %(message)s',
-                                         datefmt='%Y-%m-%d %H:%M:%S')
-        file_handler.setFormatter(file_formatter)
-        file_handler.addFilter(self.context_filter)
-        
-        # Add file handler
-        self.logger.addHandler(file_handler)
-        
-        # 2. Rich handler - enhanced console output (only in DEBUG mode)
-        if self.mode == LogMode.DEBUG:
-            rich_handler = RichHandler(
-                console=self.console,
-                show_time=True,
-                show_level=True,
-                show_path=False,
-                markup=True,
-                rich_tracebacks=True,
-                tracebacks_show_locals=True
-            )
-            rich_handler.setLevel(logging.DEBUG)
-            
-            # Rich formatter - simpler format since Rich adds its own styling
-            rich_formatter = logging.Formatter('[%(prompt_id)s] %(message)s')
-            rich_handler.setFormatter(rich_formatter)
-            rich_handler.addFilter(self.context_filter)
-            
-            # Add rich handler
-            self.logger.addHandler(rich_handler)
-        
-        # Prevent propagation to root logger
-        self.logger.propagate = False
     
     def set_prompt_id(self, prompt_id: str):
-        """Set the prompt ID for all subsequent log entries."""
+        """Set the prompt ID for compatibility."""
         self.prompt_id = prompt_id
-        
-        # Extract base prompt ID (remove -exec/-init suffixes for statement logging)
-        if '-' in prompt_id:
-            self.base_prompt_id = prompt_id.split('-')[0]
-        else:
-            self.base_prompt_id = prompt_id
-            
-        if self.context_filter:
-            self.context_filter.prompt_id = prompt_id
     
     def _write_to_stderr(self, message: str):
         """Write message to STDERR using Rich console."""
         if self.mode == LogMode.DEBUG:
             self.console.print(message)
     
-    def _log(self, level: int, message: str):
-        """Internal logging method."""
-        if self.logger and self.mode in [LogMode.LOG, LogMode.DEBUG]:
-            self.logger.log(level, message)
-    
-    def _log_with_base_id(self, level: int, message: str):
-        """Internal logging method using base prompt ID (for statements)."""
-        if self.logger and self.mode in [LogMode.LOG, LogMode.DEBUG]:
-            # Temporarily switch to base prompt ID
-            original_prompt_id = self.context_filter.prompt_id
-            self.context_filter.prompt_id = self.base_prompt_id
-            self.logger.log(level, message)
-            # Restore original prompt ID
-            self.context_filter.prompt_id = original_prompt_id
-    
-    # Core logging methods with custom levels
+    # Core logging methods - simplified to only handle DEBUG console output
     def log_info(self, message: str):
         """Log general information (statement execution)."""
-        # Remove Rich markup and table formatting from message for clean logging
-        import re
-        clean_message = re.sub(r'\[/?[^\]]*\]', '', message)  # Remove Rich markup
-        clean_message = re.sub(r'│\s*', '', clean_message)    # Remove table prefix
-        clean_message = re.sub(r'\s*│\s*$', '', clean_message)  # Remove table suffix
-        clean_message = clean_message.strip()  # Remove extra whitespace
-        self._log(logging.INFO, clean_message)
+        if self.mode == LogMode.DEBUG:
+            self._write_to_stderr(f"[dim]INFO: {message}[/dim]")
     
     def log_debug(self, message: str):
         """Log debug information (detailed execution flow)."""
-        self._log(logging.DEBUG, message)
+        if self.mode == LogMode.DEBUG:
+            self._write_to_stderr(f"[dim]DEBUG: {message}[/dim]")
     
     def log_llm(self, message: str):
         """Log LLM API calls, tokens, costs."""
-        self._log(LLM_LEVEL, message)
+        if self.mode == LogMode.DEBUG:
+            self._write_to_stderr(f"[blue]LLM: {message}[/blue]")
     
     def log_func(self, message: str):
         """Log function calls and results."""
-        self._log(FUNC_LEVEL, message)
+        if self.mode == LogMode.DEBUG:
+            self._write_to_stderr(f"[green]FUNC: {message}[/green]")
     
     def log_msg(self, message: str):
         """Log message exchanges."""
-        self._log(MSG_LEVEL, message)
+        if self.mode == LogMode.DEBUG:
+            self._write_to_stderr(f"[cyan]MSG: {message}[/cyan]")
     
     def log_error(self, message: str, exit_code: int = 1):
         """Log error message and exit."""
-        self._log(logging.ERROR, message)
-        
         # Always write to STDERR (all modes)
         print(f"Error: {message}", file=sys.stderr)
         
@@ -213,8 +121,6 @@ class StandardLogger:
     
     def log_warning(self, message: str):
         """Log warning message."""
-        self._log(logging.WARNING, message)
-        
         # Always write to STDERR
         print(f"Warning: {message}", file=sys.stderr)
         
@@ -224,15 +130,12 @@ class StandardLogger:
     
     # Convenience methods for common logging patterns
     def log_statement(self, msg_no: int, keyword: str, value: str):
-        """Log statement execution using base prompt ID."""
-        # Remove Rich markup from message for clean logging
-        import re
-        if value:
-            clean_message = re.sub(r'\[/?[^\]]*\]', '', f"{keyword} {value}")
-        else:
-            clean_message = re.sub(r'\[/?[^\]]*\]', '', f"{keyword}")
-        
-        self._log_with_base_id(logging.INFO, clean_message)
+        """Log statement execution."""
+        if self.mode == LogMode.DEBUG:
+            if value:
+                self._write_to_stderr(f"[dim]STMT: {keyword} {value}[/dim]")
+            else:
+                self._write_to_stderr(f"[dim]STMT: {keyword}[/dim]")
     
     def log_llm_call(self, message: str, call_id: str = None):
         """Log LLM API call information."""
@@ -337,26 +240,13 @@ class StandardLogger:
         if not messages:
             return
         
-        # Determine how many messages are new (only log new messages)
-        current_msg_count = len(messages)
-        messages_to_log = messages[self.next_msg_number - 1:]  # Get only new messages
-        
-        # Log each new message individually with sequential numbering
-        import json
-        for msg in messages_to_log:
-            msg_num = f"{self.next_msg_number:02d}"
-            try:
-                msg_json = json.dumps(msg, ensure_ascii=False)
-                self.log_msg(f"{msg_num}: {msg_json}")
-            except (TypeError, ValueError):
-                # Fallback if message isn't JSON serializable
-                self.log_msg(f"{msg_num}: {str(msg)}")
-            
-            self.next_msg_number += 1
+        # In DEBUG mode, log a summary of the message exchange
+        if self.mode == LogMode.DEBUG:
+            self.log_msg(f"Message exchange: {len(messages)} messages")
     
-    def log_conversation(self, conversation_data: dict):
+    def log_session(self, conversation_data: dict):
         """Log conversation data."""
-        self.log_msg(f"Conversation logged: {len(conversation_data.get('messages', []))} messages")
+        self.log_msg(f"Session logged: {len(conversation_data.get('messages', []))} messages")
     
     def log_user_answer(self, answer: str):
         """Log user answer in conversation mode."""
@@ -364,10 +254,8 @@ class StandardLogger:
 
     def close(self):
         """Close the logger and cleanup handlers."""
-        if self.logger:
-            for handler in self.logger.handlers:
-                handler.close()
-            self.logger.handlers.clear()
+        # No-op since we don't have file handlers anymore
+        pass
 
 
 # Backward compatibility aliases (will be removed in future versions)

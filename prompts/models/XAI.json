@@ -1,113 +1,549 @@
 {
   "metadata": {
     "provider": "XAI",
-    "last_updated": "2025-08-15T11:45:24.273895",
-    "total_models": 8
+    "last_updated": "2025-09-26T13:34:38.498309",
+    "total_models": 27,
+    "source": "LiteLLM"
   },
   "models": {
-    "grok-4": {
-      "company": "XAI",
+    "grok-2": {
       "provider": "XAI",
-      "model": "grok-4",
-      "input": 3e-06,
-      "output": 1.5e-05,
-      "context": 256000,
-      "modality_in": "Text+Vision",
-      "modality_out": "Text",
-      "functions": "Yes",
-      "description": "The world's best model with advanced reasoning, coding, and visual processing capabilities",
-      "cutoff": "2025-07"
-    },
-    "grok-3": {
-      "company": "XAI",
-      "provider": "XAI",
-      "model": "grok-3",
-      "input": 3e-06,
-      "output": 1.5e-05,
-      "context": 131072,
-      "modality_in": "Text+Vision",
-      "modality_out": "Text",
-      "functions": "Yes",
-      "description": "Flagship enterprise model that excels at data extraction, programming, and text summarization",
-      "cutoff": "2025-02"
-    },
-    "grok-3-mini": {
-      "company": "XAI",
-      "provider": "XAI",
-      "model": "grok-3-mini",
-      "input": 3e-07,
-      "output": 5e-07,
-      "context": 131072,
-      "modality_in": "Text",
-      "modality_out": "Text",
-      "functions": "Yes",
-      "description": "Lightweight model that thinks before responding. Excels at quantitative tasks involving math and reasoning",
-      "cutoff": "2025-02"
-    },
-    "grok-2-vision-1212": {
-      "company": "XAI",
-      "provider": "XAI",
-      "model": "grok-2-vision-1212",
-      "input": 2e-06,
-      "output": 1e-05,
-      "context": 131072,
-      "modality_in": "Text+Vision",
-      "modality_out": "Text",
-      "functions": "Yes",
-      "description": "Vision-capable Grok-2 model with image understanding",
-      "cutoff": "2024-12"
+      "company": "Xai",
+      "model": "grok-2",
+      "input_cost": 2e-06,
+      "output_cost": 1e-05,
+      "max_tokens": 131072,
+      "cache_cost": 0.0,
+      "max_input_tokens": 131072,
+      "max_output_tokens": 131072,
+      "supports": {
+        "function_calling": true,
+        "tool_choice": true,
+        "web_search": true
+      },
+      "mode": "chat",
+      "source": "",
+      "description": ""
     },
     "grok-2-1212": {
-      "company": "XAI",
       "provider": "XAI",
+      "company": "Xai",
       "model": "grok-2-1212",
-      "input": 2e-06,
-      "output": 1e-05,
-      "context": 131072,
-      "modality_in": "Text",
-      "modality_out": "Text",
-      "functions": "Yes",
-      "description": "Updated Grok-2 model with improved performance",
-      "cutoff": "2024-12"
+      "input_cost": 2e-06,
+      "output_cost": 1e-05,
+      "max_tokens": 131072,
+      "cache_cost": 0.0,
+      "max_input_tokens": 131072,
+      "max_output_tokens": 131072,
+      "supports": {
+        "function_calling": true,
+        "tool_choice": true,
+        "web_search": true
+      },
+      "mode": "chat",
+      "source": "",
+      "description": ""
     },
-    "grok-vision-beta": {
-      "company": "XAI",
+    "grok-2-latest": {
       "provider": "XAI",
-      "model": "grok-vision-beta",
-      "input": 2e-06,
-      "output": 1e-05,
-      "context": 131072,
-      "modality_in": "Text+Vision",
-      "modality_out": "Text",
-      "functions": "Yes",
-      "description": "Beta vision model for image understanding tasks",
-      "cutoff": "2024-12"
+      "company": "Xai",
+      "model": "grok-2-latest",
+      "input_cost": 2e-06,
+      "output_cost": 1e-05,
+      "max_tokens": 131072,
+      "cache_cost": 0.0,
+      "max_input_tokens": 131072,
+      "max_output_tokens": 131072,
+      "supports": {
+        "function_calling": true,
+        "tool_choice": true,
+        "web_search": true
+      },
+      "mode": "chat",
+      "source": "",
+      "description": ""
+    },
+    "grok-2-vision": {
+      "provider": "XAI",
+      "company": "Xai",
+      "model": "grok-2-vision",
+      "input_cost": 2e-06,
+      "output_cost": 1e-05,
+      "max_tokens": 32768,
+      "cache_cost": 0.0,
+      "max_input_tokens": 32768,
+      "max_output_tokens": 32768,
+      "supports": {
+        "function_calling": true,
+        "tool_choice": true,
+        "vision": true,
+        "web_search": true
+      },
+      "mode": "chat",
+      "source": "",
+      "description": ""
+    },
+    "grok-2-vision-1212": {
+      "provider": "XAI",
+      "company": "Xai",
+      "model": "grok-2-vision-1212",
+      "input_cost": 2e-06,
+      "output_cost": 1e-05,
+      "max_tokens": 32768,
+      "cache_cost": 0.0,
+      "max_input_tokens": 32768,
+      "max_output_tokens": 32768,
+      "supports": {
+        "function_calling": true,
+        "tool_choice": true,
+        "vision": true,
+        "web_search": true
+      },
+      "mode": "chat",
+      "source": "",
+      "description": ""
+    },
+    "grok-2-vision-latest": {
+      "provider": "XAI",
+      "company": "Xai",
+      "model": "grok-2-vision-latest",
+      "input_cost": 2e-06,
+      "output_cost": 1e-05,
+      "max_tokens": 32768,
+      "cache_cost": 0.0,
+      "max_input_tokens": 32768,
+      "max_output_tokens": 32768,
+      "supports": {
+        "function_calling": true,
+        "tool_choice": true,
+        "vision": true,
+        "web_search": true
+      },
+      "mode": "chat",
+      "source": "",
+      "description": ""
+    },
+    "grok-3": {
+      "provider": "XAI",
+      "company": "Xai",
+      "model": "grok-3",
+      "input_cost": 3e-06,
+      "output_cost": 1.5e-05,
+      "max_tokens": 131072,
+      "cache_cost": 0.0,
+      "max_input_tokens": 131072,
+      "max_output_tokens": 131072,
+      "supports": {
+        "function_calling": true,
+        "response_schema": false,
+        "tool_choice": true,
+        "web_search": true
+      },
+      "mode": "chat",
+      "source": "https://x.ai/api#pricing",
+      "description": ""
+    },
+    "grok-3-beta": {
+      "provider": "XAI",
+      "company": "Xai",
+      "model": "grok-3-beta",
+      "input_cost": 3e-06,
+      "output_cost": 1.5e-05,
+      "max_tokens": 131072,
+      "cache_cost": 0.0,
+      "max_input_tokens": 131072,
+      "max_output_tokens": 131072,
+      "supports": {
+        "function_calling": true,
+        "response_schema": false,
+        "tool_choice": true,
+        "web_search": true
+      },
+      "mode": "chat",
+      "source": "https://x.ai/api#pricing",
+      "description": ""
+    },
+    "grok-3-fast-beta": {
+      "provider": "XAI",
+      "company": "Xai",
+      "model": "grok-3-fast-beta",
+      "input_cost": 5e-06,
+      "output_cost": 2.5e-05,
+      "max_tokens": 131072,
+      "cache_cost": 0.0,
+      "max_input_tokens": 131072,
+      "max_output_tokens": 131072,
+      "supports": {
+        "function_calling": true,
+        "response_schema": false,
+        "tool_choice": true,
+        "web_search": true
+      },
+      "mode": "chat",
+      "source": "https://x.ai/api#pricing",
+      "description": ""
+    },
+    "grok-3-fast-latest": {
+      "provider": "XAI",
+      "company": "Xai",
+      "model": "grok-3-fast-latest",
+      "input_cost": 5e-06,
+      "output_cost": 2.5e-05,
+      "max_tokens": 131072,
+      "cache_cost": 0.0,
+      "max_input_tokens": 131072,
+      "max_output_tokens": 131072,
+      "supports": {
+        "function_calling": true,
+        "response_schema": false,
+        "tool_choice": true,
+        "web_search": true
+      },
+      "mode": "chat",
+      "source": "https://x.ai/api#pricing",
+      "description": ""
+    },
+    "grok-3-latest": {
+      "provider": "XAI",
+      "company": "Xai",
+      "model": "grok-3-latest",
+      "input_cost": 3e-06,
+      "output_cost": 1.5e-05,
+      "max_tokens": 131072,
+      "cache_cost": 0.0,
+      "max_input_tokens": 131072,
+      "max_output_tokens": 131072,
+      "supports": {
+        "function_calling": true,
+        "response_schema": false,
+        "tool_choice": true,
+        "web_search": true
+      },
+      "mode": "chat",
+      "source": "https://x.ai/api#pricing",
+      "description": ""
+    },
+    "grok-3-mini": {
+      "provider": "XAI",
+      "company": "Xai",
+      "model": "grok-3-mini",
+      "input_cost": 3e-07,
+      "output_cost": 5e-07,
+      "max_tokens": 131072,
+      "cache_cost": 0.0,
+      "max_input_tokens": 131072,
+      "max_output_tokens": 131072,
+      "supports": {
+        "function_calling": true,
+        "reasoning": true,
+        "response_schema": false,
+        "tool_choice": true,
+        "web_search": true
+      },
+      "mode": "chat",
+      "source": "https://x.ai/api#pricing",
+      "description": ""
+    },
+    "grok-3-mini-beta": {
+      "provider": "XAI",
+      "company": "Xai",
+      "model": "grok-3-mini-beta",
+      "input_cost": 3e-07,
+      "output_cost": 5e-07,
+      "max_tokens": 131072,
+      "cache_cost": 0.0,
+      "max_input_tokens": 131072,
+      "max_output_tokens": 131072,
+      "supports": {
+        "function_calling": true,
+        "reasoning": true,
+        "response_schema": false,
+        "tool_choice": true,
+        "web_search": true
+      },
+      "mode": "chat",
+      "source": "https://x.ai/api#pricing",
+      "description": ""
+    },
+    "grok-3-mini-fast": {
+      "provider": "XAI",
+      "company": "Xai",
+      "model": "grok-3-mini-fast",
+      "input_cost": 6e-07,
+      "output_cost": 4e-06,
+      "max_tokens": 131072,
+      "cache_cost": 0.0,
+      "max_input_tokens": 131072,
+      "max_output_tokens": 131072,
+      "supports": {
+        "function_calling": true,
+        "reasoning": true,
+        "response_schema": false,
+        "tool_choice": true,
+        "web_search": true
+      },
+      "mode": "chat",
+      "source": "https://x.ai/api#pricing",
+      "description": ""
+    },
+    "grok-3-mini-fast-beta": {
+      "provider": "XAI",
+      "company": "Xai",
+      "model": "grok-3-mini-fast-beta",
+      "input_cost": 6e-07,
+      "output_cost": 4e-06,
+      "max_tokens": 131072,
+      "cache_cost": 0.0,
+      "max_input_tokens": 131072,
+      "max_output_tokens": 131072,
+      "supports": {
+        "function_calling": true,
+        "reasoning": true,
+        "response_schema": false,
+        "tool_choice": true,
+        "web_search": true
+      },
+      "mode": "chat",
+      "source": "https://x.ai/api#pricing",
+      "description": ""
+    },
+    "grok-3-mini-fast-latest": {
+      "provider": "XAI",
+      "company": "Xai",
+      "model": "grok-3-mini-fast-latest",
+      "input_cost": 6e-07,
+      "output_cost": 4e-06,
+      "max_tokens": 131072,
+      "cache_cost": 0.0,
+      "max_input_tokens": 131072,
+      "max_output_tokens": 131072,
+      "supports": {
+        "function_calling": true,
+        "reasoning": true,
+        "response_schema": false,
+        "tool_choice": true,
+        "web_search": true
+      },
+      "mode": "chat",
+      "source": "https://x.ai/api#pricing",
+      "description": ""
+    },
+    "grok-3-mini-latest": {
+      "provider": "XAI",
+      "company": "Xai",
+      "model": "grok-3-mini-latest",
+      "input_cost": 3e-07,
+      "output_cost": 5e-07,
+      "max_tokens": 131072,
+      "cache_cost": 0.0,
+      "max_input_tokens": 131072,
+      "max_output_tokens": 131072,
+      "supports": {
+        "function_calling": true,
+        "reasoning": true,
+        "response_schema": false,
+        "tool_choice": true,
+        "web_search": true
+      },
+      "mode": "chat",
+      "source": "https://x.ai/api#pricing",
+      "description": ""
+    },
+    "grok-4": {
+      "provider": "XAI",
+      "company": "Xai",
+      "model": "grok-4",
+      "input_cost": 3e-06,
+      "output_cost": 1.5e-05,
+      "max_tokens": 256000,
+      "cache_cost": 0.0,
+      "max_input_tokens": 256000,
+      "max_output_tokens": 256000,
+      "supports": {
+        "function_calling": true,
+        "reasoning": true,
+        "tool_choice": true,
+        "web_search": true
+      },
+      "mode": "chat",
+      "source": "https://docs.x.ai/docs/models",
+      "description": ""
+    },
+    "grok-4-fast-reasoning": {
+      "provider": "XAI",
+      "company": "Xai",
+      "model": "grok-4-fast-reasoning",
+      "input_cost": 2e-07,
+      "output_cost": 5e-07,
+      "max_tokens": 2000000.0,
+      "cache_cost": 5e-08,
+      "max_input_tokens": 2000000.0,
+      "max_output_tokens": 2000000.0,
+      "supports": {
+        "function_calling": true,
+        "reasoning": true,
+        "tool_choice": true,
+        "web_search": true
+      },
+      "mode": "chat",
+      "source": "https://docs.x.ai/docs/models",
+      "description": ""
+    },
+    "grok-4-fast-non-reasoning": {
+      "provider": "XAI",
+      "company": "Xai",
+      "model": "grok-4-fast-non-reasoning",
+      "input_cost": 2e-07,
+      "output_cost": 5e-07,
+      "max_tokens": 2000000.0,
+      "cache_cost": 5e-08,
+      "max_input_tokens": 2000000.0,
+      "max_output_tokens": 2000000.0,
+      "supports": {
+        "function_calling": true,
+        "tool_choice": true,
+        "web_search": true
+      },
+      "mode": "chat",
+      "source": "https://docs.x.ai/docs/models",
+      "description": ""
+    },
+    "grok-4-0709": {
+      "provider": "XAI",
+      "company": "Xai",
+      "model": "grok-4-0709",
+      "input_cost": 3e-06,
+      "output_cost": 1.5e-05,
+      "max_tokens": 256000,
+      "cache_cost": 0.0,
+      "max_input_tokens": 256000,
+      "max_output_tokens": 256000,
+      "supports": {
+        "function_calling": true,
+        "reasoning": true,
+        "tool_choice": true,
+        "web_search": true
+      },
+      "mode": "chat",
+      "source": "https://docs.x.ai/docs/models",
+      "description": ""
+    },
+    "grok-4-latest": {
+      "provider": "XAI",
+      "company": "Xai",
+      "model": "grok-4-latest",
+      "input_cost": 3e-06,
+      "output_cost": 1.5e-05,
+      "max_tokens": 256000,
+      "cache_cost": 0.0,
+      "max_input_tokens": 256000,
+      "max_output_tokens": 256000,
+      "supports": {
+        "function_calling": true,
+        "reasoning": true,
+        "tool_choice": true,
+        "web_search": true
+      },
+      "mode": "chat",
+      "source": "https://docs.x.ai/docs/models",
+      "description": ""
     },
     "grok-beta": {
-      "company": "XAI",
       "provider": "XAI",
+      "company": "Xai",
       "model": "grok-beta",
-      "input": 2e-06,
-      "output": 1e-05,
-      "context": 131072,
-      "modality_in": "Text",
-      "modality_out": "Text",
-      "functions": "Yes",
-      "description": "Beta version of Grok model",
-      "cutoff": "2024-12"
+      "input_cost": 5e-06,
+      "output_cost": 1.5e-05,
+      "max_tokens": 131072,
+      "cache_cost": 0.0,
+      "max_input_tokens": 131072,
+      "max_output_tokens": 131072,
+      "supports": {
+        "function_calling": true,
+        "tool_choice": true,
+        "vision": true,
+        "web_search": true
+      },
+      "mode": "chat",
+      "source": "",
+      "description": ""
     },
-    "grok-2-image-1212": {
-      "company": "XAI",
+    "grok-code-fast": {
       "provider": "XAI",
-      "model": "grok-2-image-1212",
-      "input": 0.0,
-      "output": 0.07,
-      "context": 131072,
-      "modality_in": "Text",
-      "modality_out": "Images",
-      "functions": "No",
-      "description": "Latest image generation model capable of generating multiple images from text prompts",
-      "cutoff": "2024-12"
+      "company": "Xai",
+      "model": "grok-code-fast",
+      "input_cost": 2e-07,
+      "output_cost": 1.5e-06,
+      "max_tokens": 256000,
+      "cache_cost": 2e-08,
+      "max_input_tokens": 256000,
+      "max_output_tokens": 256000,
+      "supports": {
+        "function_calling": true,
+        "reasoning": true,
+        "tool_choice": true
+      },
+      "mode": "chat",
+      "source": "https://docs.x.ai/docs/models",
+      "description": ""
+    },
+    "grok-code-fast-1": {
+      "provider": "XAI",
+      "company": "Xai",
+      "model": "grok-code-fast-1",
+      "input_cost": 2e-07,
+      "output_cost": 1.5e-06,
+      "max_tokens": 256000,
+      "cache_cost": 2e-08,
+      "max_input_tokens": 256000,
+      "max_output_tokens": 256000,
+      "supports": {
+        "function_calling": true,
+        "reasoning": true,
+        "tool_choice": true
+      },
+      "mode": "chat",
+      "source": "https://docs.x.ai/docs/models",
+      "description": ""
+    },
+    "grok-code-fast-1-0825": {
+      "provider": "XAI",
+      "company": "Xai",
+      "model": "grok-code-fast-1-0825",
+      "input_cost": 2e-07,
+      "output_cost": 1.5e-06,
+      "max_tokens": 256000,
+      "cache_cost": 2e-08,
+      "max_input_tokens": 256000,
+      "max_output_tokens": 256000,
+      "supports": {
+        "function_calling": true,
+        "reasoning": true,
+        "tool_choice": true
+      },
+      "mode": "chat",
+      "source": "https://docs.x.ai/docs/models",
+      "description": ""
+    },
+    "grok-vision-beta": {
+      "provider": "XAI",
+      "company": "Xai",
+      "model": "grok-vision-beta",
+      "input_cost": 5e-06,
+      "output_cost": 1.5e-05,
+      "max_tokens": 8192,
+      "cache_cost": 0.0,
+      "max_input_tokens": 8192,
+      "max_output_tokens": 8192,
+      "supports": {
+        "function_calling": true,
+        "tool_choice": true,
+        "vision": true,
+        "web_search": true
+      },
+      "mode": "chat",
+      "source": "",
+      "description": ""
     }
   }
 }

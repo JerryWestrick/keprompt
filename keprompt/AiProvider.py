@@ -63,11 +63,6 @@ class AiProvider(abc.ABC):
         """Calculate costs based on token usage. Returns (cost_in, cost_out)."""
         pass
 
-    @classmethod
-    @abc.abstractmethod
-    def create_models_json(cls, provider_name: str) -> None:
-        """Create/update the models JSON file for this provider"""
-        pass
 
     @classmethod
     def register_models(cls, provider_name: str) -> None:

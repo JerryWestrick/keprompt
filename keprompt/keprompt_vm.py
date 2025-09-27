@@ -7,8 +7,8 @@ import time
 import uuid
 from typing import cast, List
 
-import keyring
 from rich.console import Console
+from .config import get_config
 from rich.logging import RichHandler
 from rich.table import Table
 
@@ -50,7 +50,8 @@ def print_prompt_code(prompt_files: list[str]) -> None:
             console.print(f"[bold red]Error parsing file {prompt_file} : {str(e)}[/bold red]")
             console.print_exception()
             sys.exit(1)
-        title = os.path.basename(prompt_file)
+        # Strip .prompt extension from display name
+        title = os.path.splitext(os.path.basename(prompt_file))[0]
         if vm.statements:
             for stmt in vm.statements:
                 table.add_row(title, f"{stmt.msg_no:03}", stmt.keyword, stmt.value)
@@ -88,7 +89,7 @@ class VM:
         if filename:
             prompt_name = os.path.splitext(os.path.basename(filename))[0]
         else:
-            prompt_name = "conversation"
+            prompt_name = "session"
         
         # Initialize the new standard logger
         self.logger = StandardLogger(prompt_name=prompt_name, mode=log_mode, log_identifier=log_identifier)
@@ -278,7 +279,7 @@ class VM:
         """
 
         if not self.filename:
-            # No prompt file to parse (conversation mode)
+            # No prompt file to parse (session mode)
             return
 
         lines: list[str]
@@ -393,14 +394,17 @@ class VM:
     def execute(self) -> None:
         """Execute the statements in the prompt file using the new standard logging system."""
         
+        # Output session ID at start
+        console.print(f"[dim]Session: {self.prompt_uuid}[/dim]")
+        
         # Set initial prompt ID for logging context
         initial_prompt_id = f"{self.prompt_uuid}-init"
         self.logger.set_prompt_id(initial_prompt_id)
         
         # Log session start
-        if self.log_mode in [LogMode.LOG, LogMode.DEBUG]:
-            header_name = self.filename or "conversation"
-            self.logger.log_info(f"Starting execution of {header_name}")
+        # if self.log_mode in [LogMode.LOG, LogMode.DEBUG]:
+        #     header_name = self.filename or "session"
+        #     self.logger.log_info(f"Starting execution of {header_name}")
 
         # Execute all statements
         for stmt_no, stmt in enumerate(self.statements):
@@ -430,6 +434,19 @@ class VM:
             if stmt.keyword == '.exit':
                 break
 
+        # Save session to database (always enabled for normal execution)
+        try:
+            from .session_manager import get_session_manager
+            session_manager = get_session_manager()
+            session_name = session_manager.save_session(self)
+            # Optionally show session name in debug mode
+            if self.vm_debug:
+                print(f"VM-DEBUG: session saved as: {session_name}", file=sys.stderr)
+        except Exception as e:
+            # Don't fail execution if session saving fails
+            if self.vm_debug:
+                print(f"Warning: Failed to save session: {e}", file=sys.stderr)
+
         # Log session end and cleanup
         if self.log_mode in [LogMode.LOG, LogMode.DEBUG]:
             self.logger.log_info(f"Completed execution")
@@ -452,20 +469,20 @@ class VM:
 
         self.print(f"{hdr}[/]:{print_line}[bold white]{VERTICAL}[/]")
 
-    def log_conversation(self, call_id: str = None):
-        """Log conversation using the new logger system."""
+    def log_session(self, call_id: str = None):
+        """Log session using the new logger system."""
         messages = self.prompt.to_json()
         
-        # Add call_id to the conversation metadata if provided
+        # Add call_id to the session metadata if provided
         if call_id:
-            conversation_data = {
+            session_data = {
                 "call_id": call_id,
                 "messages": messages
             }
         else:
-            conversation_data = messages
+            session_data = messages
             
-        self.logger.log_conversation(conversation_data)
+        self.logger.log_session(session_data)
 
     def print_json(self,    label: str, data: dict) -> None:
         """Print a JSON object to the console"""
@@ -482,125 +499,91 @@ class VM:
                 pdict[k] = v
         self.print(json.dumps(pdict, indent=2, sort_keys=True))
 
-    def save_conversation(self, conversation_filename: str):
-        """Save VM state using universal messages format"""
-        from pathlib import Path
-        
-        conversation_path = Path(f"conversations/{conversation_filename}.conversation")
-        conversation_path.parent.mkdir(exist_ok=True)
-        
-        # Create a JSON-serializable copy of variables with improved object handling
-        serializable_vars = {}
-        for key, value in self.vdict.items():
-            if hasattr(value, '__class__') and value.__class__.__name__ == 'AiModel':
-                # Use the new __str__ method for AiModel objects
-                serializable_vars[key] = str(value)
-            elif hasattr(value, '__class__') and 'Path' in value.__class__.__name__:
-                # Handle PosixPath, WindowsPath, etc.
-                serializable_vars[key] = str(value)
-            elif isinstance(value, (str, int, float, bool, type(None))):
-                # Keep simple types as-is
-                serializable_vars[key] = value
-            else:
-                # Test if the value is JSON serializable
-                try:
-                    json.dumps(value)
-                    serializable_vars[key] = value
-                except (TypeError, ValueError):
-                    # Convert other objects to string representation
-                    serializable_vars[key] = str(value)
-        
-        # Save VM state with universal messages format
-        conversation_data = {
-            "vm_state": {
-                "ip": self.ip,
-                "model_name": self.model_name,
-                "company": self.model.company if self.model else "",
-                "interaction_no": self.interaction_no,
-                "created": time.strftime("%Y-%m-%d %H:%M:%S")
-            },
-            "messages": self.prompt.to_json(),  # Universal format messages
-            "variables": serializable_vars
-        }
-        
-        with open(conversation_path, 'w') as f:
-            json.dump(conversation_data, f, indent=2)
-
-    def load_conversation(self, conversation_filename: str):
-        """Load VM state from universal messages format"""
-        from pathlib import Path
-        
-        conversation_path = Path(f"conversations/{conversation_filename}.conversation")
-        
-        if not conversation_path.exists():
-            return False  # New conversation
-        
-        with open(conversation_path, 'r') as f:
-            conversation_data = json.load(f)
-        
-        # Restore VM state
-        vm_state = conversation_data.get("vm_state", {})
-        self.ip = vm_state.get("ip", 0)
-        self.model_name = vm_state.get("model_name", "")
-        self.interaction_no = vm_state.get("interaction_no", 0)
-
-        # Restore LLM configuration if we have model info
-        if self.model_name:
-            if self.model_name in AiRegistry.models:
-                self.model = AiRegistry.get_model(self.model_name)
-                # Set up basic LLM configuration
-                self.llm = {"model": self.model_name}
-                self.prompt.company = self.model.company
-                self.prompt.model = self.model_name
-                
-                # Get API key
-                try:
-                    api_key = keyring.get_password('keprompt', username=self.model.provider)
-                    if api_key:
-                        self.llm['API_KEY'] = api_key
-                        self.api_key = api_key
-                        self.prompt.api_key = api_key
-                        self.prompt.provider = self.model.provider
-                except:
-                    pass  # API key will be requested when needed
-        
-        # Restore messages (universal format)
-        messages_data = conversation_data.get("messages", [])
-        self.prompt.messages = []
-        
-        for msg_data in messages_data:
-            role = msg_data.get("role", "")
-            content_data = msg_data.get("content", [])
+    def load_session(self, session_id: str):
+        """Load VM state from database"""
+        try:
+            from .session_manager import get_session_manager
+            session_manager = get_session_manager()
+            data = session_manager.get_session(session_id)
             
-            # Reconstruct message parts
-            content_parts = []
-            for part_data in content_data:
-                part_type = part_data.get("type", "")
-                
-                if part_type == "text":
-                    content_parts.append(AiTextPart(vm=self, text=part_data.get("text", "")))
-                elif part_type == "tool":
-                    content_parts.append(AiCall(
-                        vm=self,
-                        name=part_data.get("name", ""),
-                        arguments=part_data.get("arguments", {}),
-                        id=part_data.get("id", "")
-                    ))
-                elif part_type == "tool_result":
-                    content_parts.append(AiResult(
-                        vm=self,
-                        name=part_data.get("name", ""),
-                        id=part_data.get("tool_use_id", ""),
-                        result=part_data.get("content", "")
-                    ))
+            if not data:
+                return False  # session not found
             
-            # Add message to prompt
-            self.prompt.messages.append(AiMessage(vm=self, role=role, content=content_parts))
-        
-        # Restore variables
-        self.vdict.update(conversation_data.get("variables", {}))
-        
-        return True  # Successfully loaded conversation
+            session = data['session']
+            messages_data = data['messages']
+            variables_data = data['variables']
+            
+            # Restore VM state from database
+            vm_state = json.loads(session.vm_state_json) if session.vm_state_json else {}
+            self.ip = vm_state.get("ip", 0)
+            self.model_name = vm_state.get("model_name", "")
+            self.interaction_no = vm_state.get("interaction_no", 0)
+
+            # Restore LLM configuration if we have model info
+            if self.model_name:
+                if self.model_name in AiRegistry.models:
+                    self.model = AiRegistry.get_model(self.model_name)
+                    # Set up basic LLM configuration
+                    self.llm = {"model": self.model_name}
+                    self.prompt.company = self.model.company
+                    self.prompt.model = self.model_name
+                    
+                    # Get API key
+                    try:
+                        config = get_config()
+                        api_key = config.get_api_key(self.model.provider)
+                        if api_key:
+                            self.llm['API_KEY'] = api_key
+                            self.api_key = api_key
+                            self.prompt.api_key = api_key
+                            self.prompt.provider = self.model.provider
+                    except:
+                        pass  # API key will be requested when needed
+            
+            # Restore messages (universal format)
+            self.prompt.messages = []
+            
+            for msg_data in messages_data:
+                role = msg_data.get("role", "")
+                content_data = msg_data.get("content", [])
+                
+                # Reconstruct message parts
+                content_parts = []
+                for part_data in content_data:
+                    part_type = part_data.get("type", "")
+                    
+                    if part_type == "text":
+                        content_parts.append(AiTextPart(vm=self, text=part_data.get("text", "")))
+                    elif part_type == "tool":
+                        content_parts.append(AiCall(
+                            vm=self,
+                            name=part_data.get("name", ""),
+                            arguments=part_data.get("arguments", {}),
+                            id=part_data.get("id", "")
+                        ))
+                    elif part_type == "tool_result":
+                        content_parts.append(AiResult(
+                            vm=self,
+                            name=part_data.get("name", ""),
+                            id=part_data.get("tool_use_id", ""),
+                            result=part_data.get("content", "")
+                        ))
+                
+                # Add message to prompt
+                self.prompt.messages.append(AiMessage(vm=self, role=role, content=content_parts))
+            
+            # Restore variables
+            self.vdict.update(variables_data)
+            
+            # Restore original filename from session metadata
+            if session.prompt_filename:
+                self.filename = session.prompt_filename
+            
+            return True  # Successfully loaded session
+            
+        except Exception as e:
+            print(f"Error loading session {session_id}: {e}", file=sys.stderr)
+            return False
 
     def execute_from(self, start_index: int = 0):
         """Execute statements starting from specified index"""
@@ -610,7 +593,7 @@ class VM:
         
         # Log session start
         if self.log_mode in [LogMode.LOG, LogMode.DEBUG]:
-            header_name = self.filename or "conversation"
+            header_name = self.filename or "session"
             self.logger.log_info(f"Resuming execution of {header_name} from statement {start_index}")
 
         # Execute statements from start_index
@@ -888,7 +871,7 @@ class StmtExec(StmtPrompt):
 
         Returns:
             None: The execution modifies the VM's state directly by adding the response to 
-                  the prompt context and logging the conversation data.
+                  the prompt context and logging the session data.
         """
         # Log the exec statement
         super().execute(vm)
@@ -922,8 +905,8 @@ class StmtExec(StmtPrompt):
         if hasattr(vm.prompt, 'last_tokens_in') and hasattr(vm.prompt, 'last_tokens_out'):
             tokens_in = vm.prompt.last_tokens_in
             tokens_out = vm.prompt.last_tokens_out
-            cost_in = tokens_in * vm.model.input if vm.model else 0
-            cost_out = tokens_out * vm.model.output if vm.model else 0
+            cost_in = tokens_in * vm.model.input_cost if vm.model else 0
+            cost_out = tokens_out * vm.model.output_cost if vm.model else 0
             
             # Update VM totals
             vm.toks_in += tokens_in
@@ -950,53 +933,40 @@ class StmtExec(StmtPrompt):
         # Log the response using structured logging
         vm.logger.log_llm_call(f"Response from {vm.model.provider} API completed", call_id)
 
-        # Track cost data to SQLite database (always-on cost tracking)
+        # Track cost data to new database system (always-on cost tracking)
         # Get token information from the first hasattr block above
         if hasattr(vm.prompt, 'last_tokens_in') and hasattr(vm.prompt, 'last_tokens_out'):
-            # Get prompt name (strip path and extension)
-            prompt_name = "conversation"
-            if vm.filename:
-                prompt_name = os.path.splitext(os.path.basename(vm.filename))[0]
-            
-            # Get execution mode
-            execution_mode = "production"
-            if vm.log_mode == LogMode.DEBUG:
-                execution_mode = "debug"
-            elif vm.log_mode == LogMode.LOG:
-                execution_mode = "log"
-            
             # Get model configuration parameters
             temperature = vm.llm.get('temperature') if vm.llm else None
             max_tokens = vm.llm.get('max_tokens') if vm.llm else None
+            context_length = vm.llm.get('context_length') if vm.llm else None
             
-            # Track the execution
+            # Track the execution using session manager
             try:
-                track_prompt_execution(
-                    prompt_name=prompt_name,
-                    session_id=vm.prompt_uuid,
+                from .session_manager import get_session_manager
+                session_manager = get_session_manager()
+                session_manager.save_cost_tracking(
+                    vm=vm,
+                    msg_no=self.msg_no,
                     call_id=call_id,
-                    model=vm.model_name,
-                    provider=vm.provider,
                     tokens_in=tokens_in,
                     tokens_out=tokens_out,
                     cost_in=cost_in,
                     cost_out=cost_out,
                     elapsed_time=elapsed_time,
-                    execution_mode=execution_mode,
-                    parameters=vm.vdict.copy(),  # Copy current parameters
+                    model=vm.model_name,
+                    provider=vm.provider,
                     success=True,  # If we got here, execution succeeded
                     temperature=temperature,
                     max_tokens=max_tokens,
-                    prompt_semantic_name=vm.prompt_name,
-                    prompt_version=vm.prompt_version,
-                    expected_params=vm.expected_params
+                    context_length=context_length
                 )
             except Exception as e:
                 # Don't fail execution if cost tracking fails
                 print(f"Warning: Cost tracking failed: {e}", file=sys.stderr)
 
-        # Note: Conversation logging is now handled incrementally through log_message_exchange
-        # No need to log the entire conversation again here
+        # Note: session logging is now handled incrementally through log_message_exchange
+        # No need to log the entire session again here
 
 
 class StmtExit(StmtPrompt):
@@ -1057,7 +1027,7 @@ class StmtImage(StmtPrompt):
 
     This class represents a `.image` keyword statement that adds an image
     to the AI prompt context. It incorporates a provided image file into the
-    conversation as an input element.
+    session as an input element.
 
     Attributes:
         msg_no (int): The message number in the execution sequence.
@@ -1124,17 +1094,12 @@ class StmtLlm(StmtPrompt):
             sys.exit(9)
 
         # Now we that we have loaded the LLM,  we will load the API_KEY
-        try:
-            api_key = keyring.get_password('keprompt', username=vm.model.provider)
-        except keyring.errors.PasswordDeleteError:
-            vm.logger.log_error(f"Error accessing keyring ('keprompt', username={vm.model.provider})")
-            api_key = None
+        config = get_config()
+        api_key = config.get_api_key(vm.model.provider)
 
-        if api_key is None:
-            api_key = console.input(f"Please enter your {vm.model.provider} API key: ")
-            keyring.set_password("keprompt", username=vm.model.provider, password=api_key)
         if not api_key:
-            vm.logger.log_error("API key cannot be empty.")
+            error_msg = config.get_missing_key_error(vm.model.provider)
+            vm.logger.log_error(error_msg)
             sys.exit(1)
 
         vm.llm['API_KEY'] = api_key
@@ -1149,7 +1114,7 @@ class StmtSystem(StmtPrompt):
     Handles the execution of a system message in the Virtual Machine (VM).
 
     This class represents a `.system` keyword statement in the prompt file and
-    allows for adding a system role message into the AI conversation context.
+    allows for adding a system role message into the AI session context.
     A system role is used to provide instructions or contextual rules for the AI.
 
     Attributes:
@@ -1176,7 +1141,7 @@ class StmtText(StmtPrompt):
 
     This class represents a `.text` keyword statement in the prompt file. It is 
     responsible for handling user-provided text and appending it as part of the 
-    conversation context.
+    session context.
 
     Attributes:
         msg_no (int): The message number in the execution sequence.
@@ -1294,6 +1259,12 @@ class StmtPromptMeta(StmtPrompt):
         vm.prompt_version = prompt_data["version"]
         vm.expected_params = prompt_data.get("params", {})
         
+        # Set variables from params for substitution (only if not already set by command line)
+        if "params" in prompt_data:
+            for key, value in prompt_data["params"].items():
+                if key not in vm.vdict:  # Only set if not already defined (e.g., by --param)
+                    vm.set_variable(key, value)
+        
         # Log the prompt metadata
         vm.logger.log_info(f"Prompt metadata: {vm.prompt_name} v{vm.prompt_version}")
 
@@ -1382,20 +1353,20 @@ def print_statement_types():
     # Custom descriptions for better documentation
     descriptions = {
         '.#': 'Comment statement - ignored during execution',
-        '.assistant': 'Add an assistant message to the conversation context',
+        '.assistant': 'Add an assistant message to the session context',
         '.clear': 'Delete specified files or file patterns from the system',
         '.cmd': 'Execute a defined function with specified arguments',
         '.debug': 'Display VM state information for debugging purposes',
         '.exec': 'Execute the current prompt context with the configured LLM',
         '.exit': 'Terminate prompt execution',
-        '.image': 'Add an image file to the conversation context',
+        '.image': 'Add an image file to the session context',
         '.include': 'Include content from another file into the current context',
         '.llm': 'Configure the Language Learning Model and its parameters',
         '.print': 'Output text to STDOUT with variable substitution (production output)',
         '.set': 'Set variables including Prefix/Postfix for configurable substitution delimiters',
-        '.system': 'Add a system message to the conversation context',
+        '.system': 'Add a system message to the session context',
         '.text': 'Add text content to the current message context',
-        '.user': 'Add a user message to the conversation context',
+        '.user': 'Add a user message to the session context',
     }
 
     # Define which statements come from user vs LLM

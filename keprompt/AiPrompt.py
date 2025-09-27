@@ -3,8 +3,8 @@ import json
 import mimetypes
 from abc import ABC, abstractmethod
 from typing import List, Optional
-import keyring
 from rich.console import Console
+from .config import get_config
 
 from .AiRegistry import AiRegistry
 from .keprompt_util import HORIZONTAL_LINE, TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT, VERTICAL
@@ -367,17 +367,12 @@ class AiPrompt:
 
 
 def get_api_key(company: str) -> str:
-    try:
-        api_key = keyring.get_password("keprompt", username=company)
-    except keyring.errors.PasswordDeleteError:
-        console.print(f"[bold red]Error accessing keyring for company: {company}[/bold red]")
-        raise APIKeyError("Unable to access the keyring.")
+    config = get_config()
+    api_key = config.get_api_key(company)
 
     if not api_key:
-        api_key = console.input(f"Please enter your {company} API key: ")
-        if not api_key:
-            console.print("[bold red]API key cannot be empty.[/bold red]")
-            raise APIKeyError("API key cannot be empty.")
-        keyring.set_password("keprompt", username=company, password=api_key)
+        error_msg = config.get_missing_key_error(company)
+        console.print(f"[bold red]{error_msg}[/bold red]")
+        raise APIKeyError(error_msg)
 
     return api_key

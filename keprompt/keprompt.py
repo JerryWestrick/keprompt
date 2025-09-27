@@ -5,11 +5,12 @@ import os
 import re
 import sys
 
-import keyring
 from rich.console import Console
+from .config import get_config
 from rich.logging import RichHandler
 from rich.prompt import Prompt
 from rich.table import Table
+from rich.text import Text
 
 from .AiRegistry import AiRegistry
 from .keprompt_functions import DefinedToolsArray
@@ -138,13 +139,13 @@ def print_models(model_pattern: str = "", company_pattern: str = "", provider_pa
             display_provider,
             display_company,
             model_name,
-            str(model.context),
-            f"{model.input*1_000_000:06.4f}",
-            f"{model.output*1_000_000:06.4f}",
-            model.modality_in,
-            model.modality_out,
-            model.functions,
-            model.cutoff,
+            str(model.max_tokens),
+            f"{model.input_cost*1_000_000:06.4f}",
+            f"{model.output_cost*1_000_000:06.4f}",
+            "Text+Vision" if model.supports.get("vision", False) else "Text",
+            "Text",
+            "Yes" if model.supports.get("function_calling", False) else "No",
+            "2024-04",
             model.description
         )
         
@@ -162,7 +163,7 @@ def print_prompt_names(prompt_files: list[str]) -> None:
     for prompt_file in prompt_files:
         try:
             with open(prompt_file, 'r') as file:
-                first_line = file.readline().strip()[2:]  # Read first line
+                first_line = file.readline().strip()  # Read entire first line without stripping
         except Exception as e:
             first_line = f"Error reading file: {str(e)}"
 
@@ -191,7 +192,8 @@ def get_new_api_key() -> None:
     company = create_dropdown(companies, "AI Company?")
     # api_key = console.input(f"[bold green]Please enter your [/][bold cyan]{company} API key: [/]")
     api_key = getpass.getpass(f"Please enter your {company} API key: ")
-    keyring.set_password("keprompt", username=company, password=api_key)
+    config = get_config()
+    config.set_api_key(company, api_key)
 
 def print_prompt_lines(prompts_files: list[str]) -> None:
     table = Table(title="Prompt Code")
@@ -216,33 +218,238 @@ def print_prompt_lines(prompts_files: list[str]) -> None:
         table.add_row('───────────────', '───', '──────────────────────────────────────────────────────────────────────')
     console.print(table)
 
+class RichHelpFormatter(argparse.HelpFormatter):
+    """Custom help formatter that uses Rich for colorized output"""
+    
+    def __init__(self, prog):
+        super().__init__(prog, max_help_position=40, width=100)
+        self._console = Console()
+    
+    def format_help(self):
+        # Get the standard help text
+        help_text = super().format_help()
+        
+        # Use Rich to display it with colors
+        self._console.print()
+        self._console.print(f"[bold cyan]keprompt[/] [dim]v{__version__}[/] - [bold green]Prompt Engineering Tool[/]")
+        self._console.print()
+        
+        # Add Quick Start section at the top
+        self._console.print(f"[bold yellow]⚡ Quick Start for the Impatient:[/]")
+        self._console.print(f"  [dim]1. Find a prompt:       [/][blue]keprompt -p simple[/]")
+        self._console.print(f"  [green]   Shows prompts matching prompts/*simple*.prompt with their allowed parameters and default values[/]")
+        self._console.print(f"  [dim]2. Run the prompt:      [/][blue]keprompt -e simple --param llm openai/gpt-4o-mini[/]")
+        self._console.print(f"  [green]   → Note the Session ID in output: \"Session: 06e760ed\"[/]")
+        self._console.print(f"  [dim]3. Continue chatting:   [/][blue]keprompt --session 06e760ed --answer \"Who is William Tell?\"[/]")
+        self._console.print(f"  [green]   Uses the session ID and --answer to continue the conversation[/]")
+        self._console.print(f"  [dim]4. View/debug session:  [/][blue]keprompt --view-session 06e760ed[/]")
+        self._console.print(f"  [green]   To view/debug the interaction with the LLM[/]")
+        self._console.print()
+        
+        # Split help into sections
+        lines = help_text.split('\n')
+        current_section = None
+        
+        for line in lines:
+            if line.startswith('usage:'):
+                self._console.print(f"[bold yellow]Usage:[/]")
+                usage_line = line.replace('usage: __main__.py', 'keprompt')
+                self._console.print(f"  [dim]{usage_line[7:]}[/]")  # Remove 'usage: '
+                self._console.print()
+            elif line.strip() == 'Prompt Engineering Tool.':
+                continue  # Skip this as we already showed it
+            elif line.strip() == 'options:':
+                self._console.print(f"[bold yellow]Options:[/]")
+                self._console.print(f"  [cyan]-h, --help[/]            Show this help message and exit")
+                self._console.print()
+            elif line.endswith(':') and not line.startswith('  '):
+                # This is a section header - add blank line before
+                section_name = line.rstrip(':')
+                self._console.print()  # Blank line before each group
+                
+                if section_name == 'Start a New Session':
+                    self._console.print(f"[bold green]🚀 {section_name}:[/]")
+                elif section_name == 'Continue an Existing Session':
+                    self._console.print(f"[bold green]🔄 {section_name}:[/]")
+                elif section_name == 'Session History & Review':
+                    self._console.print(f"[bold green]📋 {section_name}:[/]")
+                elif section_name == 'Prompt Management':
+                    self._console.print(f"[bold green]📝 {section_name}:[/]")
+                elif section_name == 'Available Functions':
+                    self._console.print(f"[bold green]⚙️  {section_name}:[/]")
+                elif section_name == 'LLM API Providers':
+                    self._console.print(f"[bold green]🤖 {section_name}:[/]")
+                elif section_name == 'Database Operations':
+                    self._console.print(f"[bold green]🗄️  {section_name}:[/]")
+                elif section_name == 'System Management & Updates':
+                    self._console.print(f"[bold green]🔧 {section_name}:[/]")
+                elif section_name == 'Development & Debugging':
+                    self._console.print(f"[bold green]🐛 {section_name}:[/]")
+                elif section_name == 'General':
+                    self._console.print(f"[bold green]ℹ️  {section_name}:[/]")
+                
+                current_section = section_name
+            elif line.startswith('  -') or line.startswith('  --'):
+                # This is an argument line
+                parts = line.split(None, 1)
+                if len(parts) >= 2:
+                    arg_part = parts[0].strip()
+                    desc_part = parts[1] if len(parts) > 1 else ""
+                    self._console.print(f"  [cyan]{arg_part}[/] {desc_part}")
+                else:
+                    self._console.print(f"  [cyan]{line.strip()}[/]")
+                
+            elif line.startswith('                        '):
+                # This is a continuation of the description
+                self._console.print(f"                        [dim]{line.strip()}[/]")
+            elif line.strip():
+                # Any other non-empty line
+                self._console.print(line)
+        
+        self._console.print()
+        self._console.print("[dim]For more information, visit: https://github.com/JerryWestrick/keprompt[/]")
+        
+        # Return empty string since we've already printed everything
+        return ""
+
+def print_rich_help():
+    """Print help using Rich formatting"""
+    parser = argparse.ArgumentParser(
+        description="Prompt Engineering Tool.",
+        formatter_class=RichHelpFormatter,
+        add_help=False  # We'll handle help ourselves
+    )
+    
+    # Add all the same arguments as get_cmd_args() but don't parse
+    # 1. Start a New Session
+    new_session_group = parser.add_argument_group('Start a New Session')
+    new_session_group.add_argument('-e', '--execute', nargs='?', const='*', help='Execute one or more Prompts')
+    new_session_group.add_argument('--param', nargs=2, action='append',metavar=('key', 'value'),help='Add key/value pairs (for use with --execute)')
+    
+    # 2. Continue an Existing Session
+    continue_session_group = parser.add_argument_group('Continue an Existing Session')
+    continue_session_group.add_argument('--session', metavar='SESSION_ID', help='Load/save session state by session ID')
+    continue_session_group.add_argument('--answer', metavar='TEXT', help='New user response for session (--session SESSION_ID)')
+    
+    # 3. Session History & Review
+    session_group = parser.add_argument_group('Session History & Review')
+    session_group.add_argument('--list-sessions', action='store_true', help='List all available sessions')
+    session_group.add_argument('--recent-sessions', type=int, nargs='?', const=20, help='List recent sessions')
+    session_group.add_argument('--view-session', nargs='?', const='', metavar='SESSION_ID', help='View session history and details (pre-select SESSION_ID)')
+    
+    # 4. Prompt Management
+    prompt_group = parser.add_argument_group('Prompt Management')
+    prompt_group.add_argument('-p', '--prompts', nargs='?', const='*', help='List Prompts')
+    prompt_group.add_argument('-c', '--code', nargs='?', const='*', help='List code in Prompts')
+    prompt_group.add_argument('-l', '--list', nargs='?', const='*', help='List Prompt files, or specify: companies, providers')
+    prompt_group.add_argument('-s', '--statements', action='store_true', help='List supported prompt statement types and exit')
+    
+    # 5. Available Functions
+    functions_group = parser.add_argument_group('Available Functions')
+    functions_group.add_argument('-f', '--functions', action='store_true', help='List functions available to AI and exit')
+    
+    # 6. LLM API Providers
+    providers_group = parser.add_argument_group('LLM API Providers')
+    providers_group.add_argument('-m', '--models', nargs='?', const='', help='List models (optionally filter by model name pattern)')
+    providers_group.add_argument('--company', help='Filter models by company name pattern')
+    providers_group.add_argument('--provider', help='Filter models by provider name pattern')
+    providers_group.add_argument('-k', '--key', action='store_true', help='Ask for (new) Company Key')
+    
+    # 7. Database Operations
+    database_group = parser.add_argument_group('Database Operations')
+    database_group.add_argument('--init-db', action='store_true', help='Initialize database and create tables')
+    database_group.add_argument('--delete-db', action='store_true', help='Delete entire database (Tom\'s nuclear option)')
+    database_group.add_argument('--truncate-db', action='store_true', help='Clean up old sessions (Dick\'s managed cleanup)')
+    database_group.add_argument('--max-days', type=int, help='Maximum age in days for --truncate-db')
+    database_group.add_argument('--max-count', type=int, help='Maximum number of sessions for --truncate-db')
+    database_group.add_argument('--max-gb', type=float, help='Maximum database size in GB for --truncate-db')
+    database_group.add_argument('--db-stats', action='store_true', help='Show database statistics')
+    
+    # 8. System Management & Updates
+    system_group = parser.add_argument_group('System Management & Updates')
+    system_group.add_argument('--init', action='store_true', help='Initialize prompts and functions directories')
+    system_group.add_argument('--update-models', metavar='PROVIDER', help='Update models for a provider or "All" for all providers')
+    system_group.add_argument('--check-builtins', action='store_true', help='Check for built-in function updates')
+    system_group.add_argument('--update-builtins', action='store_true', help='Update built-in functions')
+    system_group.add_argument('-r', '--remove', action='store_true', help='remove all .~nn~. files from sub directories')
+    
+    # 9. Development & Debugging
+    debug_group = parser.add_argument_group('Development & Debugging')
+    debug_group.add_argument('--debug', action='store_true', help='Enable structured logging + rich output to STDERR')
+    debug_group.add_argument('--vm-debug', action='store_true', help='Enable detailed VM statement execution debugging')
+    debug_group.add_argument('--debug-session', action='store_true', help='Save execution to timestamped debug session for analysis')
+    
+    # 10. General
+    general_group = parser.add_argument_group('General')
+    general_group.add_argument('-v', '--version', action='store_true', help='Show version information and exit')
+    
+    # Print the help
+    parser.print_help()
+
 def get_cmd_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Prompt Engineering Tool.")
-    parser.add_argument('-v', '--version', action='store_true', help='Show version information and exit')
-    parser.add_argument('--param', nargs=2, action='append',metavar=('key', 'value'),help='Add key/value pairs')
-    parser.add_argument('-m', '--models', nargs='?', const='', help='List models (optionally filter by model name pattern)')
-    parser.add_argument('--company', help='Filter models by company name pattern')
-    parser.add_argument('--provider', help='Filter models by provider name pattern')
-    parser.add_argument('-s', '--statements', action='store_true', help='List supported prompt statement types and exit')
-    parser.add_argument('-f', '--functions', action='store_true', help='List functions available to AI and exit')
-    parser.add_argument('-p', '--prompts', nargs='?', const='*', help='List Prompts')
-    parser.add_argument('-c', '--code', nargs='?', const='*', help='List code in Prompts')
-    parser.add_argument('-l', '--list', nargs='?', const='*', help='List Prompt files, or specify: company/companies, provider/providers')
-    parser.add_argument('-e', '--execute', nargs='?', const='*', help='Execute one or more Prompts')
-    parser.add_argument('-k', '--key', action='store_true', help='Ask for (new) Company Key')
-    parser.add_argument('--log', metavar='IDENTIFIER', nargs='?', const='', help='Enable structured logging to prompts/logs-<identifier>/ directory (if no identifier provided, uses prompt name)')
-    parser.add_argument('--debug', action='store_true', help='Enable structured logging + rich output to STDERR')
-    parser.add_argument('--vm-debug', action='store_true', help='Enable detailed VM statement execution debugging')
-    parser.add_argument('--debug-conversation', action='store_true', help='Save execution to timestamped debug conversation for analysis')
-    parser.add_argument('-r', '--remove', action='store_true', help='remove all .~nn~. files from sub directories')
-    parser.add_argument('--init', action='store_true', help='Initialize prompts and functions directories')
-    parser.add_argument('--check-builtins', action='store_true', help='Check for built-in function updates')
-    parser.add_argument('--update-builtins', action='store_true', help='Update built-in functions')
-    parser.add_argument('--update-models', metavar='PROVIDER', help='Update model definitions for specified provider (e.g., OpenRouter) or "All" for all providers')
-    parser.add_argument('--conversation', metavar='NAME', help='Load/save conversation state')
-    parser.add_argument('--answer', metavar='TEXT', help='Continue conversation with user response')
-    parser.add_argument('--view-conversation', metavar='NAME', help='View conversation history and details')
-    parser.add_argument('--list-conversations', action='store_true', help='List all available conversations')
+    
+    # 1. Start a New Session
+    new_session_group = parser.add_argument_group('Start a New Session')
+    new_session_group.add_argument('-e', '--execute', nargs='?', const='*', help='Execute one or more Prompts')
+    new_session_group.add_argument('--param', nargs=2, action='append',metavar=('key', 'value'),help='Add key/value pairs (for use with --execute)')
+    
+    # 2. Continue an Existing Session
+    continue_session_group = parser.add_argument_group('Continue an Existing Session')
+    continue_session_group.add_argument('--session', metavar='SESSION_ID', help='Load/save session state by session ID')
+    continue_session_group.add_argument('--answer', metavar='TEXT', help='Continue session with user response (use with --session SESSION_ID)')
+    
+    # 3. Session History & Review
+    session_group = parser.add_argument_group('Session History & Review')
+    session_group.add_argument('--list-sessions', action='store_true', help='List all available sessions')
+    session_group.add_argument('--recent-sessions', type=int, nargs='?', const=20, help='List recent sessions')
+    session_group.add_argument('--view-session', nargs='?', const='', metavar='SESSION_ID', help='View session history and details (optionally specify session ID)')
+    
+    # 4. Prompt Management
+    prompt_group = parser.add_argument_group('Prompt Management')
+    prompt_group.add_argument('-p', '--prompts', nargs='?', const='*', help='List Prompts')
+    prompt_group.add_argument('-c', '--code', nargs='?', const='*', help='List code in Prompts')
+    prompt_group.add_argument('-l', '--list', nargs='?', const='*', help='List Prompt files, or specify: company/companies, provider/providers')
+    prompt_group.add_argument('-s', '--statements', action='store_true', help='List supported prompt statement types and exit')
+    
+    # 5. Available Functions
+    functions_group = parser.add_argument_group('Available Functions')
+    functions_group.add_argument('-f', '--functions', action='store_true', help='List functions available to AI and exit')
+    
+    # 6. LLM API Providers
+    providers_group = parser.add_argument_group('LLM API Providers')
+    providers_group.add_argument('-m', '--models', nargs='?', const='', help='List models (optionally filter by model name pattern)')
+    providers_group.add_argument('--company', help='Filter models by company name pattern')
+    providers_group.add_argument('--provider', help='Filter models by provider name pattern')
+    providers_group.add_argument('-k', '--key', action='store_true', help='Ask for (new) Company Key')
+    
+    # 7. Database Operations
+    database_group = parser.add_argument_group('Database Operations')
+    database_group.add_argument('--init-db', action='store_true', help='Initialize database and create tables')
+    database_group.add_argument('--delete-db', action='store_true', help='Delete entire database (Tom\'s nuclear option)')
+    database_group.add_argument('--truncate-db', action='store_true', help='Clean up old sessions (Dick\'s managed cleanup)')
+    database_group.add_argument('--max-days', type=int, help='Maximum age in days for --truncate-db')
+    database_group.add_argument('--max-count', type=int, help='Maximum number of sessions for --truncate-db')
+    database_group.add_argument('--max-gb', type=float, help='Maximum database size in GB for --truncate-db')
+    database_group.add_argument('--db-stats', action='store_true', help='Show database statistics')
+    
+    # 8. System Management & Updates
+    system_group = parser.add_argument_group('System Management & Updates')
+    system_group.add_argument('--init', action='store_true', help='Initialize prompts and functions directories')
+    system_group.add_argument('--update-models', metavar='PROVIDER', help='Update model definitions for specified provider (e.g., OpenRouter) or "All" for all providers')
+    system_group.add_argument('--check-builtins', action='store_true', help='Check for built-in function updates')
+    system_group.add_argument('--update-builtins', action='store_true', help='Update built-in functions')
+    system_group.add_argument('-r', '--remove', action='store_true', help='remove all .~nn~. files from sub directories')
+    
+    # 9. Development & Debugging
+    debug_group = parser.add_argument_group('Development & Debugging')
+    debug_group.add_argument('--debug', action='store_true', help='Enable structured logging + rich output to STDERR')
+    debug_group.add_argument('--vm-debug', action='store_true', help='Enable detailed VM statement execution debugging')
+    debug_group.add_argument('--debug-session', action='store_true', help='Save execution to timestamped debug session for analysis')
+    
+    # 10. General
+    general_group = parser.add_argument_group('General')
+    general_group.add_argument('-v', '--version', action='store_true', help='Show version information and exit')
 
     return parser.parse_args()
 
@@ -259,331 +466,7 @@ def glob_prompt(prompt_name: str) -> list[Path]:
     prompt_p = prompt_pattern(prompt_name)
     return sorted(Path('.').glob(str(prompt_p)))
 
-def list_conversations():
-    """List all available conversations with summary information"""
-    import json
-    import sqlite3
-    from datetime import datetime
-    
-    conversations_dir = Path('conversations')
-    if not conversations_dir.exists():
-        console.print("[bold yellow]No conversations directory found.[/bold yellow]")
-        return
-    
-    conversation_files = list(conversations_dir.glob('*.conversation'))
-    if not conversation_files:
-        console.print("[bold yellow]No conversations found.[/bold yellow]")
-        return
-    
-    # Create table for conversation list
-    table = Table(title="Available Conversations")
-    table.add_column("Name", style="cyan", no_wrap=True)
-    table.add_column("Model", style="green", no_wrap=True)
-    table.add_column("Messages", style="blue", justify="right")
-    table.add_column("Last Updated", style="magenta")
-    table.add_column("Total Cost", style="yellow", justify="right")
-    
-    # Get cost data from database if available
-    cost_data = {}
-    try:
-        if os.path.exists('prompts/costs.db'):
-            conn = sqlite3.connect('prompts/costs.db')
-            cursor = conn.execute("""
-                SELECT prompt_semantic_name, COUNT(*) as calls, SUM(estimated_costs) as total_cost
-                FROM cost_tracking 
-                WHERE prompt_semantic_name IS NOT NULL AND prompt_semantic_name != ''
-                GROUP BY prompt_semantic_name
-            """)
-            for row in cursor.fetchall():
-                cost_data[row[0]] = {'calls': row[1], 'total_cost': row[2]}
-            conn.close()
-    except:
-        pass  # Continue without cost data if database unavailable
-    
-    for conv_file in sorted(conversation_files):
-        try:
-            with open(conv_file, 'r') as f:
-                data = json.load(f)
-            
-            name = conv_file.stem
-            vm_state = data.get('vm_state', {})
-            messages = data.get('messages', [])
-            
-            model = vm_state.get('model_name', 'Unknown')
-            message_count = len(messages)
-            created = vm_state.get('created', 'Unknown')
-            
-            # Try to get semantic name for cost lookup
-            variables = data.get('variables', {})
-            semantic_name = None
-            
-            # Try to extract semantic name from original filename
-            original_filename = variables.get('filename', '')
-            if original_filename and isinstance(original_filename, str) and original_filename.endswith('.prompt'):
-                try:
-                    with open(original_filename, 'r') as f:
-                        first_line = f.readline().strip()
-                        if first_line.startswith('.prompt '):
-                            json_content = "{" + first_line[8:] + "}"
-                            prompt_data = json.loads(json_content)
-                            semantic_name = prompt_data.get("name", "")
-                except:
-                    pass
-            
-            # Get cost information
-            total_cost = "N/A"
-            if semantic_name and semantic_name in cost_data:
-                total_cost = f"${cost_data[semantic_name]['total_cost']:.6f}"
-            
-            table.add_row(name, model, str(message_count), created, total_cost)
-            
-        except Exception as e:
-            table.add_row(conv_file.stem, "Error", "?", "?", f"Error: {str(e)}")
-    
-    console.print(table)
 
-def view_conversation(conversation_name: str):
-    """View detailed conversation history and information with execution analysis"""
-    import json
-    import sqlite3
-    from datetime import datetime
-    from collections import Counter
-    
-    conv_file = Path(f'conversations/{conversation_name}.conversation')
-    if not conv_file.exists():
-        console.print(f"[bold red]Conversation '{conversation_name}' not found.[/bold red]")
-        return
-    
-    try:
-        with open(conv_file, 'r') as f:
-            data = json.load(f)
-    except Exception as e:
-        console.print(f"[bold red]Error reading conversation: {e}[/bold red]")
-        return
-    
-    vm_state = data.get('vm_state', {})
-    messages = data.get('messages', [])
-    variables = data.get('variables', {})
-    
-    # Check if this is a debug conversation
-    is_debug_conversation = '_debug_' in conversation_name
-    
-    # Display conversation summary
-    console.print(f"\n[bold cyan]Conversation: {conversation_name}[/bold cyan]")
-    if is_debug_conversation:
-        console.print("[yellow]🔍 Debug Conversation - Execution Analysis Available[/yellow]")
-    console.print("─" * 60)
-    
-    summary_table = Table(show_header=False, box=None)
-    summary_table.add_column("Field", style="cyan", width=15)
-    summary_table.add_column("Value", style="white")
-    
-    summary_table.add_row("Model:", vm_state.get('model_name', 'Unknown'))
-    summary_table.add_row("Company:", vm_state.get('company', 'Unknown'))
-    summary_table.add_row("Messages:", str(len(messages)))
-    summary_table.add_row("Interactions:", str(vm_state.get('interaction_no', 0)))
-    summary_table.add_row("Created:", vm_state.get('created', 'Unknown'))
-    
-    # Analyze function calls if this is a debug conversation
-    if is_debug_conversation:
-        function_calls = []
-        duplicate_calls = []
-        
-        for message in messages:
-            if message.get('role') == 'assistant':
-                content = message.get('content', [])
-                for part in content:
-                    if part.get('type') == 'tool':
-                        func_name = part.get('name', 'unknown')
-                        func_args = part.get('arguments', {})
-                        call_signature = f"{func_name}({func_args})"
-                        function_calls.append((func_name, func_args, call_signature))
-        
-        # Find duplicates
-        call_counts = Counter(call[2] for call in function_calls)
-        duplicates = {call: count for call, count in call_counts.items() if count > 1}
-        
-        if function_calls:
-            summary_table.add_row("Function Calls:", str(len(function_calls)))
-            summary_table.add_row("Unique Calls:", str(len(call_counts)))
-            if duplicates:
-                summary_table.add_row("Duplicate Calls:", f"{len(duplicates)} patterns")
-    
-    # Try to get semantic name and cost information
-    semantic_name = None
-    original_filename = variables.get('filename', '')
-    if original_filename and isinstance(original_filename, str) and original_filename.endswith('.prompt'):
-        summary_table.add_row("Original Prompt:", os.path.basename(original_filename))
-        try:
-            with open(original_filename, 'r') as f:
-                first_line = f.readline().strip()
-                if first_line.startswith('.prompt '):
-                    json_content = "{" + first_line[8:] + "}"
-                    prompt_data = json.loads(json_content)
-                    semantic_name = prompt_data.get("name", "")
-                    if semantic_name:
-                        summary_table.add_row("Semantic Name:", semantic_name)
-                        summary_table.add_row("Version:", prompt_data.get("version", ""))
-        except:
-            pass
-    
-    # Get cost information from database
-    if semantic_name:
-        try:
-            if os.path.exists('prompts/costs.db'):
-                conn = sqlite3.connect('prompts/costs.db')
-                cursor = conn.execute("""
-                    SELECT COUNT(*) as calls, SUM(estimated_costs) as total_cost, 
-                           SUM(tokens_in) as total_tokens_in, SUM(tokens_out) as total_tokens_out
-                    FROM cost_tracking 
-                    WHERE prompt_semantic_name = ?
-                """, (semantic_name,))
-                row = cursor.fetchone()
-                if row and row[0] > 0:
-                    summary_table.add_row("Total Calls:", str(row[0]))
-                    summary_table.add_row("Total Cost:", f"${row[1]:.6f}")
-                    summary_table.add_row("Total Tokens In:", str(row[2]))
-                    summary_table.add_row("Total Tokens Out:", str(row[3]))
-                conn.close()
-        except:
-            pass
-    
-    console.print(summary_table)
-    console.print()
-    
-    # Show detailed duplicate analysis for debug conversations
-    if is_debug_conversation and function_calls:
-        console.print("[bold yellow]🔍 Function Call Analysis:[/bold yellow]")
-        console.print("─" * 60)
-        
-        if duplicates:
-            console.print("[bold red]⚠️  Duplicate Function Calls Detected:[/bold red]")
-            dup_table = Table(show_header=True)
-            dup_table.add_column("Function Call", style="cyan")
-            dup_table.add_column("Count", style="red", justify="right")
-            dup_table.add_column("Impact", style="yellow")
-            
-            for call_sig, count in duplicates.items():
-                # Determine impact
-                if 'readfile' in call_sig:
-                    impact = "Redundant file reads"
-                elif 'writefile' in call_sig:
-                    impact = "Duplicate file writes"
-                elif 'execcmd' in call_sig:
-                    impact = "Repeated commands"
-                else:
-                    impact = "Unnecessary execution"
-                
-                dup_table.add_row(call_sig, str(count), impact)
-            
-            console.print(dup_table)
-            console.print()
-        
-        # Show function call sequence
-        console.print("[bold cyan]📋 Function Call Sequence:[/bold cyan]")
-        seq_table = Table(show_header=True)
-        seq_table.add_column("#", style="dim", width=3)
-        seq_table.add_column("Function", style="green")
-        seq_table.add_column("Arguments", style="blue")
-        seq_table.add_column("Status", style="white")
-        
-        for idx, (func_name, func_args, call_sig) in enumerate(function_calls, 1):
-            # Check if this is a duplicate
-            status = "🔄 DUPLICATE" if call_counts[call_sig] > 1 else "✅ Unique"
-            
-            # Format arguments for display
-            args_str = str(func_args)
-            if len(args_str) > 50:
-                args_str = args_str[:47] + "..."
-            
-            seq_table.add_row(str(idx), func_name, args_str, status)
-        
-        console.print(seq_table)
-        console.print()
-    
-    # Display conversation messages
-    console.print("[bold cyan]Conversation History:[/bold cyan]")
-    console.print("─" * 60)
-    
-    for i, message in enumerate(messages, 1):
-        role = message.get('role', 'unknown')
-        content = message.get('content', [])
-        
-        # Role styling
-        role_style = {
-            'user': '[bold blue]User[/bold blue]',
-            'assistant': '[bold green]Assistant[/bold green]',
-            'system': '[bold magenta]System[/bold magenta]',
-            'tool': '[bold yellow]Tool[/bold yellow]'
-        }.get(role, f'[bold white]{role.title()}[/bold white]')
-        
-        console.print(f"\n{i:2d}. {role_style}:")
-        
-        # Display content
-        for part in content:
-            part_type = part.get('type', 'unknown')
-            
-            if part_type == 'text':
-                text = part.get('text', '')
-                # Clean up LaTeX formatting for better readability
-                text = text.replace('\\(', '').replace('\\)', '')
-                text = text.replace('\\[', '\n    ').replace('\\]', '\n    ')
-                text = text.replace('\\displaystyle', '')
-                text = text.replace('\\frac{', '(').replace('}{', ')/(').replace('}', ')')
-                text = text.replace('\\;', ' ')
-                text = text.replace('\\qquad', '   ')
-                
-                # Split long text into readable chunks
-                lines = text.split('\n')
-                for line in lines:
-                    line = line.strip()
-                    if line:
-                        # Wrap very long lines
-                        if len(line) > 80:
-                            words = line.split(' ')
-                            current_line = "    "
-                            for word in words:
-                                if len(current_line + word) > 80:
-                                    console.print(current_line.rstrip(), style="white")
-                                    current_line = "    " + word + " "
-                                else:
-                                    current_line += word + " "
-                            if current_line.strip():
-                                console.print(current_line.rstrip(), style="white")
-                        else:
-                            console.print(f"    {line}", style="white")
-                
-            elif part_type == 'tool':
-                tool_name = part.get('name', 'unknown')
-                tool_args = part.get('arguments', {})
-                console.print(f"    [dim]🔧 Called: {tool_name}({tool_args})[/dim]")
-                
-            elif part_type == 'tool_result':
-                result_content = part.get('content', '')
-                console.print(f"    [dim]📤 Result: {result_content}[/dim]")
-                
-            else:
-                console.print(f"    [dim]({part_type}: {part})[/dim]")
-    
-    # Display current variables (if any interesting ones)
-    interesting_vars = {k: v for k, v in variables.items() 
-                       if k not in ['Prefix', 'Postfix', 'Debug', 'Verbose'] and not k.startswith('_')}
-    
-    if interesting_vars:
-        console.print(f"\n[bold cyan]Current Variables:[/bold cyan]")
-        console.print("─" * 60)
-        var_table = Table(show_header=False, box=None)
-        var_table.add_column("Variable", style="cyan", width=20)
-        var_table.add_column("Value", style="white")
-        
-        for key, value in interesting_vars.items():
-            # Truncate long values
-            str_value = str(value)
-            if len(str_value) > 80:
-                str_value = str_value[:77] + "..."
-            var_table.add_row(key, str_value)
-        
-        console.print(var_table)
 
 def create_global_variables():
     """Create global variables dictionary with explicit hard-coded defaults"""
@@ -599,6 +482,11 @@ def create_global_variables():
     }
 
 def main():
+    # Check for help first, before creating directories
+    if len(sys.argv) > 1 and (sys.argv[1] == '-h' or sys.argv[1] == '--help'):
+        print_rich_help()
+        return
+    
     # Ensure 'prompts' directory exists
     if not os.path.exists('prompts'):
         os.makedirs('prompts')
@@ -719,71 +607,65 @@ def main():
         return
 
     if args.update_models:
-        # Update model definitions for specified provider or all providers
-        provider_input = args.update_models
-        
-        if provider_input.lower() == 'all':
-            # Update all providers
-            providers = sorted(AiRegistry.handlers.keys())
-            console.print(f"[bold cyan]Updating models for all {len(providers)} providers...[/bold cyan]")
-            
-            success_count = 0
-            for provider_name in providers:
-                try:
-                    handler_class = AiRegistry.get_handler(provider_name)
-                    console.print(f"[bold cyan]Updating models for {provider_name}...[/bold cyan]")
-                    handler_class.create_models_json(provider_name)
-                    console.print(f"[bold green]Successfully updated models for {provider_name}![/bold green]")
-                    success_count += 1
-                except Exception as e:
-                    console.print(f"[bold red]Error updating models for {provider_name}: {e}[/bold red]")
-            
-            console.print(f"[bold cyan]Update complete: {success_count}/{len(providers)} providers updated successfully[/bold cyan]")
-        else:
-            # Update single provider
-            provider_name = provider_input
-            try:
-                # Get the handler class for the provider
-                handler_class = AiRegistry.get_handler(provider_name)
-                
-                # Call the create_models_json method
-                console.print(f"[bold cyan]Updating models for {provider_name}...[/bold cyan]")
-                handler_class.create_models_json(provider_name)
-                console.print(f"[bold green]Successfully updated models for {provider_name}![/bold green]")
-                
-            except ValueError as e:
-                console.print(f"[bold red]Error: {e}[/bold red]")
-                console.print(f"[yellow]Available providers: {', '.join(sorted(AiRegistry.handlers.keys()))}[/yellow]")
-            except Exception as e:
-                console.print(f"[bold red]Error updating models for {provider_name}: {e}[/bold red]")
+        from .model_updater import update_models
+        update_models(args.update_models)
         return
 
     if args.key:
         get_new_api_key()
 
-    # Handle conversation viewing commands
-    if args.list_conversations:
-        list_conversations()
+    # Handle database management commands
+    if args.delete_db:
+        from .db_cli import delete_database
+        delete_database()
         return
 
-    if args.view_conversation:
+    if args.truncate_db:
+        from .db_cli import truncate_database
+        truncate_database(
+            max_days=args.max_days,
+            max_count=args.max_count,
+            max_gb=args.max_gb
+        )
+        return
+
+    if args.db_stats:
+        from .db_cli import show_database_stats
+        show_database_stats()
+        return
+
+    if args.recent_sessions is not None:
+        from .db_cli import list_recent_conversations
+        list_recent_conversations(limit=args.recent_sessions)
+        return
+
+    if args.init_db:
+        from .db_cli import init_database
+        init_database()
+        return
+
+    # Handle conversation viewing commands
+    if args.list_sessions:
+        from .db_cli import list_recent_conversations
+        list_recent_conversations(limit=100)
+        return
+
+    if args.view_session is not None:
         # Check if textual is available for TUI mode
         try:
-            from .conversation_viewer import view_conversation_tui
-            view_conversation_tui(args.view_conversation)
+            from .session_viewer import view_session_tui
+            session_id = args.view_session or ""
+            view_session_tui(session_id)  # Pass session ID or empty string for all
         except ImportError:
             # Fall back to Rich-based viewer if textual is not available
             console.print("[yellow]Textual not available, using basic viewer[/yellow]")
-            view_conversation(args.view_conversation)
+            console.print("[red]Rich-based viewer requires a specific session name[/red]")
         return
 
     # Handle conversation mode
-    if args.conversation:
-        # Ensure 'conversations' directory exists
-        if not os.path.exists('conversations'):
-            os.makedirs('conversations')
+    if args.session:
         
-        conversation_name = args.conversation
+        conversation_name = args.session
         
         # Determine logging mode and identifier
         from .keprompt_logger import LogMode
@@ -791,27 +673,25 @@ def main():
         log_identifier = None
         if args.debug:
             log_mode = LogMode.DEBUG
-            log_identifier = conversation_name
-        elif args.log is not None:  # --log was specified (with or without identifier)
-            log_mode = LogMode.LOG
-            if args.log:  # --log <identifier> was provided
-                log_identifier = args.log
-            else:  # --log without identifier, use conversation name
-                log_identifier = conversation_name
         else:
             log_mode = LogMode.PRODUCTION
+        
+        log_identifier = conversation_name
         
         if args.answer:
             # Continue existing conversation with user answer
             from .keprompt_vm import make_statement
             from .AiPrompt import AiTextPart
             
-            step = VM(None, global_variables, log_mode=log_mode, log_identifier=log_identifier, vm_debug=args.vm_debug, exec_debug=args.debug_conversation)  # No prompt file
-            loaded = step.load_conversation(conversation_name)
+            step = VM(None, global_variables, log_mode=log_mode, log_identifier=log_identifier, vm_debug=args.vm_debug, exec_debug=args.debug_session)  # No prompt file
+            loaded = step.load_session(conversation_name)
             
             if not loaded:
                 console.print(f"[bold red]Error: Conversation '{conversation_name}' not found[/bold red]")
                 sys.exit(1)
+            
+            # Reuse the existing session ID instead of generating a new one
+            step.prompt_uuid = conversation_name
             
             # For conversation continuations, try to inherit prompt metadata from the conversation
             # Look for the original prompt name in the variables to get metadata
@@ -849,7 +729,7 @@ def main():
             step.execute()
             
             # Save updated conversation
-            step.save_conversation(conversation_name)
+            # step.save_session(conversation_name)
             
         elif args.execute:
             # Start new conversation with prompt file
@@ -857,18 +737,18 @@ def main():
             
             if glob_files:
                 for prompt_file in glob_files:
-                    step = VM(prompt_file, global_variables, log_mode=log_mode, log_identifier=log_identifier, vm_debug=args.vm_debug, exec_debug=args.debug_conversation)
+                    step = VM(str(prompt_file), global_variables, log_mode=log_mode, log_identifier=log_identifier, vm_debug=args.vm_debug, exec_debug=args.debug_session)
                     step.parse_prompt()
                     step.execute()
                     
                     # Save conversation after execution
-                    step.save_conversation(conversation_name)
+                    step.save_session(conversation_name)
             else:
                 pname = prompt_pattern(args.execute)
                 log.error(f"[bold red]No Prompt files found with {pname}[/bold red]", extra={"markup": True})
         else:
-            # No --answer or --execute specified with --conversation
-            console.print("[bold red]Error: --conversation requires either --answer or --execute[/bold red]")
+            # No --answer or --execute specified with --session
+            console.print("[bold red]Error: --session requires either --answer or --execute[/bold red]")
             sys.exit(1)
         
         return
@@ -928,39 +808,30 @@ def main():
                     log_mode = LogMode.DEBUG
                     # Use prompt name as default identifier for debug mode
                     log_identifier = os.path.splitext(os.path.basename(prompt_file))[0]
-                elif args.log is not None:  # --log was specified (with or without identifier)
-                    log_mode = LogMode.LOG
-                    if args.log:  # --log <identifier> was provided
-                        log_identifier = args.log
-                    else:  # --log without identifier, use prompt name
-                        log_identifier = os.path.splitext(os.path.basename(prompt_file))[0]
                 else:
                     log_mode = LogMode.PRODUCTION
+                    log_identifier = os.path.splitext(os.path.basename(prompt_file))[0]
                 
-                # If --debug-conversation is enabled, automatically save to conversation
-                if args.debug_conversation:
-                    # Ensure 'conversations' directory exists
-                    if not os.path.exists('conversations'):
-                        os.makedirs('conversations')
-                    
-                    # Create debug conversation name with timestamp
+                # If --debug-session is enabled, automatically save to session
+                if args.debug_session:
+                    # Create debug session name with timestamp
                     import time
                     prompt_name = os.path.splitext(os.path.basename(prompt_file))[0]
                     timestamp = time.strftime("%Y%m%d_%H%M%S")
-                    debug_conversation_name = f"{prompt_name}_debug_{timestamp}"
+                    debug_session_name = f"{prompt_name}_debug_{timestamp}"
                     
-                    console.print(f"[cyan]--debug-conversation enabled: Saving execution to conversation '{debug_conversation_name}'[/cyan]")
+                    console.print(f"[cyan]--debug-session enabled: Saving execution to session '{debug_session_name}'[/cyan]")
                     
-                    step = VM(prompt_file, global_variables, log_mode=log_mode, log_identifier=log_identifier, vm_debug=args.vm_debug, exec_debug=args.debug_conversation)
+                    step = VM(str(prompt_file), global_variables, log_mode=log_mode, log_identifier=log_identifier, vm_debug=args.vm_debug, exec_debug=args.debug_session)
                     step.parse_prompt()
                     step.execute()
                     
-                    # Save the conversation for analysis
-                    step.save_conversation(debug_conversation_name)
+                    # Save the session for analysis
+                    step.save_session(debug_session_name)
                     
-                    console.print(f"[green]Debug conversation saved! View with: keprompt --view-conversation {debug_conversation_name}[/green]")
+                    console.print(f"[green]Debug session saved! View with: keprompt --view-session {debug_session_name}[/green]")
                 else:
-                    step = VM(prompt_file, global_variables, log_mode=log_mode, log_identifier=log_identifier, vm_debug=args.vm_debug, exec_debug=args.debug_conversation)
+                    step = VM(prompt_file, global_variables, log_mode=log_mode, log_identifier=log_identifier, vm_debug=args.vm_debug, exec_debug=args.debug_session)
                     step.parse_prompt()
                     step.execute()
         else:
