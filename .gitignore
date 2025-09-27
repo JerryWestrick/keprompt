@@ -44,3 +44,5 @@ poetry.lock
 .idea/keprompt.iml
 .idea/misc.xml
 .env
+/vscode-extension
+
