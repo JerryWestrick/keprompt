@@ -21,6 +21,7 @@ var/
 *.egg
 
 # Virtual Environment
+.venv/
 venv/
 ENV/
 
@@ -44,5 +45,5 @@ poetry.lock
 .idea/keprompt.iml
 .idea/misc.xml
 .env
-/vscode-extension
+vscode-extension/
 
