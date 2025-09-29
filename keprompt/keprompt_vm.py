@@ -238,6 +238,7 @@ class VM:
     def substitute(self, text: str):
         """
         Substitute variables in text using configurable prefix and postfix delimiters.
+        Supports both regular variables and VM namespace (VM.*) for read-only VM state access.
         Gets delimiters directly from dictionary for future subroutine scoping compatibility.
         """
         # Get delimiters directly from dictionary (supports future variable stack for subroutines)
@@ -256,7 +257,21 @@ class VM:
             # Extract variable name
             variable_name = front[last_begin + len(prefix):]
 
-            # Handle nested dictionaries
+            # Handle VM namespace (read-only access to VM properties)
+            if variable_name.startswith('VM.'):
+                vm_property = variable_name[3:]  # Remove 'VM.' prefix
+                value = self._get_vm_property(vm_property)
+                if value is None:
+                    raise ValueError(f"VM property '{vm_property}' is not available")
+                
+                # Log VM property access
+                self.logger.log_variable_retrieval(variable_name, str(value))
+                
+                # Replace the matched part with the value
+                text = front[:last_begin] + str(value) + back
+                continue
+
+            # Handle regular variables and nested dictionaries
             keys = variable_name.split('.')
             value = self.vdict
             try:
@@ -272,6 +287,32 @@ class VM:
             text = front[:last_begin] + str(value) + back
 
         return text
+
+    def _get_vm_property(self, property_name: str):
+        """
+        Get VM property value for VM namespace access (VM.*).
+        Returns None if property is not available.
+        """
+        # Map of available VM properties to their actual VM attributes
+        vm_properties = {
+            'session_id': self.prompt_uuid,
+            'model_name': self.model_name,
+            'provider': self.provider,
+            'interaction_no': self.interaction_no,
+            'cost_in': self.cost_in,
+            'cost_out': self.cost_out,
+            'total_cost': self.cost_in + self.cost_out,
+            'toks_in': self.toks_in,
+            'toks_out': self.toks_out,
+            'total_tokens': self.toks_in + self.toks_out,
+            'filename': self.filename or "",
+            'ip': self.ip,
+            'prompt_name': self.prompt_name,
+            'prompt_version': self.prompt_version,
+            'api_key': "***HIDDEN***",  # Never expose actual API key
+        }
+        
+        return vm_properties.get(property_name)
 
     def parse_prompt(self) -> None:
         """Parse the prompt file and create a list of statements.
@@ -369,11 +410,11 @@ class VM:
         if self.file_console:  # Ensure file is open
             self.file_console.print_exception()  # Print to file
 
-    def load_llm(self, parms: dict[str, str]) -> None:
+    def load_llm(self, params: dict[str, str]) -> None:
 
-        if 'model' not in parms:
+        if 'model' not in params:
             raise StmtSyntaxError(f".llm syntax error: model not defined")
-        self.model_name = parms['model']
+        self.model_name = params['model']
 
         if self.model_name not in AiRegistry.models:
             raise StmtSyntaxError(f"Not Defined Error: Model {self.model_name} is not defined")
@@ -383,8 +424,8 @@ class VM:
             raise StmtSyntaxError(f"Bad Model Definition error: provider not defined for model {self.model_name}")
         self.provider = self.model.provider
 
-        # copy parms to vdict
-        for k, v in parms.items():
+        # copy params to vdict
+        for k, v in params.items():
             self.vdict[k] = v
 
         self.vdict['provider'] = self.provider
@@ -395,7 +436,7 @@ class VM:
         """Execute the statements in the prompt file using the new standard logging system."""
         
         # Output session ID at start
-        console.print(f"[dim]Session: {self.prompt_uuid}[/dim]")
+        # console.print(f"[dim]Session: {self.prompt_uuid}[/dim]")
         
         # Set initial prompt ID for logging context
         initial_prompt_id = f"{self.prompt_uuid}-init"
@@ -710,17 +751,17 @@ class StmtClear(StmtPrompt):
         super().execute(vm)
 
         try:
-            parms = json.loads(self.value)
+            params = json.loads(self.value)
         except Exception as e:
             vm.logger.log_error(f"Error parsing .clear parameters: {str(e)}")
             vm.logger.print_exception()
             sys.exit(9)
 
-        if not isinstance(parms, list):
-            vm.logger.log_error(f"Error parsing .clear parameters expected list, but got {type(parms).__name__}: {self.value}")
+        if not isinstance(params, list):
+            vm.logger.log_error(f"Error parsing .clear parameters expected list, but got {type(params).__name__}: {self.value}")
             sys.exit(9)
 
-        for k in parms:
+        for k in params:
             try:
                 log_files = glob.glob(k)  # Use glob to find all files matching the pattern
 
@@ -831,18 +872,18 @@ class StmtDebug(StmtPrompt):
 
         # vm.print(self.value)
         try:
-            parms = json.loads(self.value)
+            params = json.loads(self.value)
         except Exception as e:
             vm.print(f"{VERTICAL} [white on red]Error parsing .debug parameters: {str(e)}[/]\n\n")
             vm.print_exception()
             sys.exit(9)
 
-        if not isinstance(parms, list):
+        if not isinstance(params, list):
             vm.print(
-                f"{VERTICAL} [white on red]Error parsing .debug parameters expected list, but got {type(parms).__name__}: {self.value}")
+                f"{VERTICAL} [white on red]Error parsing .debug parameters expected list, but got {type(params).__name__}: {self.value}")
             sys.exit(9)
 
-        vm.debug_print(elements=parms)
+        vm.debug_print(elements=params)
 
 
 class StmtExec(StmtPrompt):
@@ -1074,20 +1115,20 @@ class StmtLlm(StmtPrompt):
             value = self.vm.substitute(self.value)
 
             try:
-                parms = json.loads(value)
+                params = json.loads(value)
             except Exception as e:
                 vm.logger.log_error(f"Error parsing .llm parameters: {str(e)}")
                 vm.logger.print_exception()
                 sys.exit(9)
 
-            if not isinstance(parms, dict):
+            if not isinstance(params, dict):
                 raise (StmtSyntaxError(
-                    f".llm syntax: parameters expected dict, but got {type(parms).__name__}: {self.value}"))
+                    f".llm syntax: parameters expected dict, but got {type(params).__name__}: {self.value}"))
 
-            if 'model' not in parms:
+            if 'model' not in params:
                 raise (StmtSyntaxError(f".llm syntax:  'model' parameter is required but missing {self.value}"))
 
-            vm.load_llm(parms)
+            vm.load_llm(params)
 
         except Exception as err:
             vm.logger.print_exception()

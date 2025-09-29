@@ -1,0 +1,61 @@
+{
+  "metadata": {
+    "provider": "DeepSeek",
+    "last_updated": "2025-08-15T11:45:23.654901",
+    "total_models": 4
+  },
+  "models": {
+    "deepseek-chat": {
+      "company": "DeepSeek",
+      "provider": "DeepSeek",
+      "model": "deepseek-chat",
+      "input": 2.7e-07,
+      "output": 1.1e-06,
+      "context": 64000,
+      "modality_in": "Text",
+      "modality_out": "Text",
+      "functions": "Yes",
+      "description": "High-performance model for general tasks (DeepSeek-V3-0324). Supports JSON output, function calling, and FIM completion.",
+      "cutoff": "2024-03"
+    },
+    "deepseek-reasoner": {
+      "company": "DeepSeek",
+      "provider": "DeepSeek",
+      "model": "deepseek-reasoner",
+      "input": 5.5e-07,
+      "output": 2.1899999999999998e-06,
+      "context": 64000,
+      "modality_in": "Text",
+      "modality_out": "Text",
+      "functions": "Yes",
+      "description": "Advanced reasoning model with transparent thinking process (DeepSeek-R1-0528). Output includes CoT reasoning and final answer.",
+      "cutoff": "2024-05"
+    },
+    "deepseek-v3-0324": {
+      "company": "DeepSeek",
+      "provider": "DeepSeek",
+      "model": "deepseek-v3-0324",
+      "input": 2.7e-07,
+      "output": 1.1e-06,
+      "context": 64000,
+      "modality_in": "Text",
+      "modality_out": "Text",
+      "functions": "Yes",
+      "description": "DeepSeek-V3 model from March 2024. Supports JSON output, function calling, chat prefix completion, and FIM completion.",
+      "cutoff": "2024-03"
+    },
+    "deepseek-r1-0528": {
+      "company": "DeepSeek",
+      "provider": "DeepSeek",
+      "model": "deepseek-r1-0528",
+      "input": 5.5e-07,
+      "output": 2.1899999999999998e-06,
+      "context": 64000,
+      "modality_in": "Text",
+      "modality_out": "Text",
+      "functions": "Yes",
+      "description": "DeepSeek-R1 reasoning model from May 2024. Features transparent chain-of-thought reasoning with output not counting toward context limit.",
+      "cutoff": "2024-05"
+    }
+  }
+}

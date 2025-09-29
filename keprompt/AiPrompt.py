@@ -8,6 +8,7 @@ from .config import get_config
 
 from .AiRegistry import AiRegistry
 from .keprompt_util import HORIZONTAL_LINE, TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT, VERTICAL
+from .keprompt_utils import truncate_for_display
 
 # Global Variables
 console = Console()
@@ -63,8 +64,7 @@ class AiTextPart(AiMessagePart):
     def print_message(self) -> str:
         txt = self.vm.substitute(self.text)
         txt = self.substitute().replace('\n', '\\n')
-        if len(txt) > MAX_LINE_LENGTH:
-            txt = txt[:MAX_LINE_LENGTH] + '...'
+        txt = truncate_for_display(txt, MAX_LINE_LENGTH)
         return f"Text({txt})"
 
 class AiImagePart(AiMessagePart):
@@ -122,10 +122,7 @@ class AiCall(AiMessagePart):
     def print_message(self) -> str:
         targs = {}
         for k,v in self.arguments.items():
-            if len(v) > 25:
-                targs[k] = v[:25] + '...'
-            else:
-                targs[k]=v
+            targs[k] = truncate_for_display(str(v), 25)
         args = json.dumps(targs)
         args = args.replace('\n', '\\n')
         return f"Call {self.name}(id={self.id}, {args[1:-1]})"
@@ -149,8 +146,7 @@ class AiResult(AiMessagePart):
 
     def print_message(self) -> str:
         replaced = self.result.replace('\n', '\\n')
-        if len(replaced) > MAX_LINE_LENGTH:
-            replaced = replaced[:MAX_LINE_LENGTH] + '...'
+        replaced = truncate_for_display(replaced, MAX_LINE_LENGTH)
         return f"Rtn  {self.name}(id={self.id}, content:{replaced})"
 
 
@@ -246,107 +242,6 @@ class AiPrompt:
 
         return retval
 
-    def _process_response(self, data: dict) -> AiMessage:
-        msg_parts: List[AiMessagePart] = []
-        company = self.provider
-
-        if company == "Anthropic":
-            self.toks_out += data.get("usage", {}).get("output_tokens", 0)
-            self.toks_in += data.get("usage", {}).get("input_tokens", 0)
-
-            role = data.get("role")
-            contents = data.get("content", [])
-
-            if isinstance(contents, str):
-                contents = [contents]
-
-            for msg in contents:
-                if isinstance(msg, str):
-                    msg_parts.append(AiTextPart(vm=self.vm, text=msg))
-                elif isinstance(msg, dict):
-                    if msg.get("type") == "text":
-                        msg_parts.append(AiTextPart(vm=self.vm, text=msg.get("text", "")))
-                    elif msg.get("type") == "tool_use":
-                        msg_parts.append(
-                            AiCall(
-                                vm=self.vm,
-                                name=msg.get("name", ""),
-                                arguments=msg.get("input", ""),
-                                id=msg.get("id"),
-                            )
-                        )
-
-            return AiMessage(vm=self.vm, role=role, content=msg_parts)
-
-        elif company == "Google":
-            self.toks_out += data.get("usageMetadata", {}).get("candidatesTokenCount", 0)
-            self.toks_in += data.get("usageMetadata", {}).get("promptTokenCount", 0)
-
-            candidates = data.get("candidates", [])
-            if not candidates:
-                raise APIKeyError("No content found in the response.")
-
-            llm_msg = candidates[0].get("content", {})
-            role = llm_msg.get("role")
-            parts = llm_msg.get("parts", [])
-
-            for part in parts:
-                if "text" in part:
-                    msg_parts.append(AiTextPart(vm=self.vm, text=part["text"]))
-                elif "functionCall" in part:
-                    msg_parts.append(
-                        AiCall(
-                            vm=self.vm,
-                            name=part["functionCall"].get("name", ""),
-                            arguments=part["functionCall"].get("args", ""),
-                        )
-                    )
-                else:
-                    console.print(f"[red]Unexpected response type: {part.keys()}[/red]")
-                    raise APIKeyError("Unexpected response structure from Google.")
-
-            return AiMessage(vm=self.vm, role=role, content=msg_parts)
-
-        elif company in ["MistralAI", "OpenAI", "XAI", "DeepSeek"]:
-            self.toks_out += data.get("usage", {}).get("completion_tokens", 0)
-            self.toks_in += data.get("usage", {}).get("prompt_tokens", 0)
-
-            choices = data.get("choices", [])
-            if not choices:
-                raise APIKeyError("No content found in the response.")
-
-            llm_msg = choices[0].get("message", {})
-            role = llm_msg.get("role")
-            parts = llm_msg.get("content") or []
-
-            if not isinstance(parts, list):
-                parts = [parts]
-
-            for part in parts:
-                if isinstance(part, str) and part:
-                    msg_parts.append(AiTextPart(vm=self.vm, text=part))
-                elif isinstance(part, dict) and part.get("text"):
-                    msg_parts.append(AiTextPart(vm=self.vm, text=part["text"]))
-                else:
-                    console.print(f"[red]Unexpected response type: {type(part)}[/red]")
-                    raise APIKeyError("Unexpected response structure from the company.")
-
-            # Process tool_calls and add them to msg_parts
-            if "tool_calls" in llm_msg and llm_msg["tool_calls"]:
-                for fc in llm_msg["tool_calls"]:
-                    msg_parts.append(
-                        AiCall(
-                            vm=self.vm,
-                            name=fc["function"]["name"],
-                            arguments=fc["function"]["arguments"],
-                            id=fc["id"],
-                        )
-                    )
-
-            return AiMessage(vm=self.vm, role=role, content=msg_parts)
-
-        else:
-            raise APIKeyError(f"Unknown company: {company}")
 
     def clean_messages(self, data: dict) -> dict:
         sensitive_keys = {"url", "data", "image_url"}

@@ -1,0 +1,16 @@
+.prompt "name":"VM Namespace Test", "version":"1.0.0"
+
+.llm "model":"gpt-4o-mini"
+
+.user Hello! Can you tell me about this session?
+
+.exec
+
+.print Session ID: <<VM.session_id>>
+.print Model: <<VM.model_name>> from <<VM.provider>>
+.print Interaction #: <<VM.interaction_no>>
+.print Tokens In: <<VM.toks_in>>, Tokens Out: <<VM.toks_out>>
+.print Cost: $<<VM.total_cost>>
+.print Filename: <<VM.filename>>
+
+.exit

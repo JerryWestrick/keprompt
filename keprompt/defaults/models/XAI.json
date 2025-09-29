@@ -1,0 +1,113 @@
+{
+  "metadata": {
+    "provider": "XAI",
+    "last_updated": "2025-08-15T11:45:24.273895",
+    "total_models": 8
+  },
+  "models": {
+    "grok-4": {
+      "company": "XAI",
+      "provider": "XAI",
+      "model": "grok-4",
+      "input": 3e-06,
+      "output": 1.5e-05,
+      "context": 256000,
+      "modality_in": "Text+Vision",
+      "modality_out": "Text",
+      "functions": "Yes",
+      "description": "The world's best model with advanced reasoning, coding, and visual processing capabilities",
+      "cutoff": "2025-07"
+    },
+    "grok-3": {
+      "company": "XAI",
+      "provider": "XAI",
+      "model": "grok-3",
+      "input": 3e-06,
+      "output": 1.5e-05,
+      "context": 131072,
+      "modality_in": "Text+Vision",
+      "modality_out": "Text",
+      "functions": "Yes",
+      "description": "Flagship enterprise model that excels at data extraction, programming, and text summarization",
+      "cutoff": "2025-02"
+    },
+    "grok-3-mini": {
+      "company": "XAI",
+      "provider": "XAI",
+      "model": "grok-3-mini",
+      "input": 3e-07,
+      "output": 5e-07,
+      "context": 131072,
+      "modality_in": "Text",
+      "modality_out": "Text",
+      "functions": "Yes",
+      "description": "Lightweight model that thinks before responding. Excels at quantitative tasks involving math and reasoning",
+      "cutoff": "2025-02"
+    },
+    "grok-2-vision-1212": {
+      "company": "XAI",
+      "provider": "XAI",
+      "model": "grok-2-vision-1212",
+      "input": 2e-06,
+      "output": 1e-05,
+      "context": 131072,
+      "modality_in": "Text+Vision",
+      "modality_out": "Text",
+      "functions": "Yes",
+      "description": "Vision-capable Grok-2 model with image understanding",
+      "cutoff": "2024-12"
+    },
+    "grok-2-1212": {
+      "company": "XAI",
+      "provider": "XAI",
+      "model": "grok-2-1212",
+      "input": 2e-06,
+      "output": 1e-05,
+      "context": 131072,
+      "modality_in": "Text",
+      "modality_out": "Text",
+      "functions": "Yes",
+      "description": "Updated Grok-2 model with improved performance",
+      "cutoff": "2024-12"
+    },
+    "grok-vision-beta": {
+      "company": "XAI",
+      "provider": "XAI",
+      "model": "grok-vision-beta",
+      "input": 2e-06,
+      "output": 1e-05,
+      "context": 131072,
+      "modality_in": "Text+Vision",
+      "modality_out": "Text",
+      "functions": "Yes",
+      "description": "Beta vision model for image understanding tasks",
+      "cutoff": "2024-12"
+    },
+    "grok-beta": {
+      "company": "XAI",
+      "provider": "XAI",
+      "model": "grok-beta",
+      "input": 2e-06,
+      "output": 1e-05,
+      "context": 131072,
+      "modality_in": "Text",
+      "modality_out": "Text",
+      "functions": "Yes",
+      "description": "Beta version of Grok model",
+      "cutoff": "2024-12"
+    },
+    "grok-2-image-1212": {
+      "company": "XAI",
+      "provider": "XAI",
+      "model": "grok-2-image-1212",
+      "input": 0.0,
+      "output": 0.07,
+      "context": 131072,
+      "modality_in": "Text",
+      "modality_out": "Images",
+      "functions": "No",
+      "description": "Latest image generation model capable of generating multiple images from text prompts",
+      "cutoff": "2024-12"
+    }
+  }
+}
