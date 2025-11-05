@@ -11,17 +11,18 @@ KePrompt lets you work with multiple AI providers (OpenAI, Anthropic, Google, an
 - **Comprehensive cost tracking**: Automatic SQLite-based tracking of all API usage with detailed reporting
 - **Conversation management**: Save and resume multi-turn conversations
 - **Function calling**: Extend prompts with file operations, web requests, and custom functions
+- **Web GUI**: Modern browser-based interface for interactive prompt development
 - **Production ready**: Built-in logging, error handling, and debugging tools
 
 ## Quick Start
 
 ### 0. Prepare Your Working Directory
 ```bash
-# Create a new project directory, install private python environment, etc.
+# Create a new project directory with isolated Python environment
 mkdir myproject
 cd myproject
 python3 -m venv .venv
-activate .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 ```
 
 ### 1. Install KePrompt
@@ -31,20 +32,22 @@ pip install keprompt
 
 ### 2. Initialize your workspace
 ```bash
-keprompt --init
+keprompt database create
 ```
-This creates the `prompts/` directory and installs built-in functions.
+This creates the `prompts/` directory and initializes the database.
 
 ### 3. Set up your API key
 ```bash
-keprompt -k
+# Add to your .env file or export directly
+export OPENAI_API_KEY="sk-..."
+export ANTHROPIC_API_KEY="sk-ant-..."
+# ... or add to ~/.env
 ```
-Choose your AI provider and enter your API key (stored securely in your system keyring).
 
 ### 4. Create your first prompt
 ```bash
 cat > prompts/hello.prompt << 'EOF'
-.prompt "name":"Hello Assistant", "version":"1.0.0", "params":{"model":"gpt-4o-mini"}
+.prompt "name":"Hello Assistant", "version":"1.0.0", "params":{}
 .# My first keprompt file
 .llm {"model": "gpt-4o-mini"}
 .system You are a helpful assistant.
@@ -55,15 +58,10 @@ EOF
 
 ### 5. Run your prompt
 ```bash
-keprompt -e hello --debug
+keprompt chats create --prompt hello
 ```
 
-.include <<filename>>
-Provide a summary, key points, and any recommendations.
-.exec
-EOF
-```
-🎉 **You should see the AI's response!** The `--debug` flag shows detailed execution information.
+🎉 **You should see the AI's response!** The system automatically tracks costs and saves the conversation.
 
 ## Your First Real Prompt
 
@@ -73,17 +71,12 @@ Let's create something more useful - a file analyzer:
 cat > prompts/analyze.prompt << 'EOF'
 .prompt "name":"File Analyzer", "version":"1.0.0", "params":{"model":"gpt-4o", "filename":"file_to_analyze"}
 .# Analyze any text file
-.llm {"model": "gpt-4o"}
-.system You are a expert text analyst. Provide clear, actionable insights.
+.llm {"model": "<<model>>"}
+.system You are an expert text analyst. Provide clear, actionable insights.
 .user Please analyze this file:
+
 .include <<filename>>
-Provide a summary, key points, and any recommendations.
-.exec
-EOF
-```
-===
-.include <<filename>>
-===
+
 Provide a summary, key points, and any recommendations.
 .exec
 EOF
@@ -91,8 +84,78 @@ EOF
 
 Run it with a parameter:
 ```bash
-keprompt -e analyze --param filename "README.md" --debug
+keprompt chats create --prompt analyze --param filename "README.md"
 ```
+
+Run it with 2 parameters:
+```bash
+keprompt chats create --prompt analyze --param filename "README.md" --param model "openrouter/openai/gpt-oss-20b"
+```
+
+## Modern CLI Interface
+
+KePrompt uses an intuitive object-verb command structure:
+
+```bash
+keprompt <object> <verb> [options]
+```
+
+### Core Objects
+- **prompts** - List and manage prompt files
+- **chats** - Create and manage conversations
+- **models** - Browse available AI models
+- **providers** - View AI providers
+- **functions** - List available functions
+- **server** - Start/stop web interface
+- **database** - Manage conversation database
+
+### Common Commands
+```bash
+# List available prompts
+keprompt prompts get
+
+# Create a new conversation
+keprompt chats create --prompt hello --param name "Alice"
+
+# Continue a conversation
+keprompt chats reply <chat-id> "Tell me more"
+
+# List conversations with costs
+keprompt chats get
+
+# Browse available models
+keprompt models get --company OpenAI
+
+# Start web interface
+keprompt server start --web-gui
+```
+
+See the full CLI reference in [ks/02-cli-interface.md](ks/02-cli-interface.md)
+
+## Web GUI Interface
+
+KePrompt includes a modern web-based interface for interactive development:
+
+```bash
+# Start server with web GUI
+keprompt server start --web-gui
+
+# Specify port (optional)
+keprompt server start --web-gui --port 8080
+
+# Development mode with auto-reload
+keprompt server start --web-gui --reload
+```
+
+Then open your browser to `http://localhost:8080`
+
+**Features:**
+- Interactive chat interface
+- Real-time cost tracking
+- Prompt editor with syntax highlighting
+- Model selection and comparison
+- Function testing and debugging
+- Conversation history browser
 
 ## Core Concepts
 
@@ -139,12 +202,6 @@ keprompt -e analyze --param filename "README.md" --debug
 .prompt "name":"Research Assistant", "version":"1.5.0", "params":{"model":"claude-3-5-sonnet-20241022", "depth":"comprehensive"}
 ```
 
-**Benefits:**
-- **Cost tracking**: Semantic names in reports instead of filenames
-- **Version control**: Track prompt evolution and performance
-- **Documentation**: Self-documenting prompts with parameter info
-- **Organization**: Professional prompt management
-
 ### Variables
 Use `<<variable>>` syntax for substitution:
 ```bash
@@ -152,7 +209,7 @@ Use `<<variable>>` syntax for substitution:
 .user Hello <<name>>, today is <<date>>
 
 # Run with parameters
-keprompt -e greeting --param name "Alice" --param date "Monday"
+keprompt chats create --prompt greeting --param name "Alice" --param date "Monday"
 ```
 
 ### Built-in Functions
@@ -176,7 +233,7 @@ Based on this information, provide a comprehensive overview with key facts and r
 .exec
 EOF
 
-keprompt -e research --param topic "Artificial_Intelligence"
+keprompt chats create --prompt research --param topic "Artificial_Intelligence"
 ```
 
 ### Code Review
@@ -193,24 +250,20 @@ Focus on: code quality, potential bugs, performance, and best practices.
 .exec
 EOF
 
-keprompt -e review --param codefile "src/main.py"
+keprompt chats create --prompt review --param codefile "src/main.py"
 ```
 
-### Content Generation
+### Interactive Chat Session
 ```bash
-cat > prompts/blog.prompt << 'EOF'
-.prompt "name":"Blog Writer", "version":"1.0.0", "params":{"model":"gpt-4o", "topic":"subject", "audience":"target_audience", "tone":"writing_tone", "length":"word_count"}
-.llm {"model": "gpt-4o"}
-.system You are a professional content writer.
-.user Write the file named "blog_<<topic>.md with: 
-a blog post about: <<topic>>
-Target audience: <<audience>>
-Tone: <<tone>>
-Length: approximately <<length>> words
-.exec
-EOF
+# Start a conversation
+CHAT_ID=$(keprompt chats create --prompt hello --json | jq -r '.data.chat_id')
 
-keprompt -e blog --param topic "AI_Tools" --param audience "developers" --param tone "informative" --param length "800"
+# Continue the conversation
+keprompt chats reply $CHAT_ID "Can you explain that in more detail?"
+keprompt chats reply $CHAT_ID "What about edge cases?"
+
+# View full conversation
+keprompt chats get $CHAT_ID
 ```
 
 ## Working with Models
@@ -218,134 +271,75 @@ keprompt -e blog --param topic "AI_Tools" --param audience "developers" --param 
 ### List available models
 ```bash
 # See all models
-keprompt -m
+keprompt models get
 
 # Filter by provider
-keprompt -m --company openai
-keprompt -m --company anthropic
+keprompt models get --company OpenAI
+keprompt models get --company Anthropic
 
 # Search by name
-keprompt -m gpt-4
-keprompt -m "*sonnet*"
+keprompt models get --name "gpt-4*"
+keprompt models get --name "*sonnet*"
 ```
 
 ### Compare costs
 ```bash
 # Show pricing for all GPT models
-keprompt -m gpt --company openai
+keprompt models get --name "gpt*" --company OpenAI
+```
+
+### Update model registry
+```bash
+# Fetch latest models from providers
+keprompt models update
 ```
 
 ## Cost Tracking & Analysis
 
-KePrompt automatically tracks all API usage with comprehensive cost analysis. No configuration required!
+KePrompt automatically tracks all API usage with comprehensive cost analysis.
 
-### Automatic Tracking
-Every `.exec` statement is automatically tracked to `prompts/costs.db` with:
-- **Tokens**: Input/output token counts
-- **Costs**: Precise cost calculations per provider
-- **Timing**: Execution duration for performance analysis
-- **Metadata**: Model, provider, session IDs, parameters
-- **Context**: Project name, git commit, environment
-
-### Cost Reporting Commands
+### View Conversation Costs
 ```bash
-# View recent API calls
-python -m keprompt.cost_cli recent --limit 10
+# List recent conversations with costs
+keprompt chats get --limit 20
 
-# Cost summary for last 7 days
-python -m keprompt.cost_cli summary --days 7
+# View specific chat details
+keprompt chats get <chat-id>
 
-# Breakdown by prompt
-python -m keprompt.cost_cli by-prompt --days 30
-
-# Breakdown by model
-python -m keprompt.cost_cli by-model --days 7
-
-# Export to CSV for analysis
-python -m keprompt.cost_cli export costs.csv --days 30
+# Get cost summary
+sqlite3 prompts/chats.db "SELECT SUM(total_cost) FROM chats"
 ```
 
-### Example Output
-```
-Recent Cost Entries
-┏━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━┳━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━━━┓
-┃ Project  ┃ Prompt     ┃ Provider ┃ Model       ┃ TokIn ┃ TokOut ┃      Cost ┃ Time        ┃
-┡━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━╇━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━━━┩
-│ myapp    │ analyze    │ OpenAI   │ gpt-4o      │  1250 │    340 │ $0.018500 │ 09-15 14:23 │
-│ myapp    │ research   │ Anthropic│ claude-3-5  │   890 │    220 │ $0.012400 │ 09-15 14:20 │
-└──────────┴────────────┴──────────┴─────────────┴───────┴────────┴───────────┴─────────────┘
-```
-
-### Project Organization
-- **Auto-detection**: Uses current directory name as project
-- **Manual override**: Set `KEPROMPT_PROJECT` environment variable
-- **Multi-project**: Each project has its own `prompts/costs.db`
-
-## Conversation Management
-
-### Start a conversation
+### Database Management
 ```bash
-keprompt -e chat --conversation my_session --debug
+# View database info
+keprompt database get
+
+# Clean up old conversations
+keprompt chats delete --days 30
+
+# Keep only recent conversations
+keprompt chats delete --count 100
 ```
-
-### Continue a conversation
-```bash
-keprompt --conversation my_session --answer "Tell me more about the second point"
-```
-
-### Resume with logging
-```bash
-keprompt --conversation my_session --answer "Can you provide examples?" --debug
-```
-
-### View and Manage Conversations (New in v1.4.0)
-
-**List all conversations with cost tracking:**
-```bash
-keprompt --list-conversations
-```
-
-**View detailed conversation history:**
-```bash
-keprompt --view-conversation my_session
-```
-
-**Features:**
-- **Professional overview**: Tabular list with model info, message counts, and total costs
-- **Enhanced readability**: LaTeX math formatting cleaned up for easy reading
-- **Cost integration**: Automatic cost tracking linked to original prompts
-- **Smart text wrapping**: Long content properly formatted and wrapped
-- **Complete history**: Full conversation flow with role-based formatting
-
-**Example conversation list:**
-```
-                                 Available Conversations                                 
-┏━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┓
-┃ Name         ┃ Model                    ┃ Messages ┃ Last Updated        ┃ Total Cost ┃
-┡━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━┩
-│ math-tutor   │ gpt-4o-mini              │       12 │ 2025-09-17 09:31:36 │  $0.000458 │
-│ research-ai  │ claude-3-5-sonnet        │        8 │ 2025-09-17 08:15:22 │  $0.012340 │
-└──────────────┴──────────────────────────┴──────────┴─────────────────────┴────────────┘
-```
-
-**Perfect for:**
-- **Educational content**: Math equations and formulas displayed clearly
-- **Debugging**: Review conversation flow and variable states
-- **Cost analysis**: Track conversation costs and optimize usage
-- **Content review**: Easy-to-read conversation histories
 
 ## Custom Functions
 
-Create executable functions in any language:
+KePrompt supports custom functions written in any language. See the detailed guide at [ks/creating-keprompt-functions.context.md](ks/creating-keprompt-functions.context.md)
 
-```bash
-# Create a custom function
-cat > prompts/functions/weather << 'EOF'
+### Quick Example
+
+Create an executable in `prompts/functions/`:
+
+```python
 #!/usr/bin/env python3
-import json, sys, requests
+import json, sys
 
-def get_schema():
-    return [{
+def get_weather(city: str) -> str:
+    # Your weather API logic here
+    return f"Weather in {city}: Sunny, 72°F"
+
+FUNCTIONS = [
+    {
         "name": "get_weather",
         "description": "Get current weather for a city",
         "parameters": {
@@ -353,58 +347,142 @@ def get_schema():
             "properties": {
                 "city": {"type": "string", "description": "City name"}
             },
-            "required": ["city"]
+            "required": ["city"],
+            "additionalProperties": False
         }
-    }]
+    }
+]
 
-if sys.argv[1] == "--list-functions":
-    print(json.dumps(get_schema()))
-elif sys.argv[1] == "get_weather":
-    args = json.loads(sys.stdin.read())
-    # Your weather API logic here
-    print(f"Weather in {args['city']}: Sunny, 72°F")
-EOF
+if __name__ == "__main__":
+    if sys.argv[1] == "--list-functions":
+        print(json.dumps(FUNCTIONS))
+    elif sys.argv[1] == "get_weather":
+        args = json.loads(sys.stdin.read())
+        print(get_weather(**args))
+```
 
+Make it executable:
+```bash
 chmod +x prompts/functions/weather
 ```
 
 Use in prompts:
 ```bash
 cat > prompts/weather_check.prompt << 'EOF'
+.prompt "name":"Weather Check", "version":"1.0.0", "params":{"city":"default_city"}
 .llm {"model": "gpt-4o-mini"}
-.user Use defined functions to describe what's the weather like in <<city>>?
-Based on this weather, suggest appropriate clothing.
+.user What's the weather like in <<city>>? Based on the weather, suggest appropriate clothing.
 .exec
 EOF
 
-keprompt -e weather_check --param city "San Francisco"  --debug
+keprompt chats create --prompt weather_check --param city "San Francisco"
 ```
 
-## Command Reference
+For comprehensive documentation on creating custom functions, see [ks/creating-keprompt-functions.context.md](ks/creating-keprompt-functions.context.md)
 
-| Command | Description |
-|---------|-------------|
-| `keprompt -e <name>` | Execute prompt file |
-| `keprompt -p` | List available prompts |
-| `keprompt -m` | List available models |
-| `keprompt -f` | List available functions |
-| `keprompt -k` | Add/update API keys |
-| `keprompt --debug` | Enable detailed logging |
-| `keprompt --conversation <name>` | Manage conversations |
-| `keprompt --param key value` | Set variables |
+## Conversation Management
+
+### Create and Continue Conversations
+```bash
+# Start a new conversation
+keprompt chats create --prompt hello
+
+# Continue with a chat ID
+keprompt chats reply a1b2c3d4 "Tell me more about that"
+
+# Show full conversation history
+keprompt chats reply a1b2c3d4 --full "Thanks for the explanation"
+```
+
+### List and View Conversations
+```bash
+# List all conversations
+keprompt chats get
+
+# View specific conversation
+keprompt chats get a1b2c3d4
+
+# List with filters
+keprompt chats get --limit 10
+```
+
+### Clean Up
+```bash
+# Delete specific conversation
+keprompt chats delete a1b2c3d4
+
+# Delete old conversations
+keprompt chats delete --days 30
+
+# Keep only recent conversations
+keprompt chats delete --count 100
+```
+
+## Server Management
+
+### Start Server
+```bash
+# Start with web GUI
+keprompt server start --web-gui
+
+# Specify port
+keprompt server start --web-gui --port 8080
+
+# Development mode with auto-reload
+keprompt server start --web-gui --reload
+
+# Start in specific directory
+keprompt server start --web-gui --directory /path/to/project
+```
+
+### Manage Servers
+```bash
+# List running servers
+keprompt server list --active-only
+
+# Check status
+keprompt server status
+
+# Stop server
+keprompt server stop
+
+# Stop all servers
+keprompt server stop --all
+```
+
+## Output Formats
+
+### Human-Readable (Default in Terminal)
+Rich formatted tables with colors and alignment.
+
+### Machine-Readable (JSON)
+```bash
+# Get JSON output
+keprompt chats get --json
+
+# Use with jq
+keprompt chats get --json | jq '.data[] | select(.total_cost > 0.01)'
+
+# Get chat ID programmatically
+CHAT_ID=$(keprompt chats create --prompt hello --json | jq -r '.data.chat_id')
+```
 
 ## Tips & Best Practices
 
 ### 1. Start Simple
 Begin with basic prompts and gradually add complexity.
 
-### 2. Use Debug Mode
-Always use `--debug` when developing prompts to see what's happening.
+### 2. Use the Web GUI for Development
+The web interface provides a better development experience with real-time feedback.
+
+```bash
+keprompt server start --web-gui --reload
+```
 
 ### 3. Manage Costs
 - Use cheaper models for development (`gpt-4o-mini`, `claude-3-haiku`)
-- Monitor token usage with the debug output
-- Check model pricing with `keprompt -m`
+- Monitor costs with `keprompt chats get`
+- Check model pricing with `keprompt models get`
 
 ### 4. Organize Your Prompts
 ```
@@ -431,20 +509,33 @@ The same prompt may work differently with different models. Test and compare.
 ### Common Issues
 
 **"No models found"**
-- Run `keprompt --init` to set up the workspace
-- Check your internet connection for model updates
+```bash
+keprompt models update
+```
 
 **"API key not found"**
-- Run `keprompt -k` to add your API key
-- Ensure you have credits/access with your AI provider
+```bash
+# Add to .env file
+echo 'OPENAI_API_KEY=sk-...' >> .env
+# Or export directly
+export OPENAI_API_KEY="sk-..."
+```
 
-**"Function not found"**
-- Run `keprompt -f` to see available functions
-- Check that custom functions are executable (`chmod +x`)
+**"Prompt not found"**
+```bash
+# List available prompts
+keprompt prompts get
+# Check prompts directory exists
+ls prompts/
+```
 
-**"Prompt file not found"**
-- Ensure files are in `prompts/` directory with `.prompt` extension
-- Use `keprompt -p` to list available prompts
+**"Server already running"**
+```bash
+# Check status
+keprompt server status
+# Stop existing server
+keprompt server stop
+```
 
 ### Getting Help
 
@@ -452,22 +543,24 @@ The same prompt may work differently with different models. Test and compare.
 # Show all options
 keprompt --help
 
-# List statement types
-keprompt -s
-
-# Show prompt content
-keprompt -l <promptname>
-
-# Debug a prompt
-keprompt -e <promptname> --debug
+# Get help for specific object
+keprompt chats --help
+keprompt server --help
 ```
+
+## Documentation
+
+- [CLI Interface](ks/02-cli-interface.md) - Complete command reference
+- [Prompt Language](ks/03-prompt-language.md) - Writing .prompt files
+- [Web GUI](ks/04-web-gui.md) - Using the web interface
+- [Creating Functions](ks/creating-keprompt-functions.context.md) - Custom function development
 
 ## What's Next?
 
 - **Explore the examples** in the `prompts/` directory
+- **Try the web GUI** for interactive development
 - **Create custom functions** for your specific needs
-- **Set up conversations** for complex multi-turn interactions
-- **Integrate with your workflow** using shell scripts or CI/CD
+- **Integrate with your workflow** using the JSON API
 
 ## Contributing
 
