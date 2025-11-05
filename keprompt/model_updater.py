@@ -15,119 +15,75 @@ from .ModelManager import ModelManager, AiModel
 
 console = Console()
 
-def update_models(target: str, api_key: str = None) -> None:
+def update_models(target: str = None, api_key: str = None) -> None:
     """
-    Update models based on target:
-    - "Reset": Copy all JSONs from keprompt/defaults/models/ to prompts/models/
-    - "All": Update all providers from LiteLLM
-    - "OpenRouter-API": Update OpenRouter using its native API (requires api_key)
-    - Provider name: Update specific provider from LiteLLM
+    Update models by downloading LiteLLM's model database.
+    
+    The target parameter is deprecated and ignored. This function now:
+    - Downloads https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json
+    - Backs up existing file if present
+    - Saves to prompts/functions/model_prices_and_context_window.json
+    
+    Args:
+        target: (DEPRECATED) Previously used to specify provider. Now ignored.
+        api_key: (DEPRECATED) Previously used for OpenRouter API. Now ignored.
     """
     
-    if target.lower() == "reset":
-        reset_to_defaults()
-    elif target.lower() == "all":
-        update_all_from_litellm()
-    elif target == "OpenRouter-API":
-        update_openrouter_from_api(api_key)
-    else:
-        update_provider_from_litellm(target)
+    # Show deprecation warning if target/provider was specified
+    if target and target.lower() not in ["", "all"]:
+        console.print(f"[yellow]Warning: --provider flag is deprecated and ignored.[/yellow]")
+        console.print("[yellow]Model updates now use the centralized LiteLLM database.[/yellow]")
+    
+    # Download and save the LiteLLM model database
+    download_litellm_model_database()
 
 def reset_to_defaults() -> None:
-    """Reset all model files to bundled defaults"""
-    console.print("[cyan]Resetting models to bundled defaults...[/cyan]")
-
-    # Resolve absolute paths based on the location of this file (the keprompt package)
-    package_root = Path(__file__).resolve().parent  # .../keprompt
-    defaults_dir = package_root / "defaults" / "models"
-    # Use the project root (one level up from the package) for the editable prompts directory
-    project_root = package_root.parent
-    prompts_dir = project_root / "prompts" / "models"
-
-    if not defaults_dir.is_dir():
-        console.print("[red]Error: Defaults directory not found![/red]")
-        return
-
-    # Ensure prompts/models directory exists
-    prompts_dir.mkdir(parents=True, exist_ok=True)
-
-    # Copy all JSON files from defaults to prompts/models (skip the price‑window summary)
-    copied_files = []
-    for json_file in defaults_dir.glob("*.json"):
-        if json_file.name == "model_prices_and_context_window.json":
-            continue
-        dest_file = prompts_dir / json_file.name
-        shutil.copy2(json_file, dest_file)
-        copied_files.append(json_file.name)
-
-    console.print(f"[green]✓ Reset complete! Copied {len(copied_files)} provider files:[/green]")
-    for filename in sorted(copied_files):
-        console.print(f"  - {filename}")
+    """
+    DEPRECATED: Individual provider JSON files are no longer used.
+    Use 'keprompt models update' to download the centralized model database instead.
+    """
+    console.print("[yellow]Warning: reset_to_defaults is deprecated.[/yellow]")
+    console.print("[yellow]Individual provider JSON files are no longer used.[/yellow]")
+    console.print("[cyan]Use 'keprompt models update' to download the centralized model database.[/cyan]")
 
 def update_all_from_litellm() -> None:
-    """Update all providers from LiteLLM database"""
-    console.print("[cyan]Updating all providers from LiteLLM database...[/cyan]")
-    
-    # Get LiteLLM data
-    litellm_data = download_litellm_data()
-    if not litellm_data:
-        console.print("[red]Failed to download LiteLLM data[/red]")
-        return
-    
-    # Get list of our supported providers
-    supported_providers = get_supported_providers()
-    
-    updated_count = 0
-    for provider in supported_providers:
-        try:
-            if update_provider_from_data(provider, litellm_data):
-                updated_count += 1
-        except Exception as e:
-            console.print(f"[red]Error updating {provider}: {e}[/red]")
-    
-    console.print(f"[green]✓ Updated {updated_count}/{len(supported_providers)} providers successfully[/green]")
+    """
+    DEPRECATED: Individual provider updates are no longer supported.
+    Use update_models() to download the centralized model database instead.
+    """
+    console.print("[yellow]Warning: Individual provider updates are deprecated.[/yellow]")
+    console.print("[cyan]Use 'keprompt models update' to download the centralized model database.[/cyan]")
+    download_litellm_model_database()
 
 def update_provider_from_litellm(provider_name: str) -> None:
-    """Update specific provider from LiteLLM database"""
-    console.print(f"[cyan]Updating {provider_name} from LiteLLM database...[/cyan]")
-    
-    # Validate provider
-    supported_providers = get_supported_providers()
-    if provider_name not in supported_providers:
-        console.print(f"[red]Error: Unknown provider '{provider_name}'[/red]")
-        console.print(f"[yellow]Supported providers: {', '.join(supported_providers)}[/yellow]")
-        return
-    
-    # Get LiteLLM data
-    litellm_data = download_litellm_data()
-    if not litellm_data:
-        console.print("[red]Failed to download LiteLLM data[/red]")
-        return
-    
-    # Update the provider
-    if update_provider_from_data(provider_name, litellm_data):
-        console.print(f"[green]✓ Successfully updated {provider_name}[/green]")
-    else:
-        console.print(f"[red]Failed to update {provider_name}[/red]")
+    """
+    DEPRECATED: Individual provider updates are no longer supported.
+    Use update_models() to download the centralized model database instead.
+    """
+    console.print(f"[yellow]Warning: Updating individual provider '{provider_name}' is deprecated.[/yellow]")
+    console.print("[yellow]Individual provider JSON files are no longer used.[/yellow]")
+    console.print("[cyan]Downloading centralized model database instead...[/cyan]")
+    download_litellm_model_database()
 
-def download_litellm_data() -> Dict[str, Any]:
-    """Download LiteLLM model database with caching"""
-    cache_file = Path(tempfile.gettempdir()) / "litellm_models.json"
+def download_litellm_model_database() -> None:
+    """
+    Download LiteLLM model database and save to prompts/functions.
     
-    # Check if cached file exists and is recent (less than 24 hours old)
-    if cache_file.exists():
-        file_age = cache_file.stat().st_mtime
-        import time
-        if time.time() - file_age < 24 * 3600:  # 24 hours
-            console.print("[dim]Using cached LiteLLM data...[/dim]")
-            try:
-                with open(cache_file, 'r') as f:
-                    return json.load(f)
-            except Exception:
-                pass  # Fall through to download
+    This function:
+    - Downloads from GitHub (https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json)
+    - Creates backup of existing file if present
+    - Saves to prompts/functions/model_prices_and_context_window.json
     
-    # Download fresh data
-    console.print("[cyan]Downloading LiteLLM model database...[/cyan]")
+    Raises:
+        Exception: If download fails, with user-friendly error message
+    """
+    backup_path = Path("prompts/functions/model_prices_and_context_window.json.backup")
+    target_path = Path("prompts/functions/model_prices_and_context_window.json")
+    
+    # Ensure prompts/functions directory exists
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    console.print("[cyan]Downloading LiteLLM model database from GitHub...[/cyan]")
     
     try:
         with Progress(
@@ -137,171 +93,58 @@ def download_litellm_data() -> Dict[str, Any]:
         ) as progress:
             task = progress.add_task("Downloading...", total=None)
             
-            # LiteLLM model database URL
             url = "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json"
             response = requests.get(url, timeout=30)
             response.raise_for_status()
             
             data = response.json()
             
-            # Cache the data
-            with open(cache_file, 'w') as f:
-                json.dump(data, f, indent=2)
+            # Backup existing file if present
+            if target_path.is_file():
+                shutil.copy2(target_path, backup_path)
+                console.print(f"[dim]Created backup: {backup_path}[/dim]")
+            
+            # Write to prompts/functions
+            with open(target_path, 'w') as tf:
+                json.dump(data, tf, indent=2)
             
             progress.update(task, completed=True)
-            console.print(f"[green]✓ Downloaded {len(data)} models from LiteLLM[/green]")
-            return data
+            console.print(f"[green]✓ Successfully downloaded {len(data)} models from LiteLLM[/green]")
+            console.print(f"[green]✓ Saved to: {target_path}[/green]")
             
+    except requests.exceptions.RequestException as e:
+        raise Exception(f"Failed to download model database: {str(e)}")
+    except json.JSONDecodeError as e:
+        raise Exception(f"Failed to parse model database JSON: {str(e)}")
+    except IOError as e:
+        raise Exception(f"Failed to save model database to file: {str(e)}")
     except Exception as e:
-        console.print(f"[red]Error downloading LiteLLM data: {e}[/red]")
-        return {}
+        raise Exception(f"Unexpected error downloading model database: {str(e)}")
+
+# Legacy functions kept for backward compatibility but deprecated
+# These are no longer used since we now use the centralized model database
 
 def get_supported_providers() -> List[str]:
-    """Get list of providers we support"""
-    return ["OpenAI", "Anthropic", "Google", "MistralAI", "DeepSeek", "XAI", "OpenRouter"]
+    """
+    DEPRECATED: Individual provider JSON files are no longer used.
+    Returns empty list for backward compatibility.
+    """
+    return []
 
 def update_provider_from_data(provider_name: str, litellm_data: Dict[str, Any]) -> bool:
-    """Update a specific provider using LiteLLM data"""
-    try:
-        # Filter models for this provider
-        provider_models = filter_models_for_provider(provider_name, litellm_data)
-        
-        if not provider_models:
-            console.print(f"[yellow]No models found for {provider_name} in LiteLLM data[/yellow]")
-            return False
-        
-        # Convert to keprompt format
-        converted_models = {}
-        for model_name, model_data in provider_models.items():
-            try:
-                ai_model = AiModel.from_litellm_dict(model_name, model_data)
-                converted_models[model_name] = {
-                    "provider": provider_name,  # Use our provider name, not LiteLLM's
-                    "company": ai_model.company,
-                    "model": ai_model.model,
-                    "input_cost": ai_model.input_cost,
-                    "output_cost": ai_model.output_cost,
-                    "max_tokens": ai_model.max_tokens,
-                    "cache_cost": ai_model.cache_cost,
-                    "max_input_tokens": ai_model.max_input_tokens,
-                    "max_output_tokens": ai_model.max_output_tokens,
-                    "supports": ai_model.supports,
-                    "mode": ai_model.mode,
-                    "source": ai_model.source,
-                    "description": ai_model.description
-                }
-            except Exception as e:
-                console.print(f"[dim]Skipping {model_name}: {e}[/dim]")
-                continue
-        
-        if not converted_models:
-            console.print(f"[yellow]No valid models converted for {provider_name}[/yellow]")
-            return False
-        
-        # Write to JSON file
-        write_provider_json(provider_name, converted_models)
-        console.print(f"[green]✓ Updated {provider_name} with {len(converted_models)} models[/green]")
-        return True
-        
-    except Exception as e:
-        console.print(f"[red]Error updating {provider_name}: {e}[/red]")
-        return False
+    """
+    DEPRECATED: Individual provider updates are no longer supported.
+    Returns False for backward compatibility.
+    """
+    console.print(f"[yellow]Warning: update_provider_from_data is deprecated.[/yellow]")
+    return False
 
 def filter_models_for_provider(provider_name: str, litellm_data: Dict[str, Any]) -> Dict[str, Any]:
-    """Filter LiteLLM data for a specific provider"""
-    filtered = {}
-    
-    # Provider mapping from our names to LiteLLM provider names
-    provider_mapping = {
-        "OpenAI": ["openai"],
-        "Anthropic": ["anthropic"],
-        "Google": ["gemini", "vertex_ai"],
-        "MistralAI": ["mistral"],
-        "DeepSeek": ["deepseek"],
-        "XAI": ["xai"],
-        "OpenRouter": ["openrouter"]
-    }
-    
-    litellm_providers = provider_mapping.get(provider_name, [provider_name.lower()])
-    
-    for model_name, model_data in litellm_data.items():
-        litellm_provider = model_data.get("litellm_provider", "").lower()
-        
-        # Check if this model belongs to our target provider
-        if litellm_provider in litellm_providers:
-            # Even if the provider matches, check if we need to clean the model name
-            if "/" in model_name:
-                parts = model_name.split("/", 1)
-                if len(parts) == 2:
-                    provider_prefix = parts[0].lower()
-                    clean_model_name = parts[1]
-                    
-                    # Clean the name if it has the provider prefix
-                    if (provider_name == "MistralAI" and provider_prefix == "mistral") or \
-                       (provider_name == "Anthropic" and provider_prefix == "anthropic") or \
-                       (provider_name == "Google" and provider_prefix in ["google", "gemini"]) or \
-                       (provider_name == "DeepSeek" and provider_prefix == "deepseek") or \
-                       (provider_name == "XAI" and provider_prefix == "xai") or \
-                       (provider_name == "OpenAI" and provider_prefix == "openai"):
-                        filtered[clean_model_name] = model_data
-                    else:
-                        filtered[model_name] = model_data
-                else:
-                    filtered[model_name] = model_data
-            else:
-                filtered[model_name] = model_data
-        
-        # Handle models with "/" in name - strip provider prefix for clean API names
-        elif "/" in model_name:
-            # Check if this model should be cleaned for our target provider
-            # e.g., "openrouter/openai/gpt-oss-120b" → "openai/gpt-oss-120b" (OpenRouter)
-            # e.g., "mistral/mistral-tiny" → "mistral-tiny" (MistralAI)
-            parts = model_name.split("/", 1)  # Split on first "/" only
-            if len(parts) == 2:
-                provider_prefix = parts[0].lower()
-                clean_model_name = parts[1]  # Take everything after first "/"
-                
-                # Check if this model belongs to our target provider based on prefix
-                should_include = False
-                if provider_name == "OpenRouter":
-                    # OpenRouter accepts models from any provider
-                    should_include = True
-                elif provider_name == "MistralAI" and provider_prefix == "mistral":
-                    # MistralAI models: mistral/mistral-tiny → mistral-tiny
-                    should_include = True
-                elif provider_name == "Anthropic" and provider_prefix == "anthropic":
-                    # Anthropic models: anthropic/claude-3 → claude-3
-                    should_include = True
-                elif provider_name == "Google" and provider_prefix in ["google", "gemini"]:
-                    # Google models: google/gemini-pro → gemini-pro
-                    should_include = True
-                elif provider_name == "DeepSeek" and provider_prefix == "deepseek":
-                    # DeepSeek models: deepseek/deepseek-chat → deepseek-chat
-                    should_include = True
-                elif provider_name == "XAI" and provider_prefix == "xai":
-                    # XAI models: xai/grok-beta → grok-beta
-                    should_include = True
-                elif provider_name == "OpenAI" and provider_prefix == "openai":
-                    # OpenAI models: openai/gpt-4 → gpt-4
-                    should_include = True
-                
-                if should_include:
-                    # Only add if we don't already have this model (deduplication)
-                    # If we do have it, keep the one with better pricing (lower input cost)
-                    if clean_model_name not in filtered:
-                        model_data_copy = model_data.copy()
-                        filtered[clean_model_name] = model_data_copy
-                    else:
-                        # Compare pricing and keep the better one
-                        existing_input_cost = filtered[clean_model_name].get("input_cost_per_token", float('inf'))
-                        new_input_cost = model_data.get("input_cost_per_token", float('inf'))
-                        
-                        if new_input_cost < existing_input_cost:
-                            # New model has better pricing, replace it
-                            model_data_copy = model_data.copy()
-                            filtered[clean_model_name] = model_data_copy
-    
-    return filtered
+    """
+    DEPRECATED: Individual provider filtering is no longer needed.
+    Returns empty dict for backward compatibility.
+    """
+    return {}
 
 def update_openrouter_from_api(api_key: str = None) -> None:
     """Update OpenRouter models using the provider's native API"""
@@ -335,23 +178,9 @@ def update_openrouter_from_api(api_key: str = None) -> None:
         console.print(f"[red]Error updating OpenRouter from API: {e}[/red]")
 
 def write_provider_json(provider_name: str, models: Dict[str, Any]) -> None:
-    """Write provider models to JSON file"""
-    from datetime import datetime
-    
-    prompts_dir = Path("prompts/models")
-    prompts_dir.mkdir(parents=True, exist_ok=True)
-    
-    json_file = prompts_dir / f"{provider_name}.json"
-    
-    data = {
-        "metadata": {
-            "provider": provider_name,
-            "last_updated": datetime.now().isoformat(),
-            "total_models": len(models),
-            "source": "LiteLLM"
-        },
-        "models": models
-    }
-    
-    with open(json_file, 'w') as f:
-        json.dump(data, f, indent=2)
+    """
+    DEPRECATED: Individual provider JSON files are no longer used.
+    This function does nothing and exists only for backward compatibility.
+    """
+    console.print(f"[yellow]Warning: write_provider_json is deprecated and does nothing.[/yellow]")
+    console.print("[yellow]Individual provider JSON files are no longer used.[/yellow]")

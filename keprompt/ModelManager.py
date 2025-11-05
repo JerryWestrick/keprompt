@@ -301,65 +301,57 @@ class ModelManager:
             }
 
         if self.args.models_command == "update":
-            # Update models for a specific provider using its native API
+            # Update models by downloading centralized LiteLLM database
             provider_filter = getattr(self.args, "provider", None)
             
-            if not provider_filter:
-                return {
-                    "success": False,
-                    "error": "--provider argument is required for update command",
-                    "timestamp": datetime.now().isoformat()
-                }
-            
-            # Get API key from keprompt config (loads from ~/.env)
-            from .config import get_config
-            config = get_config()
-            api_key = config.get_api_key(provider_filter)
-            
-            if not api_key:
-                return {
-                    "success": False,
-                    "error": config.get_missing_key_error(provider_filter),
-                    "timestamp": datetime.now().isoformat()
-                }
-            
-            # Call the provider's update_models method
+            # Call the new centralized update function
             try:
-                handler_class = self.get_handler(provider_filter)
+                from .model_updater import update_models
+                from rich.panel import Panel
+                from rich.text import Text
                 
-                # Create a mock prompt to instantiate the provider
-                class MockPrompt:
-                    def __init__(self, api_key: str):
-                        self.api_key = api_key
-                        self.model = "mock"
-                        self.vm = None
+                update_models(target=provider_filter)
                 
-                mock_prompt = MockPrompt(api_key)
-                provider = handler_class(mock_prompt)
+                # Reload models after update
+                self._initialized = False
+                self._load_all_models()
                 
-                success = provider.update_models()
+                message = "Successfully updated model database from LiteLLM"
+                if provider_filter:
+                    message += f"\n\nNote: --provider '{provider_filter}' flag is deprecated and was ignored"
                 
-                if success:
-                    # Reload models after update
-                    self._initialized = False
-                    self._load_all_models()
-                    
-                    return {
-                        "success": True,
-                        "data": f"Successfully updated {provider_filter} models from API",
-                        "timestamp": datetime.now().isoformat()
-                    }
-                else:
-                    return {
-                        "success": False,
-                        "error": f"Failed to update {provider_filter} models",
-                        "timestamp": datetime.now().isoformat()
-                    }
+                # Return pretty format if requested
+                if getattr(self.args, "pretty", False):
+                    from rich.console import Console
+                    console = Console()
+                    panel = Panel(
+                        message,
+                        title="[green]✓ Model Update Complete[/green]",
+                        border_style="green"
+                    )
+                    return panel
+                
+                # Return JSON format
+                return {
+                    "success": True,
+                    "data": message,
+                    "timestamp": datetime.now().isoformat()
+                }
                     
             except Exception as e:
+                # Return error in appropriate format
+                if getattr(self.args, "pretty", False):
+                    from rich.panel import Panel
+                    panel = Panel(
+                        str(e),
+                        title="[red]✗ Model Update Failed[/red]",
+                        border_style="red"
+                    )
+                    return panel
+                
                 return {
                     "success": False,
-                    "error": f"Error updating {provider_filter} models: {str(e)}",
+                    "error": str(e),
                     "timestamp": datetime.now().isoformat()
                 }
 

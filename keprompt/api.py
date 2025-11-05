@@ -308,16 +308,26 @@ class SystemManagement:
     
     @staticmethod
     def update_models(provider: str = None) -> Dict[str, Any]:
-        """Update model definitions"""
+        """
+        Update model definitions by downloading LiteLLM database.
+        
+        Note: The provider parameter is deprecated and will be ignored.
+        All model updates now use the centralized LiteLLM database.
+        """
         try:
             from .model_updater import update_models
             
-            result = update_models(provider or "All")
+            # Call update_models (provider parameter is now deprecated and ignored)
+            update_models(target=provider)
+            
+            message = "Models updated successfully from LiteLLM database"
+            if provider:
+                message += f" (Note: --provider '{provider}' flag is deprecated and was ignored)"
             
             return JSONResponse.success({
-                "provider": provider or "All",
                 "updated": True,
-                "message": "Models updated successfully"
+                "message": message,
+                "file": "prompts/functions/model_prices_and_context_window.json"
             })
             
         except Exception as e:

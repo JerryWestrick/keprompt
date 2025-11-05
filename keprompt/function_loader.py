@@ -65,6 +65,12 @@ class FunctionLoader:
         executables = []
         if self.functions_dir.exists():
             for file_path in sorted(self.functions_dir.iterdir()):
+                # Skip JSON files and backup files
+                if file_path.suffix in ['.json', '.backup']:
+                    continue
+                # Skip the functions.json specifically
+                if file_path.name in ['functions.json', 'model_prices_and_context_window.json', 'model_prices_and_context_window.json.backup']:
+                    continue
                 if file_path.is_file() and os.access(file_path, os.X_OK):
                     executables.append(file_path)
         return executables

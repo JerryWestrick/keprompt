@@ -91,80 +91,80 @@ class AiOpenRouter(AiProvider):
 
         return openrouter_messages
 
-    # def update_models(self) -> bool:
-    #     """Update models from OpenRouter API"""
-    #     try:
-    #         from datetime import datetime
-    #         import os
-    #         
-    #         console.print("[cyan]Fetching models from OpenRouter API...[/cyan]")
-    #         
-    #         # Fetch models from OpenRouter API
-    #         url = "https://openrouter.ai/api/v1/models"
-    #         headers = {"Authorization": f"Bearer {self.prompt.api_key}"}
-    #         response = requests.get(url, headers=headers)
-    #         
-    #         if response.status_code != 200:
-    #             console.print(f"[red]Failed to fetch models: {response.status_code} {response.text}[/red]")
-    #             return False
-    #         
-    #         api_data = response.json()
-    #         
-    #         # Convert to models.json format
-    #         models = {}
-    #         for model_data in api_data.get("data", []):
-    #             model_id = model_data.get("id", "")
-    #             if not model_id:
-    #                 continue
-    #             
-    #             # Extract pricing (convert from per-token to per-million-tokens if needed)
-    #             pricing = model_data.get("pricing", {})
-    #             input_cost = float(pricing.get("prompt", 0))
-    #             output_cost = float(pricing.get("completion", 0))
-    #             
-    #             # Extract company from model ID (e.g., "openai/gpt-4" -> "Openai")
-    #             company = "OpenRouter"
-    #             if "/" in model_id:
-    #                 company = model_id.split("/")[0].capitalize()
-    #             
-    #             # Build model entry
-    #             models[model_id] = {
-    #                 "provider": "OpenRouter",
-    #                 "company": company,
-    #                 "model": model_id,
-    #                 "input": input_cost,
-    #                 "output": output_cost,
-    #                 "context": model_data.get("context_length", 0),
-    #                 "modality_in": "Text+Vision" if model_data.get("architecture", {}).get("modality") == "multimodal" else "Text",
-    #                 "modality_out": "Text",
-    #                 "functions": "Yes" if "tools" in model_data.get("supported_generation_params", []) else "No",
-    #                 "description": model_data.get("description", ""),
-    #                 "cutoff": "See provider docs"
-    #             }
-    #         
-    #         # Write to JSON file
-    #         json_path = "prompts/models/OpenRouter.json"
-    #         os.makedirs(os.path.dirname(json_path), exist_ok=True)
-    #         
-    #         output_data = {
-    #             "metadata": {
-    #                 "provider": "OpenRouter",
-    #                 "last_updated": datetime.now().isoformat(),
-    #                 "total_models": len(models)
-    #             },
-    #             "models": models
-    #         }
-    #         
-    #         import json
-    #         with open(json_path, 'w', encoding='utf-8') as f:
-    #             json.dump(output_data, f, indent=2, ensure_ascii=False)
-    #         
-    #         console.print(f"[green]Successfully updated {len(models)} OpenRouter models to {json_path} [/green]")
-    #         return True
-    #         
-    #     except Exception as e:
-    #         console.print(f"[red]Error updating OpenRouter models: {e}[/red]")
-    #         return False
+def update_models(self) -> bool:
+    """Update models from OpenRouter API"""
+    try:
+        from datetime import datetime
+        import os
+        
+        console.print("[cyan]Fetching models from OpenRouter API...[/cyan]")
+        
+        # Fetch models from OpenRouter API
+        url = "https://openrouter.ai/api/v1/models"
+        headers = {"Authorization": f"Bearer {self.prompt.api_key}"}
+        response = requests.get(url, headers=headers)
+        
+        if response.status_code != 200:
+            console.print(f"[red]Failed to fetch models: {response.status_code} {response.text}[/red]")
+            return False
+        
+        api_data = response.json()
+        
+        # Convert to models.json format
+        models = {}
+        for model_data in api_data.get("data", []):
+            model_id = model_data.get("id", "")
+            if not model_id:
+                continue
+            
+            # Extract pricing (convert from per-token to per-million-tokens if needed)
+            pricing = model_data.get("pricing", {})
+            input_cost = float(pricing.get("prompt", 0))
+            output_cost = float(pricing.get("completion", 0))
+            
+            # Extract company from model ID (e.g., "openai/gpt-4" -> "Openai")
+            company = "OpenRouter"
+            if "/" in model_id:
+                company = model_id.split("/")[0].capitalize()
+            
+            # Build model entry
+            models[model_id] = {
+                "provider": "OpenRouter",
+                "company": company,
+                "model": model_id,
+                "input": input_cost,
+                "output": output_cost,
+                "context": model_data.get("context_length", 0),
+                "modality_in": "Text+Vision" if model_data.get("architecture", {}).get("modality") == "multimodal" else "Text",
+                "modality_out": "Text",
+                "functions": "Yes" if "tools" in model_data.get("supported_generation_params", []) else "No",
+                "description": model_data.get("description", ""),
+                "cutoff": "See provider docs"
+            }
+        
+        # Write to JSON file
+        json_path = "prompts/models/OpenRouter.json"
+        os.makedirs(os.path.dirname(json_path), exist_ok=True)
+        
+        output_data = {
+            "metadata": {
+                "provider": "OpenRouter",
+                "last_updated": datetime.now().isoformat(),
+                "total_models": len(models)
+            },
+            "models": models
+        }
+        
+        import json
+        with open(json_path, 'w', encoding='utf-8') as f:
+            json.dump(output_data, f, indent=2, ensure_ascii=False)
+        
+        console.print(f"[green]Successfully updated {len(models)} OpenRouter models to {json_path} [/green]")
+        return True
+        
+    except Exception as e:
+        console.print(f"[red]Error updating OpenRouter models: {e}[/red]")
+        return False
 
 # Register handler only - models loaded from JSON files
 ModelManager.register_handler(provider_name="openrouter", handler_class=AiOpenRouter)

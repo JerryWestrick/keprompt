@@ -312,19 +312,19 @@ def setup_routes(app: FastAPI, enable_web_gui: bool = False) -> None:
     # Mount static files LAST (after all API routes are defined)
     # This prevents static file serving from intercepting API routes
     if enable_web_gui:
-        # Determine path to web-gui directory
-        # This file is in keprompt/http_server.py, so web-gui is at ../web-gui
+        # Determine path to web_gui directory
+        # This file is in keprompt/http_server.py, web_gui is in keprompt/web_gui
         current_file = Path(__file__)
-        project_root = current_file.parent.parent  # Go up from keprompt/ to project root
-        web_gui_path = project_root / "web-gui"
+        package_root = current_file.parent  # This is the keprompt/ directory
+        web_gui_path = package_root / "web_gui"
         
-        # Check if web-gui directory exists
+        # Check if web_gui directory exists
         if web_gui_path.exists() and web_gui_path.is_dir():
             # Mount static files - this will serve the web GUI
             app.mount("/", StaticFiles(directory=str(web_gui_path), html=True), name="static")
             print(f"Web GUI enabled: serving from {web_gui_path}")
         else:
-            print(f"Warning: web-gui directory not found at {web_gui_path}")
+            print(f"Warning: web_gui directory not found at {web_gui_path}")
             print("Web GUI disabled - directory not available")
 
 
