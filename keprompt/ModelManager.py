@@ -169,10 +169,8 @@ class ModelManager:
         if cls._initialized:
             return
 
-        # Load from LiteLLM database
-        package_root = Path(__file__).resolve().parent  # .../keprompt
-        project_root = package_root.parent
-        litellm_db_path = project_root / "prompts" / "functions" / "model_prices_and_context_window.json"
+        # Load from LiteLLM database in current working directory
+        litellm_db_path = Path("./prompts/functions/model_prices_and_context_window.json")
 
         if not os.path.exists(litellm_db_path):
             print(f"Warning: LiteLLM database not found at {litellm_db_path}")
