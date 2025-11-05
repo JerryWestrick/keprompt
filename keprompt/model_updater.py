@@ -11,15 +11,16 @@ from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 import requests
 
-from .AiRegistry import AiRegistry, AiModel
+from .ModelManager import ModelManager, AiModel
 
 console = Console()
 
-def update_models(target: str) -> None:
+def update_models(target: str, api_key: str = None) -> None:
     """
     Update models based on target:
     - "Reset": Copy all JSONs from keprompt/defaults/models/ to prompts/models/
     - "All": Update all providers from LiteLLM
+    - "OpenRouter-API": Update OpenRouter using its native API (requires api_key)
     - Provider name: Update specific provider from LiteLLM
     """
     
@@ -27,31 +28,38 @@ def update_models(target: str) -> None:
         reset_to_defaults()
     elif target.lower() == "all":
         update_all_from_litellm()
+    elif target == "OpenRouter-API":
+        update_openrouter_from_api(api_key)
     else:
         update_provider_from_litellm(target)
 
 def reset_to_defaults() -> None:
     """Reset all model files to bundled defaults"""
     console.print("[cyan]Resetting models to bundled defaults...[/cyan]")
-    
-    defaults_dir = Path("keprompt/defaults/models")
-    prompts_dir = Path("prompts/models")
-    
-    if not defaults_dir.exists():
+
+    # Resolve absolute paths based on the location of this file (the keprompt package)
+    package_root = Path(__file__).resolve().parent  # .../keprompt
+    defaults_dir = package_root / "defaults" / "models"
+    # Use the project root (one level up from the package) for the editable prompts directory
+    project_root = package_root.parent
+    prompts_dir = project_root / "prompts" / "models"
+
+    if not defaults_dir.is_dir():
         console.print("[red]Error: Defaults directory not found![/red]")
         return
-    
+
     # Ensure prompts/models directory exists
     prompts_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Copy all JSON files from defaults to prompts/models
+
+    # Copy all JSON files from defaults to prompts/models (skip the price‑window summary)
     copied_files = []
     for json_file in defaults_dir.glob("*.json"):
-        if json_file.name != "model_prices_and_context_window.json":  # Skip legacy file
-            dest_file = prompts_dir / json_file.name
-            shutil.copy2(json_file, dest_file)
-            copied_files.append(json_file.name)
-    
+        if json_file.name == "model_prices_and_context_window.json":
+            continue
+        dest_file = prompts_dir / json_file.name
+        shutil.copy2(json_file, dest_file)
+        copied_files.append(json_file.name)
+
     console.print(f"[green]✓ Reset complete! Copied {len(copied_files)} provider files:[/green]")
     for filename in sorted(copied_files):
         console.print(f"  - {filename}")
@@ -294,6 +302,37 @@ def filter_models_for_provider(provider_name: str, litellm_data: Dict[str, Any])
                             filtered[clean_model_name] = model_data_copy
     
     return filtered
+
+def update_openrouter_from_api(api_key: str = None) -> None:
+    """Update OpenRouter models using the provider's native API"""
+    if not api_key:
+        console.print("[red]Error: API key required for OpenRouter-API update[/red]")
+        console.print("[yellow]Usage: update_models('OpenRouter-API', api_key='your-key')[/yellow]")
+        return
+    
+    # Create a mock prompt object to instantiate the provider
+    from .AiOpenRouter import AiOpenRouter
+    
+    class MockPrompt:
+        def __init__(self, api_key: str):
+            self.api_key = api_key
+            self.model = "mock"
+            self.vm = None
+    
+    try:
+        mock_prompt = MockPrompt(api_key)
+        provider = AiOpenRouter(mock_prompt)
+        
+        # Call the provider's update_models method
+        success = provider.update_models()
+        
+        if success:
+            console.print("[green]✓ Successfully updated OpenRouter models from API[/green]")
+        else:
+            console.print("[red]Failed to update OpenRouter models[/red]")
+            
+    except Exception as e:
+        console.print(f"[red]Error updating OpenRouter from API: {e}[/red]")
 
 def write_provider_json(provider_name: str, models: Dict[str, Any]) -> None:
     """Write provider models to JSON file"""

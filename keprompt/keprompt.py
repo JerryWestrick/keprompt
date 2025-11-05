@@ -6,13 +6,16 @@ import re
 import sys
 
 from rich.console import Console
+
+from keprompt.api import handle_json_command
 from .config import get_config
 from rich.logging import RichHandler
 from rich.prompt import Prompt
 from rich.table import Table
 from rich.text import Text
+from rich_argparse import RichHelpFormatter
 
-from .AiRegistry import AiRegistry
+from .ModelManager import ModelManager
 from .keprompt_functions import DefinedToolsArray
 from .keprompt_vm import VM, print_prompt_code, print_statement_types
 from .keprompt_utils import print_simple_table, format_model_count_data, handle_error
@@ -24,32 +27,34 @@ console.size = console.size
 logging.getLogger().setLevel(logging.WARNING)
 
 FORMAT = "%(message)s"
+
 # logging.basicConfig(level="NOTSET", format=FORMAT, datefmt="[%X]", handlers=[RichHandler(console=console)])
 
 logging.basicConfig(level=logging.WARNING,  format=FORMAT,datefmt="[%X]",handlers=[RichHandler(console=console, rich_tracebacks=True)])
 log = logging.getLogger(__file__)
+__all__ = ["main"]
 
 
-def print_functions():
-    table = Table(title="Available Functions")
-    table.add_column("Name", style="cyan", no_wrap=True)
-    table.add_column("Description/Parameters", style="green")
-    # Sort by LLM name, then model.
-    sortable_keys = [f"{AiRegistry.models[model_name].company}:{model_name}" for model_name in AiRegistry.models.keys()]
-    sortable_keys.sort()
-
-    for tool in DefinedToolsArray:
-        function = tool['function']
-        name = function['name']
-        description = function['description']
-
-        table.add_row(name, description,)
-        for k,v in function['parameters']['properties'].items():
-            table.add_row("", f"[bold blue]{k:10}[/]: {v['description']}")
-
-        table.add_row("","")
-
-    console.print(table)
+# def print_functions():
+#     table = Table(title="Available Functions")
+#     table.add_column("Name", style="cyan", no_wrap=True)
+#     table.add_column("Description/Parameters", style="green")
+#     # Sort by LLM name, then model.
+#     sortable_keys = [f"{ModelManager.models[model_name].company}:{model_name}" for model_name in ModelManager.models.keys()]
+#     sortable_keys.sort()
+#
+#     for tool in DefinedToolsArray:
+#         function = tool['function']
+#         name = function['name']
+#         description = function['description']
+#
+#         table.add_row(name, description,)
+#         for k,v in function['parameters']['properties'].items():
+#             table.add_row("", f"[bold blue]{k:10}[/]: {v['description']}")
+#
+#         table.add_row("","")
+#
+#     console.print(table)
 
 def matches_pattern(text: str, pattern: str) -> bool:
     """Case-insensitive pattern matching"""
@@ -64,7 +69,7 @@ def print_companies():
         {'name': 'Model Count', 'style': 'green', 'justify': 'right'}
     ]
     
-    rows = format_model_count_data(AiRegistry.models, 'company')
+    rows = format_model_count_data(ModelManager.models, 'company')
     print_simple_table("Available Companies (Model Creators)", columns, rows)
 
 def print_providers():
@@ -74,13 +79,13 @@ def print_providers():
         {'name': 'Model Count', 'style': 'green', 'justify': 'right'}
     ]
     
-    rows = format_model_count_data(AiRegistry.models, 'provider')
+    rows = format_model_count_data(ModelManager.models, 'provider')
     print_simple_table("Available Providers (API Services)", columns, rows)
 
 def print_models(model_pattern: str = "", company_pattern: str = "", provider_pattern: str = ""):
     # Filter models based on patterns
     filtered_models = {
-        name: model for name, model in AiRegistry.models.items()
+        name: model for name, model in ModelManager.models.items()
         if matches_pattern(name, model_pattern) and
            matches_pattern(model.company, company_pattern) and  
            matches_pattern(model.provider, provider_pattern)
@@ -181,261 +186,217 @@ def create_dropdown(options: list[str], prompt_text: str = "Select an option") -
 
 def get_new_api_key() -> None:
 
-    companies = sorted(AiRegistry.handlers.keys())
+    companies = sorted(ModelManager.handlers.keys())
     company = create_dropdown(companies, "AI Company?")
     # api_key = console.input(f"[bold green]Please enter your [/][bold cyan]{company} API key: [/]")
     api_key = getpass.getpass(f"Please enter your {company} API key: ")
     config = get_config()
     config.set_api_key(company, api_key)
 
-def print_prompt_lines(prompts_files: list[str]) -> None:
-    table = Table(title="Prompt Code")
-    table.add_column("Prompt", style="cyan bold", no_wrap=True)
-    table.add_column("Lno", style="blue bold", no_wrap=True)
-    table.add_column("Prompt Line", style="dark_green bold")
+def normalize_command_aliases(args: argparse.Namespace) -> argparse.Namespace:
+    """
+    Normalize all command aliases to their canonical forms.
+    This provides uniform aliasing throughout the system.
+    
+    Alias mappings:
+    - chat_command: get (list, show, view), create (start, new), update (reply, answer, send), delete (rm)
+    - prompt_command: get (list)
+    - models_command: get (list, show)
+    - functions_command: get (list, show)
+    - database_command: get (list, show)
+    """
+    # Chat command aliases
+    if hasattr(args, 'chat_command') and args.chat_command:
+        alias_map = {
+            'list': 'get',
+            'show': 'get',
+            'view': 'get',
+            'start': 'create',
+            'new': 'create',
+            'reply': 'update',
+            'answer': 'update',
+            'send': 'update',
+            'rm': 'delete',
+        }
+        if args.chat_command in alias_map:
+            args.chat_command = alias_map[args.chat_command]
+    
+    # Prompt command aliases
+    if hasattr(args, 'prompt_command') and args.prompt_command:
+        if args.prompt_command in ('list', 'show'):
+            args.prompt_command = 'get'
+    
+    # Models command aliases
+    if hasattr(args, 'models_command') and args.models_command:
+        if args.models_command in ('list', 'show'):
+            args.models_command = 'get'
+    
+    # Functions command aliases
+    if hasattr(args, 'functions_command') and args.functions_command:
+        if args.functions_command in ('list', 'show'):
+            args.functions_command = 'get'
+    
+    # Database command aliases
+    if hasattr(args, 'database_command') and args.database_command:
+        if args.database_command in ('list', 'show'):
+            args.database_command = 'get'
+    
+    return args
 
-    for prompt_file in prompts_files:
-        # console.print(f"{prompt_file}")
-        try:
-            title = os.path.basename(prompt_file)
-            with open(prompt_file, 'r') as file:
-                lines = file.readlines()
-                for lno, line in enumerate(lines):
-                    table.add_row(title, f"{lno:03}", line.strip())
-                    title = ''
-
-        except Exception as e:
-            handle_error(f"parsing file {prompt_file}: {str(e)}", exit_code=1, show_exception=True)
-        table.add_row('───────────────', '───', '──────────────────────────────────────────────────────────────────────')
-    console.print(table)
-
-class RichHelpFormatter(argparse.HelpFormatter):
-    """Custom help formatter that uses Rich for colorized output"""
-    
-    def __init__(self, prog):
-        super().__init__(prog, max_help_position=40, width=100)
-        self._console = Console()
-    
-    def format_help(self):
-        # Get the standard help text
-        help_text = super().format_help()
-        
-        # Use Rich to display it with colors
-        self._console.print()
-        self._console.print(f"[bold cyan]keprompt[/] [dim]v{__version__}[/] - [bold green]Prompt Engineering Tool[/]")
-        self._console.print()
-        
-        # Add Quick Start section at the top
-        self._console.print(f"[bold yellow]⚡ Quick Start for the Impatient:[/]")
-        self._console.print(f"  [dim]1. Find a prompt:       [/][blue]keprompt -p simple[/]")
-        self._console.print(f"  [green]   Shows prompts matching prompts/*simple*.prompt with their allowed parameters and default values[/]")
-        self._console.print(f"  [dim]2. Run the prompt:      [/][blue]keprompt -e simple --param llm openai/gpt-4o-mini[/]")
-        self._console.print(f"  [green]   → Note the Session ID in output: \"Session: 06e760ed\"[/]")
-        self._console.print(f"  [dim]3. Continue chatting:   [/][blue]keprompt --session 06e760ed --answer \"Who is William Tell?\"[/]")
-        self._console.print(f"  [green]   Uses the session ID and --answer to continue the conversation[/]")
-        self._console.print(f"  [dim]4. View/debug session:  [/][blue]keprompt --view-session 06e760ed[/]")
-        self._console.print(f"  [green]   To view/debug the interaction with the LLM[/]")
-        self._console.print()
-        self._console.print(f"[bold yellow]🔗 New JSON API Commands:[/]")
-        self._console.print(f"  [dim]• Get resources:        [/][blue]keprompt get models --provider OpenRouter[/]")
-        self._console.print(f"  [dim]• Create session:       [/][blue]keprompt create session --prompt simple[/]")
-        self._console.print(f"  [dim]• Continue session:     [/][blue]keprompt update session <id> --answer \"Hello\"[/]")
-        self._console.print()
-        self._console.print(f"[bold yellow]🔧 VM Namespace (New):[/]")
-        self._console.print(f"  [green]Prompts can now access VM state: [/][blue]<<VM.session_id>>, <<VM.model_name>>, <<VM.total_cost>>[/]")
-        self._console.print()
-        
-        # Split help into sections
-        lines = help_text.split('\n')
-        current_section = None
-        
-        for line in lines:
-            if line.startswith('usage:'):
-                self._console.print(f"[bold yellow]Usage:[/]")
-                usage_line = line.replace('usage: __main__.py', 'keprompt')
-                self._console.print(f"  [dim]{usage_line[7:]}[/]")  # Remove 'usage: '
-                self._console.print()
-            elif line.strip() == 'Prompt Engineering Tool.':
-                continue  # Skip this as we already showed it
-            elif line.strip() == 'options:':
-                self._console.print(f"[bold yellow]Options:[/]")
-                self._console.print(f"  [cyan]-h, --help[/]            Show this help message and exit")
-                self._console.print()
-            elif line.endswith(':') and not line.startswith('  '):
-                # This is a section header - add blank line before
-                section_name = line.rstrip(':')
-                self._console.print()  # Blank line before each group
-                
-                if section_name == 'Start a New Session':
-                    self._console.print(f"[bold green]🚀 {section_name}:[/]")
-                elif section_name == 'Continue an Existing Session':
-                    self._console.print(f"[bold green]🔄 {section_name}:[/]")
-                elif section_name == 'Session History & Review':
-                    self._console.print(f"[bold green]📋 {section_name}:[/]")
-                elif section_name == 'Prompt Management':
-                    self._console.print(f"[bold green]📝 {section_name}:[/]")
-                elif section_name == 'Available Functions':
-                    self._console.print(f"[bold green]⚙️  {section_name}:[/]")
-                elif section_name == 'LLM API Providers':
-                    self._console.print(f"[bold green]🤖 {section_name}:[/]")
-                elif section_name == 'Database Operations':
-                    self._console.print(f"[bold green]🗄️  {section_name}:[/]")
-                elif section_name == 'System Management & Updates':
-                    self._console.print(f"[bold green]🔧 {section_name}:[/]")
-                elif section_name == 'Development & Debugging':
-                    self._console.print(f"[bold green]🐛 {section_name}:[/]")
-                elif section_name == 'JSON API Commands (New)':
-                    self._console.print(f"[bold green]🔗 {section_name}:[/]")
-                elif section_name == 'General':
-                    self._console.print(f"[bold green]ℹ️  {section_name}:[/]")
-                
-                current_section = section_name
-            elif line.startswith('  -') or line.startswith('  --'):
-                # This is an argument line
-                parts = line.split(None, 1)
-                if len(parts) >= 2:
-                    arg_part = parts[0].strip()
-                    desc_part = parts[1] if len(parts) > 1 else ""
-                    self._console.print(f"  [cyan]{arg_part}[/] {desc_part}")
-                else:
-                    self._console.print(f"  [cyan]{line.strip()}[/]")
-                
-            elif line.startswith('                        '):
-                # This is a continuation of the description
-                self._console.print(f"                        [dim]{line.strip()}[/]")
-            elif line.strip():
-                # Any other non-empty line
-                self._console.print(line)
-        
-        self._console.print()
-        self._console.print("[dim]For more information, visit: https://github.com/JerryWestrick/keprompt[/]")
-        
-        # Return empty string since we've already printed everything
-        return ""
-
-def print_rich_help():
-    """Print help using Rich formatting - New JSON API Commands Only"""
-    console = Console()
-    
-    console.print()
-    console.print(f"[bold cyan]keprompt[/] [dim]v{__version__}[/] - [bold green]Prompt Engineering Tool[/]")
-    console.print()
-    
-    # Usage
-    console.print(f"[bold yellow]Usage:[/]")
-    console.print(f"  [dim]keprompt <verb> <resource> [options][/]")
-    console.print(f"  [dim]keprompt --help | --version[/]")
-    console.print()
-    
-    # Quick Start
-    console.print(f"[bold yellow]⚡ Quick Start:[/]")
-    console.print(f"  [dim]1. List prompts:        [/][blue]keprompt get prompts[/]")
-    console.print(f"  [dim]2. Run a prompt:        [/][blue]keprompt create session --prompt simple[/]")
-    console.print(f"  [dim]3. Continue session:    [/][blue]keprompt update session <id> --answer \"Hello\"[/]")
-    console.print(f"  [dim]4. List sessions:       [/][blue]keprompt get sessions[/]")
-    console.print(f"  [dim]5. View session:        [/][blue]keprompt get session <id>[/]")
-    console.print()
-    
-    # Resource Discovery Commands
-    console.print(f"[bold green]📋 Resource Discovery:[/]")
-    console.print(f"  [cyan]keprompt get prompts [pattern][/]")
-    console.print(f"    List prompts with metadata and source code")
-    console.print(f"  [cyan]keprompt get models [--name pattern] [--provider name] [--company name][/]")
-    console.print(f"    List available AI models with filtering")
-    console.print(f"  [cyan]keprompt get providers[/]")
-    console.print(f"    List all API service providers")
-    console.print(f"  [cyan]keprompt get companies[/]")
-    console.print(f"    List all model creators/companies")
-    console.print(f"  [cyan]keprompt get functions[/]")
-    console.print(f"    List all available functions for AI")
-    console.print()
-    
-    # Session Management Commands
-    console.print(f"[bold green]🔄 Session Management:[/]")
-    console.print(f"  [cyan]keprompt get sessions[/]")
-    console.print(f"    List all available sessions")
-    console.print(f"  [cyan]keprompt get session <session_id>[/]")
-    console.print(f"    Get detailed session history and data")
-    console.print(f"  [cyan]keprompt create session --prompt <name> [--param key value]...[/]")
-    console.print(f"    Create new session by executing a prompt")
-    console.print(f"  [cyan]keprompt update session <session_id> --answer <message>[/]")
-    console.print(f"    Continue conversation in existing session")
-    console.print(f"  [cyan]keprompt delete session <session_id>[/]")
-    console.print(f"    Delete a session and its history")
-    console.print()
-    
-    # System Management Commands
-    console.print(f"[bold green]🔧 System Management:[/]")
-    console.print(f"  [cyan]keprompt create workspace[/]")
-    console.print(f"    Initialize prompts and functions directories")
-    console.print(f"  [cyan]keprompt update models [provider][/]")
-    console.print(f"    Update model definitions for provider or all")
-    console.print(f"  [cyan]keprompt get builtins[/]")
-    console.print(f"    Check built-in functions status")
-    console.print(f"  [cyan]keprompt update builtins[/]")
-    console.print(f"    Update built-in functions")
-    console.print()
-    
-    # Database Management Commands
-    console.print(f"[bold green]🗄️  Database Management:[/]")
-    console.print(f"  [cyan]keprompt get database[/]")
-    console.print(f"    Show database statistics and information")
-    console.print(f"  [cyan]keprompt create database[/]")
-    console.print(f"    Initialize database and create tables")
-    console.print(f"  [cyan]keprompt delete database[/]")
-    console.print(f"    Delete entire database (nuclear option)")
-    console.print(f"  [cyan]keprompt update database [--max-days N] [--max-count N] [--max-gb N][/]")
-    console.print(f"    Clean up old sessions with optional limits")
-    console.print()
-    
-    # VM Namespace
-    console.print(f"[bold green]✨ VM Namespace (New Feature):[/]")
-    console.print(f"  Prompts can now access VM execution state:")
-    console.print(f"  [blue]<<VM.session_id>>[/] - Unique session identifier")
-    console.print(f"  [blue]<<VM.model_name>>[/] - Current model name")
-    console.print(f"  [blue]<<VM.provider>>[/] - API provider")
-    console.print(f"  [blue]<<VM.total_cost>>[/] - Total execution cost")
-    console.print(f"  [blue]<<VM.interaction_no>>[/] - Number of API calls")
-    console.print(f"  [blue]<<VM.toks_in>>, <<VM.toks_out>>[/] - Token counts")
-    console.print(f"  [dim]And many more VM properties for dynamic prompts[/]")
-    console.print()
-    
-    # General Options
-    console.print(f"[bold green]ℹ️  General Options:[/]")
-    console.print(f"  [cyan]-h, --help[/]     Show this help message and exit")
-    console.print(f"  [cyan]-v, --version[/]  Show version information and exit")
-    console.print()
-    
-    # Examples
-    console.print(f"[bold yellow]📚 Examples:[/]")
-    console.print(f"  [dim]# List all prompts[/]")
-    console.print(f"  [blue]keprompt get prompts[/]")
-    console.print()
-    console.print(f"  [dim]# Run a prompt with parameters[/]")
-    console.print(f"  [blue]keprompt create session --prompt math-tutor --param model gpt-4o[/]")
-    console.print()
-    console.print(f"  [dim]# Continue a conversation[/]")
-    console.print(f"  [blue]keprompt update session abc123 --answer \"What is 2+2?\"[/]")
-    console.print()
-    console.print(f"  [dim]# List models from specific provider[/]")
-    console.print(f"  [blue]keprompt get models --provider OpenRouter[/]")
-    console.print()
-    
-    console.print(f"[dim]For more information, visit: https://github.com/JerryWestrick/keprompt[/]")
-    console.print()
 
 def get_cmd_args() -> argparse.Namespace:
-    """Minimal argument parser - most functionality moved to JSON API"""
-    parser = argparse.ArgumentParser(description="Prompt Engineering Tool.")
+    """
+    Parse command‑line arguments for the object‑first CLI.
+
+    Example usages:
+        keprompt prompt get                     # list all prompts
+        keprompt prompt get --name my_prompt    # filter prompts by name
+        keprompt models get --provider OpenRouter
+        keprompt chat reply <id> --answer "Hello"
+    """
+    # Create parent parser with shared flags (can appear after subcommand)
+    parent = argparse.ArgumentParser(add_help=False)
+    parent.add_argument("-d", "--dump", action="store_true", help="Output cmd args")
+    format_group = parent.add_mutually_exclusive_group()
+    format_group.add_argument("--json", action="store_true", help="Output as JSON (machine-readable)")
+    format_group.add_argument("--pretty", action="store_true", help="Output as pretty tables (human-readable)")
     
-    # Only keep essential arguments
-    parser.add_argument('-v', '--version', action='store_true', help='Show version information and exit')
-    
-    return parser.parse_args()
+    # Main parser (only global options here)
+    parser = argparse.ArgumentParser(
+        prog="keprompt",
+        description="Prompt Engineering Tool – object‑first CLI",
+        formatter_class=RichHelpFormatter,
+        epilog=(
+            "[bold yellow]⚡ Quick Start:[/]\n"
+            "  keprompt prompts get\n"
+            "  keprompt models get --provider OpenRouter\n"
+            "  keprompt chats create --prompt math-tutor\n"
+        ),
+    )
+
+    parser.add_argument("--version", action="version", version=f"keprompt {__version__}")
+
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    # Prompt commands (accept both singular and plural)
+    prompt_parser = subparsers.add_parser("prompt", aliases=["prompts"], parents=[parent], help="Prompt operations")
+    prompt_subparsers = prompt_parser.add_subparsers(dest="prompt_command", required=True)
+    prompt_get = prompt_subparsers.add_parser("get", aliases=["list"], parents=[parent], help="Get prompts")
+    prompt_get.add_argument("--name", help="Filter by prompt name")
+
+    # Models commands (accept singular alias)
+    models_parser = subparsers.add_parser("models", aliases=["model"], parents=[parent], help="Model operations")
+    models_subparsers = models_parser.add_subparsers(dest="models_command", required=True)
+    models_get = models_subparsers.add_parser("get", aliases=["list", "show"], parents=[parent], help="Get models")
+    models_get.add_argument("--name", help="Filter by model name")
+    models_get.add_argument("--provider", help="Filter by provider")
+    models_get.add_argument("--company", help="Filter by company")
+    models_update = models_subparsers.add_parser("update", parents=[parent], help="update models ")
+    models_reset = models_subparsers.add_parser("reset", parents=[parent], help="Reset models to defaults")
+    models_update.add_argument("--provider", help="Filter by provider")
+
+    # Provider commands (accept singular alias)
+    provider_parser = subparsers.add_parser("provider", aliases=["providers"], parents=[parent], help="Provider operations")
+    provider_subparsers = provider_parser.add_subparsers(dest="provider_command", required=True)
+    provider_subparsers.add_parser("list", aliases=["get", "show"], parents=[parent], help="List all providers")
+
+    # Functions commands (accept singular alias)
+    functions_parser = subparsers.add_parser("functions", aliases=["function"], parents=[parent], help="Function operations")
+    functions_subparsers = functions_parser.add_subparsers(dest="functions_command", required=True)
+    functions_subparsers.add_parser("get", parents=[parent], help="Get functions")
+    functions_subparsers.add_parser("update", parents=[parent], help="Update functions")
+
+    # Chat commands (primary noun), accept conversational aliases
+    chat_parser = subparsers.add_parser("chat", aliases=["chats", "conversation", "conversations"], parents=[parent], help="Chat operations")
+    chat_subparsers = chat_parser.add_subparsers(dest="chat_command", required=True)
+
+    # create/start
+    chat_create = chat_subparsers.add_parser("create", aliases=["start", "new"], parents=[parent], help="Create a new chat from a prompt")
+    chat_create.add_argument("--prompt", required=True, help="Prompt name or filter")
+    # Support both '--param name value' and '--param name=value' forms (repeatable)
+    chat_create.add_argument("--param", nargs='+', action="append", help="Parameter (name value) or (name=value), repeatable")
+
+    # list/get
+    chat_get = chat_subparsers.add_parser("get", aliases=["list", "show", "view"], parents=[parent], help="Get a chat by id or list chats")
+    chat_get.add_argument("chat_id", nargs="?", help="Chat ID (8 chars)")
+    chat_get.add_argument("--limit", type=int, help="Max number of chats to list")
+
+    # reply/answer/send/update (continue a chat)
+    chat_reply = chat_subparsers.add_parser("reply", aliases=["answer", "send", "update"], parents=[parent], help="Send a message to a chat and get a reply")
+    chat_reply.add_argument("chat_id", help="Chat ID (8 chars)")
+    chat_reply.add_argument("message", nargs="?", help="Message text (if omitted, use --answer/--message)")
+    mex = chat_reply.add_mutually_exclusive_group()
+    mex.add_argument("--answer", help="Message text (explicit)")
+    mex.add_argument("--message", help="Message text (explicit)")
+    chat_reply.add_argument("--full", action="store_true", help="Show full conversation history (default: only new messages)")
+
+    # delete/rm
+    chat_delete = chat_subparsers.add_parser("delete", aliases=["rm"], parents=[parent], help="Delete a chat or prune chats")
+    chat_delete.add_argument("chat_id", nargs="?", help="Chat ID (8 chars)")
+    # pruning options (mutually exclusive)
+    pruneg = chat_delete.add_mutually_exclusive_group()
+    pruneg.add_argument("--days", type=int, dest="max_days", help="Delete chats older than N days")
+    pruneg.add_argument("--count", type=int, dest="max_count", help="Keep only the most recent N chats")
+    pruneg.add_argument("--gb", type=float, dest="max_size_gb", help="Target max DB size in GB")
+
+    # Database commands (keep singular, but accept plural alias)
+    database_parser = subparsers.add_parser("database", aliases=["databases"], parents=[parent], help="Database operations")
+    database_subparsers = database_parser.add_subparsers(dest="database_command", required=True)
+    database_get = database_subparsers.add_parser("get", parents=[parent], help="Get database")
+    databasse_create = database_subparsers.add_parser("create", parents=[parent], help="Delete and Create new database")
+    database_delete = database_subparsers.add_parser("delete", parents=[parent], help="Delete rows from database")
+
+    # Mutually exclusive pruning options
+    pruneg = database_delete.add_mutually_exclusive_group()
+    pruneg.add_argument("--days", type=int, help="Number of days")
+    pruneg.add_argument("--count", type=int, help="Count")
+    pruneg.add_argument("--gb", type=int, help="Size in GB")
+
+    # Server commands
+    server_parser = subparsers.add_parser("server", parents=[parent], help="HTTP server operations")
+    server_subparsers = server_parser.add_subparsers(dest="server_command", required=True)
+
+    # Common arguments for all server commands
+    def add_server_scope_args(parser):
+        scope_group = parser.add_mutually_exclusive_group()
+        scope_group.add_argument(
+            "--directory",
+            help="Directory path (default: current directory)"
+        )
+        scope_group.add_argument(
+            "--all",
+            action="store_true",
+            help="Apply to all registered servers"
+        )
+
+    # server start
+    server_start = server_subparsers.add_parser("start", parents=[parent], help="Start HTTP server")
+    add_server_scope_args(server_start)
+    server_start.add_argument("--port", type=int, help="Port (auto-assigned if not specified)")
+    server_start.add_argument("--web-gui", action="store_true", help="Enable web GUI")
+    server_start.add_argument("--reload", action="store_true", help="Enable auto-reload (development)")
+    server_start.add_argument("--host", default="localhost", help="Host to bind (default: localhost)")
+
+    # server list
+    server_list = server_subparsers.add_parser("list", parents=[parent], help="List servers")
+    add_server_scope_args(server_list)
+    server_list.add_argument("--active-only", action="store_true", help="Show only running servers")
+
+    # server status
+    server_status = server_subparsers.add_parser("status", parents=[parent], help="Check server status")
+    add_server_scope_args(server_status)
+
+    # server stop
+    server_stop = server_subparsers.add_parser("stop", parents=[parent], help="Stop server")
+    add_server_scope_args(server_stop)
+
+    args = parser.parse_args()
+    return args
 
 from pathlib import Path
 
 def prompt_pattern(prompt_name: str) -> str:
+
     if '*' in prompt_name:
         prompt_pattern = Path('prompts') / f"{prompt_name}.prompt"
     else:
@@ -462,51 +423,102 @@ def create_global_variables():
     }
 
 def main():
-    # Check for help first, before creating directories
-    if len(sys.argv) > 1 and (sys.argv[1] == '-h' or sys.argv[1] == '--help'):
-        print_rich_help()
-        return
-    
-    # Check for new REST-style commands first
-    if len(sys.argv) > 1 and sys.argv[1].lower() in ['get', 'create', 'update', 'delete']:
-        from .json_api import handle_json_command
-        exit_code = handle_json_command(sys.argv[1:])
-        sys.exit(exit_code)
-    
-    # Ensure 'prompts' directory exists
+    # create prompts directory if it doesn't exist'
     if not os.path.exists('prompts'):
         os.makedirs('prompts')
 
-    if not os.path.exists('logs'):
-        os.makedirs('logs')
-
     args = get_cmd_args()
+    
+    # Normalize all command aliases to canonical forms
+    args = normalize_command_aliases(args)
 
-    if args.version:
-        # Print the version and exit
-        console.print(f"[bold cyan]keprompt[/] [bold green]version[/] [bold magenta]{__version__}[/]")
+    # Determine output format from flags
+    # Priority: explicit flags > auto-detect from TTY
+    stdout_is_tty = sys.stdout.isatty()
+    
+    if args.json:
+        output_format = "json"
+        setattr(args, "pretty", False)
+    elif args.pretty:
+        output_format = "table"
+        setattr(args, "pretty", True)
+    else:
+        # Auto-detect: TTY = pretty tables, pipe = JSON
+        output_format = "table" if stdout_is_tty else "json"
+        setattr(args, "pretty", stdout_is_tty)
+
+    console = Console()
+    if args.dump:
+        console.print(f"[bold cyan]keprompt[/] [dim]v{__version__}[/] - [bold green]Prompt Engineering Tool[/]")
+        console.print(args)
         return
 
-    # If no JSON API command and no version, show migration message
-    console.print()
-    console.print(f"[bold yellow]🚀 keprompt has been upgraded![/]")
-    console.print()
-    console.print(f"[bold green]Old command format has been replaced with a clean JSON API.[/]")
-    console.print()
-    console.print(f"[bold cyan]New Commands:[/]")
-    console.print(f"  [dim]• List prompts:          [/][blue]keprompt get prompts[/]")
-    console.print(f"  [dim]• List models:           [/][blue]keprompt get models[/]")
-    console.print(f"  [dim]• Run a prompt:         [/][blue]keprompt create session --prompt simple[/]")
-    console.print(f"  [dim]• Continue session:     [/][blue]keprompt update session <id> --answer \"Hello\"[/]")
-    console.print(f"  [dim]• List sessions:        [/][blue]keprompt get sessions[/]")
-    console.print(f"  [dim]• View session:         [/][blue]keprompt get session <id>[/]")
-    console.print()
-    console.print(f"[bold yellow]For complete help:[/] [blue]keprompt --help[/]")
-    console.print()
-    console.print(f"[bold green]✨ New VM Namespace:[/] Prompts can now access [blue]<<VM.session_id>>, <<VM.model_name>>, <<VM.total_cost>>[/]")
-    console.print()
+    try:
+        response = handle_json_command(args)
 
+        # Build standardized envelope for machine output
+        if output_format == "json":
+            from datetime import datetime
+            import json as _json
 
+            # Determine success and error
+            success = True
+            error_obj = None
+            data_payload = None
+
+            if isinstance(response, dict):
+                success = response.get("success", True)
+                error_obj = response.get("error") if not success else None
+                data_payload = response.get("data", response)
+            else:
+                # Non-dict (e.g., Table). For JSON mode, we cannot serialize it directly.
+                # Provide a string representation as data.
+                data_payload = str(response)
+
+            envelope = {
+                "success": success,
+                "data": data_payload if success else None,
+                "error": error_obj if not success else None,
+                "meta": {
+                    "schema_version": 1,
+                    "command": f"{args.command}",
+                    "args": vars(args),
+                    "timestamp": datetime.utcnow().isoformat() + "Z",
+                    "version": __version__,
+                },
+            }
+            sys.stdout.write(_json.dumps(envelope, indent=2) + "\n")
+            sys.stdout.flush()
+            if not success:
+                # Also mirror a concise error to stderr and exit non-zero
+                err_console = Console(file=sys.stderr)
+                err_console.print(f"[red]Error:[/] {error_obj if isinstance(error_obj, str) else envelope['error']}")
+                sys.exit(1)
+            return
+
+        # Human/table output path
+        if isinstance(response, dict):
+            # Keep legacy behavior but avoid non-serializable Namespace in output
+            response.setdefault('success', True)
+            response['command'] = vars(args)
+            console.print(response)
+        else:
+            console.print(response)
+    except Exception as e:
+        # Standardize error handling
+        err_envelope = {
+            "success": False,
+            "data": None,
+            "error": {"code": "INTERNAL", "message": str(e)},
+            "meta": {"schema_version": 1, "command": f"{getattr(args, 'command', '?')}", "version": __version__},
+        }
+        if 'output_format' in locals() and output_format == 'json':
+            import json as _json
+            sys.stdout.write(_json.dumps(err_envelope, indent=2) + "\n")
+        else:
+            err_console = Console(file=sys.stderr)
+            err_console.print(err_envelope)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

@@ -8,11 +8,14 @@ import uuid
 from typing import cast, List
 
 from rich.console import Console
+from rich.markdown import Markdown
+from rich.panel import Panel
+
 from .config import get_config
 from rich.logging import RichHandler
 from rich.table import Table
 
-from .AiRegistry import AiRegistry, AiModel
+from .ModelManager import ModelManager, AiModel
 from  .keprompt_functions import DefinedFunctions, readfile
 from .AiPrompt import AiTextPart, AiImagePart, AiCall, AiResult, AiPrompt, AiMessage, MAX_LINE_LENGTH
 from  .keprompt_util import TOP_LEFT, BOTTOM_LEFT, VERTICAL, HORIZONTAL, TOP_RIGHT, RIGHT_TRIANGLE, \
@@ -41,10 +44,8 @@ def print_prompt_code(prompt_files: list[str]) -> None:
     for prompt_file in prompt_files:
         # co-*nsole.print(f"{prompt_file}")
         try:
-            # Create minimal global variables for parsing
-            from .keprompt import create_global_variables
-            global_vars = create_global_variables()
-            vm: VM = VM(prompt_file, global_vars)
+            # Let VM manage defaults internally
+            vm: VM = VM(filename=prompt_file)
             vm.parse_prompt()
         except Exception as e:
             console.print(f"[bold red]Error parsing file {prompt_file} : {str(e)}[/bold red]")
@@ -63,11 +64,24 @@ def print_prompt_code(prompt_files: list[str]) -> None:
 class StmtSyntaxError(Exception):
     pass
 
+from enum import Enum
+
+class PromptResolutionError(Exception):
+    pass
+
+
 class VM:
     """Class to hold Prompt Virtual Machine execution state"""
 
-    def __init__(self, filename: str, global_vars: dict[str, any], log_mode: LogMode = LogMode.PRODUCTION, log_identifier: str = None, vm_debug: bool = False, exec_debug: bool = False):
-        self.filename = filename
+    def __init__(self, filename: str | None = None, global_vars: dict[str, any] | None = None,
+                 prompt_ref: str | None = None, params: dict[str, any] | None = None,
+                 log_mode: LogMode = LogMode.PRODUCTION, log_identifier: str = None, vm_debug: bool = False, exec_debug: bool = False):
+        # Resolve filename either from direct path or logical prompt reference
+        resolved_filename = filename
+        if not resolved_filename and prompt_ref:
+            resolved_filename = self._resolve_prompt_ref(prompt_ref)
+
+        self.filename = resolved_filename
         self.log_mode = log_mode
         self.vm_debug = vm_debug
         self.exec_debug = exec_debug
@@ -76,8 +90,12 @@ class VM:
         # Generate unique prompt instance UUID
         self.prompt_uuid = str(uuid.uuid4())[:8]  # Use first 8 chars for readability
         
-        # Use the provided global variables (no defaults, no conditionals)
-        self.vdict = global_vars.copy()  # Copy to avoid modifying original
+        # Build variables with explicit defaults, then merge caller-provided dicts
+        self.vdict = self.default_globals()
+        if global_vars:
+            self.vdict.update(global_vars)
+        if params:
+            self.vdict.update(params)
         
         self.llm: dict[str, any] = dict()
         self.statements: list[StmtPrompt] = []
@@ -86,10 +104,10 @@ class VM:
         self.data: str = ''
         
         # Extract prompt name for logger
-        if filename:
-            prompt_name = os.path.splitext(os.path.basename(filename))[0]
+        if self.filename:
+            prompt_name = os.path.splitext(os.path.basename(self.filename))[0]
         else:
-            prompt_name = "session"
+            prompt_name = "chat"
         
         # Initialize the new standard logger
         self.logger = StandardLogger(prompt_name=prompt_name, mode=log_mode, log_identifier=log_identifier)
@@ -113,6 +131,67 @@ class VM:
         self.prompt_name: str = ""
         self.prompt_version: str = ""
         self.expected_params: dict = {}
+        self.pending_costs: list = []
+
+        # Automatically parse if filename provided
+        if self.filename:
+            self.parse_prompt()
+
+    @staticmethod
+    def default_globals() -> dict:
+        return {
+            'Prefix': '<<',
+            'Postfix': '>>',
+            'Debug': False,
+            'Verbose': False,
+        }
+
+    def _resolve_prompt_ref(self, prompt_ref: str) -> str:
+        """Resolve a logical prompt name to a single .prompt file inside prompts/.
+        Accepts either an existing file path ending with .prompt or a logical name.
+        Raises PromptResolutionError on 0 or >1 matches.
+        """
+        from pathlib import Path
+        import os as _os
+
+        # Direct file path
+        if _os.path.isfile(prompt_ref) and prompt_ref.endswith('.prompt'):
+            return prompt_ref
+
+        # Logical name → glob in prompts/
+        name = prompt_ref
+        base = Path('prompts')
+        pattern = (base / f"{name}.prompt") if ('*' in name) else (base / f"{name}*.prompt")
+        matches = sorted(Path('.').glob(str(pattern)))
+        if not matches:
+            raise PromptResolutionError(f"Prompt '{name}' not found (pattern: {pattern})")
+        if len(matches) > 1:
+            raise PromptResolutionError(f"Multiple prompts match '{name}': {[str(p) for p in matches]}")
+        return str(matches[0])
+
+
+    def serialize_statements(self) -> list[dict]:
+        """Serialize statements to a list of dictionaries for saving."""
+        return [
+            {
+                'msg_no': stmt.msg_no,
+                'keyword': stmt.keyword,
+                'value': stmt.value
+            }
+            for stmt in self.statements
+        ]
+
+    def deserialize_statements(self, statements_data: list[dict]):
+        """Deserialize statements from list of dictionaries."""
+        self.statements = []
+        for data in statements_data:
+            stmt = make_statement(
+                vm=self,
+                msg_no=data['msg_no'],
+                keyword=data['keyword'],
+                value=data['value']
+            )
+            self.statements.append(stmt)
 
     def print(self, *args, **kwargs):
         """Print method to output to both console and file."""
@@ -295,7 +374,7 @@ class VM:
         """
         # Map of available VM properties to their actual VM attributes
         vm_properties = {
-            'session_id': self.prompt_uuid,
+            'chat_id': self.prompt_uuid,
             'model_name': self.model_name,
             'provider': self.provider,
             'interaction_no': self.interaction_no,
@@ -314,13 +393,18 @@ class VM:
         
         return vm_properties.get(property_name)
 
+
+    def add_statement(self, keyword=None, value=None):
+        """Add a new statement to the prompt."""
+        self.statements.append(make_statement(self, len(self.statements), keyword=keyword, value=value))
+
     def parse_prompt(self) -> None:
         """Parse the prompt file and create a list of statements.
             parse according to rules in docs/PromptLanguage.md
         """
 
         if not self.filename:
-            # No prompt file to parse (session mode)
+            # No prompt file to parse (chat mode)
             return
 
         lines: list[str]
@@ -372,7 +456,8 @@ class VM:
                         last.value = f"{last.value}\n{value}".strip()
                         continue
 
-                self.statements.append(make_statement(self, len(self.statements), keyword=keyword, value=value))
+                self.add_statement(keyword=keyword, value=value)
+                # self.statements.append(make_statement(self, len(self.statements), keyword=keyword, value=value))
 
             except Exception as e:
                 raise StmtSyntaxError(
@@ -416,9 +501,11 @@ class VM:
             raise StmtSyntaxError(f".llm syntax error: model not defined")
         self.model_name = params['model']
 
-        if self.model_name not in AiRegistry.models:
+        # Let get_model() handle the existence check and lazy loading
+        try:
+            self.model = ModelManager.get_model(self.model_name)
+        except ValueError as e:
             raise StmtSyntaxError(f"Not Defined Error: Model {self.model_name} is not defined")
-        self.model = AiRegistry.get_model(self.model_name)
 
         if self.model.provider == '':
             raise StmtSyntaxError(f"Bad Model Definition error: provider not defined for model {self.model_name}")
@@ -428,67 +515,70 @@ class VM:
         for k, v in params.items():
             self.vdict[k] = v
 
+        # Store simple, JSON-safe metadata for use in prompts and logging
         self.vdict['provider'] = self.provider
         self.vdict['filename'] = self.filename
-        self.vdict['model'] = self.model
+        # Keep a simple string name for backward compatibility in prompts that expect <<model>>
+        self.vdict['model_name'] = self.model_name
+        # Expose a dict so prompts can access nested fields like <<model.provider>>
+        self.vdict['model'] = {
+            'name': self.model_name,
+            'provider': self.provider,
+            'company': getattr(self.model, 'company', ''),
+            'pricing': {
+                'input_cost': getattr(self.model, 'input_cost', 0.0),
+                'output_cost': getattr(self.model, 'output_cost', 0.0),
+            },
+            'context_length': getattr(self.model, 'context_length', None),
+        }
 
     def execute(self) -> None:
         """Execute the statements in the prompt file using the new standard logging system."""
         
-        # Output session ID at start
-        # console.print(f"[dim]Session: {self.prompt_uuid}[/dim]")
+        # Output chat ID at start
+        # console.print(f"[dim]Chat: {self.prompt_uuid}[/dim]")
         
         # Set initial prompt ID for logging context
         initial_prompt_id = f"{self.prompt_uuid}-init"
         self.logger.set_prompt_id(initial_prompt_id)
         
-        # Log session start
+        # Log chat start
         # if self.log_mode in [LogMode.LOG, LogMode.DEBUG]:
-        #     header_name = self.filename or "session"
+        #     header_name = self.filename or "chat"
         #     self.logger.log_info(f"Starting execution of {header_name}")
 
         # Execute all statements
-        for stmt_no, stmt in enumerate(self.statements):
+        while self.ip < len(self.statements):
+            stmt = self.statements[self.ip]
+        # for self.ip, stmt in enumerate(self.statements):
             try:
                 # VM DEBUG: Log before executing statement (only when --vm-debug flag is used)
                 if self.vm_debug:
-                    print(f"VM-DEBUG BEFORE EXEC: IP={stmt_no}, Statement={stmt.keyword} '{stmt.value[:50]}{'...' if len(stmt.value) > 50 else ''}'", file=sys.stderr)
+                    print(f"VM-DEBUG BEFORE EXEC: IP={self.ip}, Statement={stmt.keyword} '{stmt.value[:50]}{'...' if len(stmt.value) > 50 else ''}'", file=sys.stderr)
                     print(f"VM-DEBUG BEFORE EXEC: Total statements={len(self.statements)}", file=sys.stderr)
                     for i, s in enumerate(self.statements):
-                        marker = " <-- CURRENT" if i == stmt_no else ""
+                        marker = " <-- CURRENT" if i == self.ip else ""
                         print(f"VM-DEBUG   [{i:02d}] {s.keyword} '{s.value[:30]}{'...' if len(s.value) > 30 else ''}'{marker}", file=sys.stderr)
                 
                 stmt.execute(self)
                 
                 # VM DEBUG: Log after executing statement (only when --vm-debug flag is used)
                 if self.vm_debug:
-                    print(f"VM-DEBUG AFTER EXEC: IP={stmt_no}, Statement={stmt.keyword} completed", file=sys.stderr)
+                    print(f"VM-DEBUG AFTER EXEC: IP={self.ip}, Statement={stmt.keyword} completed", file=sys.stderr)
                     print(f"VM-DEBUG AFTER EXEC: Total statements={len(self.statements)}", file=sys.stderr)
                     for i, s in enumerate(self.statements):
-                        marker = " <-- JUST EXECUTED" if i == stmt_no else ""
+                        marker = " <-- JUST EXECUTED" if i == self.ip else ""
                         print(f"VM-DEBUG   [{i:02d}] {s.keyword} '{s.value[:30]}{'...' if len(s.value) > 30 else ''}'{marker}", file=sys.stderr)
                     
             except Exception as e:
-                self.logger.log_error(f"Error executing statement {stmt_no}: {str(e)}")
+                self.logger.log_error(f"Error executing statement {self.ip}: {str(e)}")
                 sys.exit(9)
 
             if stmt.keyword == '.exit':
                 break
 
-        # Save session to database (always enabled for normal execution)
-        try:
-            from .session_manager import get_session_manager
-            session_manager = get_session_manager()
-            session_name = session_manager.save_session(self)
-            # Optionally show session name in debug mode
-            if self.vm_debug:
-                print(f"VM-DEBUG: session saved as: {session_name}", file=sys.stderr)
-        except Exception as e:
-            # Don't fail execution if session saving fails
-            if self.vm_debug:
-                print(f"Warning: Failed to save session: {e}", file=sys.stderr)
 
-        # Log session end and cleanup
+        # Log chat end and cleanup
         if self.log_mode in [LogMode.LOG, LogMode.DEBUG]:
             self.logger.log_info(f"Completed execution")
             self.logger.close()
@@ -510,20 +600,20 @@ class VM:
 
         self.print(f"{hdr}[/]:{print_line}[bold white]{VERTICAL}[/]")
 
-    def log_session(self, call_id: str = None):
-        """Log session using the new logger system."""
+    def log_chat(self, call_id: str = None):
+        """Log chat using the new logger system."""
         messages = self.prompt.to_json()
         
-        # Add call_id to the session metadata if provided
+        # Add call_id to the chat metadata if provided
         if call_id:
-            session_data = {
+            chat_data = {
                 "call_id": call_id,
                 "messages": messages
             }
         else:
-            session_data = messages
+            chat_data = messages
             
-        self.logger.log_session(session_data)
+        self.logger.log_chat(chat_data)
 
     def print_json(self,    label: str, data: dict) -> None:
         """Print a JSON object to the console"""
@@ -540,91 +630,6 @@ class VM:
                 pdict[k] = v
         self.print(json.dumps(pdict, indent=2, sort_keys=True))
 
-    def load_session(self, session_id: str):
-        """Load VM state from database"""
-        try:
-            from .session_manager import get_session_manager
-            session_manager = get_session_manager()
-            data = session_manager.get_session(session_id)
-            
-            if not data:
-                return False  # session not found
-            
-            session = data['session']
-            messages_data = data['messages']
-            variables_data = data['variables']
-            
-            # Restore VM state from database
-            vm_state = json.loads(session.vm_state_json) if session.vm_state_json else {}
-            self.ip = vm_state.get("ip", 0)
-            self.model_name = vm_state.get("model_name", "")
-            self.interaction_no = vm_state.get("interaction_no", 0)
-
-            # Restore LLM configuration if we have model info
-            if self.model_name:
-                if self.model_name in AiRegistry.models:
-                    self.model = AiRegistry.get_model(self.model_name)
-                    # Set up basic LLM configuration
-                    self.llm = {"model": self.model_name}
-                    self.prompt.company = self.model.company
-                    self.prompt.model = self.model_name
-                    
-                    # Get API key
-                    try:
-                        config = get_config()
-                        api_key = config.get_api_key(self.model.provider)
-                        if api_key:
-                            self.llm['API_KEY'] = api_key
-                            self.api_key = api_key
-                            self.prompt.api_key = api_key
-                            self.prompt.provider = self.model.provider
-                    except:
-                        pass  # API key will be requested when needed
-            
-            # Restore messages (universal format)
-            self.prompt.messages = []
-            
-            for msg_data in messages_data:
-                role = msg_data.get("role", "")
-                content_data = msg_data.get("content", [])
-                
-                # Reconstruct message parts
-                content_parts = []
-                for part_data in content_data:
-                    part_type = part_data.get("type", "")
-                    
-                    if part_type == "text":
-                        content_parts.append(AiTextPart(vm=self, text=part_data.get("text", "")))
-                    elif part_type == "tool":
-                        content_parts.append(AiCall(
-                            vm=self,
-                            name=part_data.get("name", ""),
-                            arguments=part_data.get("arguments", {}),
-                            id=part_data.get("id", "")
-                        ))
-                    elif part_type == "tool_result":
-                        content_parts.append(AiResult(
-                            vm=self,
-                            name=part_data.get("name", ""),
-                            id=part_data.get("tool_use_id", ""),
-                            result=part_data.get("content", "")
-                        ))
-                
-                # Add message to prompt
-                self.prompt.messages.append(AiMessage(vm=self, role=role, content=content_parts))
-            
-            # Restore variables
-            self.vdict.update(variables_data)
-            
-            # Restore original filename from session metadata
-            if session.prompt_filename:
-                self.filename = session.prompt_filename
-            
-            return True  # Successfully loaded session
-            
-        except Exception as e:
-            print(f"Error loading session {session_id}: {e}", file=sys.stderr)
-            return False
 
     def execute_from(self, start_index: int = 0):
         """Execute statements starting from specified index"""
@@ -632,9 +637,9 @@ class VM:
         initial_prompt_id = f"{self.prompt_uuid}-resume"
         self.logger.set_prompt_id(initial_prompt_id)
         
-        # Log session start
+        # Log chat start
         if self.log_mode in [LogMode.LOG, LogMode.DEBUG]:
-            header_name = self.filename or "session"
+            header_name = self.filename or "chat"
             self.logger.log_info(f"Resuming execution of {header_name} from statement {start_index}")
 
         # Execute statements from start_index
@@ -649,7 +654,7 @@ class VM:
             if stmt.keyword == '.exit':
                 break
 
-        # Log session end and cleanup
+        # Log chat end and cleanup
         if self.log_mode in [LogMode.LOG, LogMode.DEBUG]:
             self.logger.log_info(f"Completed resumed execution")
             self.logger.close()
@@ -704,6 +709,7 @@ class StmtPrompt:
     def execute(self, vm: VM) -> None:
         # Use new standard logging methods
         vm.logger.log_statement(self.msg_no, self.keyword, self.value)
+        vm.ip += 1  # Increment the ip...
 
 
 class StmtAssistant(StmtPrompt):
@@ -729,6 +735,7 @@ class StmtAssistant(StmtPrompt):
             vm.prompt.add_message(vm=vm, role='assistant', content=[])
         else:
             vm.prompt.add_message(vm=vm, role='assistant', content=[AiTextPart(vm=vm, text=self.value)])
+
 
 
 class StmtClear(StmtPrompt):
@@ -824,6 +831,7 @@ class StmtCmd(StmtPrompt):
             last_msg.content.append(AiTextPart(vm=vm, text=text))
         vm.set_variable('last_response', text) # set last_response to result 
 
+        vm.ip += 1  # Increment the ip...
 
 
 class StmtComment(StmtPrompt):
@@ -839,7 +847,6 @@ class StmtComment(StmtPrompt):
         Executes the comment statement by printing it for informational display.
         """
         super().execute(vm)
-
 
 class StmtDebug(StmtPrompt):
     """
@@ -912,7 +919,7 @@ class StmtExec(StmtPrompt):
 
         Returns:
             None: The execution modifies the VM's state directly by adding the response to 
-                  the prompt context and logging the session data.
+                  the prompt context and logging the chat data.
         """
         # Log the exec statement
         super().execute(vm)
@@ -982,32 +989,32 @@ class StmtExec(StmtPrompt):
             max_tokens = vm.llm.get('max_tokens') if vm.llm else None
             context_length = vm.llm.get('context_length') if vm.llm else None
             
-            # Track the execution using session manager
-            try:
-                from .session_manager import get_session_manager
-                session_manager = get_session_manager()
-                session_manager.save_cost_tracking(
-                    vm=vm,
-                    msg_no=self.msg_no,
-                    call_id=call_id,
-                    tokens_in=tokens_in,
-                    tokens_out=tokens_out,
-                    cost_in=cost_in,
-                    cost_out=cost_out,
-                    elapsed_time=elapsed_time,
-                    model=vm.model_name,
-                    provider=vm.provider,
-                    success=True,  # If we got here, execution succeeded
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                    context_length=context_length
-                )
-            except Exception as e:
-                # Don't fail execution if cost tracking fails
-                print(f"Warning: Cost tracking failed: {e}", file=sys.stderr)
+            cost_data = {
+                'call_id': call_id,
+                'tokens_in': tokens_in,
+                'tokens_out': tokens_out,
+                'cost_in': float(cost_in),
+                'cost_out': float(cost_out),
+                'estimated_costs': float(cost_in + cost_out),
+                'elapsed_time': float(elapsed_time),
+                'model': vm.model_name,
+                'provider': vm.provider,
+                'success': True,  # If we got here, execution succeeded
+                'error_message': None,
+                'prompt_semantic_name': vm.prompt_name,
+                'prompt_version_tracking': vm.prompt_version,
+                'expected_params': json.dumps(vm.expected_params) if vm.expected_params else None,
+                'execution_mode': vm.log_mode.name.lower() if hasattr(vm.log_mode, 'name') else 'production',
+                'parameters': json.dumps(vm.vdict, default=str) if vm.vdict else None,
+                'environment': os.getenv('ENVIRONMENT', 'development'),
+                'temperature': temperature,
+                'max_tokens': max_tokens,
+                'context_length': context_length
+            }
+            vm.pending_costs.append((self.msg_no, cost_data))
 
-        # Note: session logging is now handled incrementally through log_message_exchange
-        # No need to log the entire session again here
+        # Note: chat logging is now handled incrementally through log_message_exchange
+        # No need to log the entire chat again here
 
 
 class StmtExit(StmtPrompt):
@@ -1031,7 +1038,7 @@ class StmtExit(StmtPrompt):
         
         # Log total costs when exiting
         if vm.toks_in > 0 or vm.toks_out > 0:
-            vm.logger.log_total_costs(vm.toks_in, vm.toks_out, vm.cost_in, vm.cost_out)
+            vm.logger.log_total_costs(vm.toks_in, vm.toks_out, vm.cost_in, vm.cost_out, vm.provider, vm.model_name, vm.prompt_uuid, vm.interaction_no)
 
 
 class StmtInclude(StmtPrompt):
@@ -1068,7 +1075,7 @@ class StmtImage(StmtPrompt):
 
     This class represents a `.image` keyword statement that adds an image
     to the AI prompt context. It incorporates a provided image file into the
-    session as an input element.
+    chat as an input element.
 
     Attributes:
         msg_no (int): The message number in the execution sequence.
@@ -1147,7 +1154,7 @@ class StmtLlm(StmtPrompt):
         vm.api_key = api_key
         vm.prompt.api_key = vm.api_key
         vm.prompt.provider = vm.model.provider
-        vm.prompt.model = vm.model_name
+        vm.prompt.model = vm.model.model  # Always contains provider/model-name
 
 
 class StmtSystem(StmtPrompt):
@@ -1155,7 +1162,7 @@ class StmtSystem(StmtPrompt):
     Handles the execution of a system message in the Virtual Machine (VM).
 
     This class represents a `.system` keyword statement in the prompt file and
-    allows for adding a system role message into the AI session context.
+    allows for adding a system role message into the AI chat context.
     A system role is used to provide instructions or contextual rules for the AI.
 
     Attributes:
@@ -1182,7 +1189,7 @@ class StmtText(StmtPrompt):
 
     This class represents a `.text` keyword statement in the prompt file. It is 
     responsible for handling user-provided text and appending it as part of the 
-    session context.
+    chat context.
 
     Attributes:
         msg_no (int): The message number in the execution sequence.
@@ -1253,7 +1260,15 @@ class StmtPrint(StmtPrompt):
         
         # Substitute variables and print to STDOUT (production channel)
         output_text = vm.substitute(self.value)
-        print(output_text)  # Add newline for clean output
+        md = Markdown(output_text)
+        console.print(Panel(md,
+                            title=f"[bold cyan]chat {vm.prompt_uuid}:{vm.interaction_no}[/bold cyan]",
+                            border_style="cyan",
+                            padding=(0, 0),
+                            expand=False,
+                            highlight=True),
+                            markup=True,
+                           soft_wrap=True)
 
 
 class StmtPromptMeta(StmtPrompt):
@@ -1394,20 +1409,20 @@ def print_statement_types():
     # Custom descriptions for better documentation
     descriptions = {
         '.#': 'Comment statement - ignored during execution',
-        '.assistant': 'Add an assistant message to the session context',
+        '.assistant': 'Add an assistant message to the chat context',
         '.clear': 'Delete specified files or file patterns from the system',
         '.cmd': 'Execute a defined function with specified arguments',
         '.debug': 'Display VM state information for debugging purposes',
         '.exec': 'Execute the current prompt context with the configured LLM',
         '.exit': 'Terminate prompt execution',
-        '.image': 'Add an image file to the session context',
+        '.image': 'Add an image file to the chat context',
         '.include': 'Include content from another file into the current context',
         '.llm': 'Configure the Language Learning Model and its parameters',
         '.print': 'Output text to STDOUT with variable substitution (production output)',
         '.set': 'Set variables including Prefix/Postfix for configurable substitution delimiters',
-        '.system': 'Add a system message to the session context',
+        '.system': 'Add a system message to the chat context',
         '.text': 'Add text content to the current message context',
-        '.user': 'Add a user message to the session context',
+        '.user': 'Add a user message to the chat context',
     }
 
     # Define which statements come from user vs LLM

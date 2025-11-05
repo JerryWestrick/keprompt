@@ -63,6 +63,11 @@ class AiProvider(abc.ABC):
         """Calculate costs based on token usage. Returns (cost_in, cost_out)."""
         pass
 
+    # @abc.abstractmethod
+    # def update_models(self) -> bool:
+    #     """Update models from provider API. Returns True if successful."""
+    #     pass
+
 
     @classmethod
     def register_models(cls, provider_name: str) -> None:
@@ -77,8 +82,8 @@ class AiProvider(abc.ABC):
         models = cls.load_models_from_json(json_path)
         
         # Import here to avoid circular imports
-        from .AiRegistry import AiRegistry
-        AiRegistry.register_models_from_dict(model_definitions=models)
+        from .ModelManager import ModelManager
+        ModelManager.register_models_from_dict(model_definitions=models)
 
     @classmethod
     def load_models_from_json(cls, json_path: str) -> Dict[str, Dict]:

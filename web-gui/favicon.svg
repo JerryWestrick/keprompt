@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Rounded rectangle background - Terminal black -->
+  <rect width="64" height="64" rx="8" fill="#1e1e1e"/>
+  
+  <!-- "Ke" text - top line -->
+  <text x="32" y="30" font-family="monospace" font-size="26" font-weight="bold" fill="#22d3ee" text-anchor="middle">Ke</text>
+  
+  <!-- "$_" text - bottom line -->
+  <text x="32" y="50" font-family="monospace" font-size="22" font-weight="bold" fill="#10b981" text-anchor="middle">$_</text>
+</svg>

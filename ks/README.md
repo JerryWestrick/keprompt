@@ -1,50 +1,201 @@
 # KePrompt Knowledge Store
 
-This directory contains structured context information designed to help AI assistants quickly understand and work with the KePrompt project.
+This directory contains comprehensive documentation about the KePrompt system for AI assistants and developers.
 
-## Purpose
+## What is KePrompt?
 
-The `ks/` (knowledge store) directory provides concise, AI-optimized documentation that enables rapid context restoration for development work. Unlike human documentation, these files focus on architectural decisions, design patterns, and key relationships that are essential for understanding the codebase.
+KePrompt is a sophisticated command-line tool and framework for prompt engineering and AI interaction. It provides a unified interface to multiple AI providers (OpenAI, Anthropic, Google, DeepSeek, Mistral, XAI, OpenRouter) with comprehensive features for production use.
 
-## Files Overview
+## Documentation Structure
 
-### Core Understanding
-- **[project-overview.md](project-overview.md)** - What KePrompt is and its core value proposition
-- **[architecture.md](architecture.md)** - System components and their relationships
-- **[core-concepts.md](core-concepts.md)** - Backend-as-prompts philosophy and CLI-first design
+### Core Documentation
+- **[01-overview.md](01-overview.md)** - High-level system architecture and design philosophy
+- **[02-cli-interface.md](02-cli-interface.md)** - Complete command-line interface documentation
+- **[03-prompt-language.md](03-prompt-language.md)** - The .prompt file language specification
+- **[04-web-gui.md](04-web-gui.md)** - Web-based graphical interface
 
-### Design Context
-- **[key-decisions.md](key-decisions.md)** - Important architectural choices and their rationale
-- **[development-patterns.md](development-patterns.md)** - Common integration patterns and workflows
-- **[directory-architecture.md](directory-architecture.md)** - Project directory structure analysis and recommendations
+## Quick Navigation
 
-### Feature Documentation
-- **[conversation-management.md](conversation-management.md)** - Professional conversation viewing system (v1.4.0)
+### For AI Assistants
+Start with:
+1. [01-overview.md](01-overview.md) - Understand the system
+2. [03-prompt-language.md](03-prompt-language.md) - Learn the language
+3. [02-cli-interface.md](02-cli-interface.md) - Understand the CLI
 
-## Quick Context Restoration
+### For Developers
+Start with:
+1. [01-overview.md](01-overview.md) - Architecture overview
+2. [02-cli-interface.md](02-cli-interface.md) - CLI implementation
+3. [03-prompt-language.md](03-prompt-language.md) - Language specification
 
-For AI assistants working on KePrompt:
+### For Users
+Start with:
+1. [02-cli-interface.md](02-cli-interface.md) - Command-line usage
+2. [03-prompt-language.md](03-prompt-language.md) - Writing prompts
+3. [04-web-gui.md](04-web-gui.md) - Using the web interface
 
-1. **Start with project-overview.md** to understand what KePrompt does
-2. **Read architecture.md** to understand how components interact
-3. **Review core-concepts.md** for the backend-as-prompts philosophy
-4. **Check key-decisions.md** for context on why things are designed this way
-5. **Reference development-patterns.md** for common implementation patterns
+## Key Features
 
-## Key Insights for AI Context
+### Object-First CLI Design
+The new command-line interface follows REST principles with object-first syntax:
+```bash
+keprompt <object> <verb> [options]
+```
 
-- **KePrompt is a CLI-first prompt execution engine** that abstracts AI providers
-- **Backend-as-prompts** means AI logic lives in `.prompt` files, separate from application code
-- **Universal integration** via subprocess calls makes it language-agnostic
-- **Production focus** with built-in cost tracking, logging, and conversation management
-- **File-based configuration** enables version control and portability
+Examples:
+```bash
+keprompt prompts get
+keprompt models get --provider OpenRouter
+keprompt chats create --prompt math-tutor
+keprompt chats reply <chat-id> "Tell me more"
+keprompt server start --web-gui
+```
 
-## Maintenance
+### Dual Output Modes
+- **Human Mode (--pretty)**: Rich formatted tables for terminal use
+- **Machine Mode (--json)**: Structured JSON for programmatic use
+- **Auto-detection**: TTY = pretty, pipe = JSON
 
-This knowledge store should be updated when:
-- Major architectural changes are made
-- New core concepts are introduced
-- Important design decisions are made or changed
-- Common development patterns evolve
+### Comprehensive Chat Management
+- Create chats from prompts with parameters
+- Continue conversations with context
+- List and filter chat history
+- Full conversation persistence with cost tracking
 
-The goal is to maintain a concise, accurate representation of the project's essential context for AI development assistance.
+### Multi-Server Support
+- Run multiple HTTP servers per directory
+- Automatic process management and registry
+- Health checking and status monitoring
+- Optional web GUI per server
+
+### Production-Ready Features
+- Comprehensive cost tracking with SQLite
+- Multi-mode logging (PRODUCTION, LOG, DEBUG)
+- Error handling and validation
+- API key management via .env files
+
+## Recent Updates
+
+### Version 1.9.2 Changes
+- **New CLI Syntax**: Object-first REST-style commands
+- **JSON API**: Unified API layer for all operations
+- **Chat System**: Full chat lifecycle management
+- **Server Management**: Multi-server HTTP support with web GUI
+- **Dual Output**: Automatic format detection for human/machine use
+
+## System Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     CLI Interface                            │
+│              (keprompt.py - argparse)                       │
+└──────────────┬──────────────────────────────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    JSON API Layer                            │
+│         (api.py - handles all commands)                      │
+├─────────────┬───────────┬──────────────┬────────────────────┤
+│  Resource   │  System   │    Chat      │    Server          │
+│  Discovery  │   Mgmt    │   Manager    │   Manager          │
+└─────────────┴───────────┴──────────────┴────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────────────────────────────┐
+│                  Core Components                             │
+├──────────────┬──────────────┬──────────────┬────────────────┤
+│ VM (Virtual  │ Model        │ Database     │ HTTP Server    │
+│ Machine)     │ Manager      │ Manager      │ (FastAPI)      │
+└──────────────┴──────────────┴──────────────┴────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────────────────────────────┐
+│                  AI Providers                                │
+├──────────┬──────────┬──────────┬──────────┬─────────────────┤
+│ OpenAI   │ Anthropic│ Google   │ DeepSeek │ Mistral, XAI... │
+└──────────┴──────────┴──────────┴──────────┴─────────────────┘
+```
+
+## File Organization
+
+### Project Structure
+```
+keprompt/
+├── keprompt/           # Main package
+│   ├── __init__.py
+│   ├── __main__.py
+│   ├── keprompt.py     # CLI entry point
+│   ├── api.py          # JSON API layer
+│   ├── chat_manager.py # Chat lifecycle
+│   ├── keprompt_vm.py  # Virtual Machine
+│   ├── AiProvider.py   # Base provider
+│   ├── AiOpenAi.py     # OpenAI implementation
+│   ├── AiAnthropic.py  # Anthropic implementation
+│   ├── ModelManager.py # Model registry
+│   ├── database.py     # Database layer
+│   ├── http_server.py  # REST API server
+│   └── ...
+├── prompts/            # User prompt files
+│   ├── *.prompt        # Prompt files
+│   ├── functions/      # Custom functions
+│   ├── chats.db        # Chat database
+│   └── sessions.db     # Legacy sessions
+├── web-gui/            # Web interface
+│   ├── index.html
+│   ├── app.js
+│   └── styles.css
+├── ks/                 # This knowledge store
+└── docs/               # Additional documentation
+```
+
+## Usage Patterns
+
+### Basic Workflow
+1. Initialize workspace: `keprompt prompts get`
+2. Set API key: Configure provider credentials
+3. Create prompt: Write .prompt file
+4. Execute: `keprompt chats create --prompt <name>`
+5. Continue: `keprompt chats reply <id> "message"`
+
+### Advanced Workflows
+- HTTP server with GUI: `keprompt server start --web-gui`
+- Cost analysis: Query chats.db for detailed tracking
+- Multi-turn conversations: Use chat management commands
+- Custom functions: Create executable tools in functions/
+
+## Learning Path
+
+1. **Start Here**: Read [01-overview.md](01-overview.md) for the big picture
+2. **CLI Basics**: Review [02-cli-interface.md](02-cli-interface.md)
+3. **Write Prompts**: Study [03-prompt-language.md](03-prompt-language.md)
+4. **Understand Execution**: Read [04-vm-architecture.md](04-vm-architecture.md)
+5. **API Integration**: Explore [05-json-api.md](05-json-api.md)
+6. **Advanced Features**: Dive into specific topics as needed
+
+## Glossary
+
+- **VM**: Virtual Machine - executes prompt statements
+- **Statement**: A single line in a .prompt file (e.g., `.user`, `.exec`)
+- **Chat**: A conversation instance with full persistence
+- **Session**: Legacy term for chat/conversation
+- **Provider**: AI API service (OpenAI, Anthropic, etc.)
+- **Model**: Specific AI model (gpt-4o, claude-3-5-sonnet, etc.)
+- **Function**: Callable tool for prompts (built-in or custom)
+- **Server Registry**: System for managing multiple HTTP servers
+
+## Version Information
+
+- Current Version: 1.9.2
+- Python: 3.8+
+- Key Dependencies: Rich, FastAPI, Uvicorn, Peewee, python-dotenv
+
+## Support
+
+For issues, questions, or contributions:
+- GitHub: https://github.com/JerryWestrick/keprompt
+- Documentation: See individual topic files in this directory
+
+---
+
+*Last Updated: 2025-11-04*
+*For KePrompt v1.9.2*

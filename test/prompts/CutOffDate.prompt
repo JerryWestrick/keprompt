@@ -1,3 +1,4 @@
+.prompt "name":"CutOffDate", "version":"1.0.0", "params":{"llm":"gpt-4o-mini"}, description:"Ask a model it's cut off date"
 .# Ask a model it's cut off date
 .llm "model": "<<llm>>"
 .system

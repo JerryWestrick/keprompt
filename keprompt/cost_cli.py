@@ -19,7 +19,7 @@ from rich.table import Table
 
 def get_costs_db_path() -> Path:
     """Get the path to the costs database."""
-    return Path("prompts/sessions.db")
+    return Path("prompts/chats.db")
 
 
 def check_database_exists() -> bool:
@@ -100,7 +100,7 @@ def get_costs_by_prompt(days: int = 7) -> list:
     conn = sqlite3.connect(str(db_path))
     cursor = conn.execute("""
         SELECT 
-            prompt_name,
+            COALESCE(prompt_semantic_name, 'unknown') as display_name,
             COUNT(*) as call_count,
             SUM(tokens_in) as total_tokens_in,
             SUM(tokens_out) as total_tokens_out,
@@ -108,7 +108,7 @@ def get_costs_by_prompt(days: int = 7) -> list:
             AVG(estimated_costs) as avg_cost
         FROM cost_tracking 
         WHERE timestamp >= ?
-        GROUP BY prompt_name
+        GROUP BY display_name
         ORDER BY total_cost DESC
     """, (threshold_str,))
     
@@ -152,7 +152,7 @@ def print_recent_costs(limit: int = 10):
     console = Console()
     
     if not check_database_exists():
-        console.print("[red]No cost tracking database found at prompts/sessions.db[/red]")
+        console.print("[red]No cost tracking database found at prompts/chats.db[/red]")
         console.print("Run a prompt to start tracking costs.")
         return
     
@@ -218,7 +218,7 @@ def print_cost_summary(days: int = 7):
     console = Console()
     
     if not check_database_exists():
-        console.print("[red]No cost tracking database found at prompts/sessions.db[/red]")
+        console.print("[red]No cost tracking database found at prompts/chats.db[/red]")
         return
     
     summary = get_cost_summary(days)
@@ -250,7 +250,7 @@ def print_costs_by_prompt(days: int = 7):
     console = Console()
     
     if not check_database_exists():
-        console.print("[red]No cost tracking database found at prompts/sessions.db[/red]")
+        console.print("[red]No cost tracking database found at prompts/chats.db[/red]")
         return
     
     costs = get_costs_by_prompt(days)
@@ -286,7 +286,7 @@ def print_costs_for_prompt(prompt_name: str, days: int = 30):
     console = Console()
     
     if not check_database_exists():
-        console.print("[red]No cost tracking database found at prompts/sessions.db[/red]")
+        console.print("[red]No cost tracking database found at prompts/chats.db[/red]")
         return
     
     db_path = get_costs_db_path()
@@ -299,7 +299,7 @@ def print_costs_for_prompt(prompt_name: str, days: int = 30):
     # Query for specific prompt using semantic name or filename
     query = """
     SELECT 
-        COALESCE(prompt_semantic_name, prompt_name) as display_name,
+        COALESCE(prompt_semantic_name, prompt_name) as display_name, 
         prompt_version,
         provider,
         model,
@@ -307,7 +307,7 @@ def print_costs_for_prompt(prompt_name: str, days: int = 30):
         tokens_out,
         estimated_costs,
         strftime('%m-%d %H:%M', timestamp) as time,
-        session_id
+        chat_id
     FROM cost_tracking 
     WHERE (COALESCE(prompt_semantic_name, prompt_name) LIKE ? OR prompt_name LIKE ?)
       AND timestamp >= ?
@@ -356,7 +356,7 @@ def print_costs_for_prompt(prompt_name: str, days: int = 30):
     detail_table.add_column("Time", style="dim", no_wrap=True)
     
     for row in rows:
-        display_name, version, provider, model, tokens_in, tokens_out, cost, time, session_id = row
+        display_name, version, provider, model, tokens_in, tokens_out, cost, time, chat_id = row
         detail_table.add_row(
             display_name or "unknown",
             version or "unknown",
@@ -376,7 +376,7 @@ def print_costs_by_model(days: int = 7):
     console = Console()
     
     if not check_database_exists():
-        console.print("[red]No cost tracking database found at prompts/sessions.db[/red]")
+        console.print("[red]No cost tracking database found at prompts/chats.db[/red]")
         return
     
     costs = get_costs_by_model(days)
@@ -415,7 +415,7 @@ def export_costs_csv(filename: str, days: int = 30):
     
     db_path = get_costs_db_path()
     if not db_path.exists():
-        print("No cost tracking database found at prompts/sessions.db", file=sys.stderr)
+        print("No cost tracking database found at prompts/chats.db", file=sys.stderr)
         return False
     
     threshold = datetime.now() - timedelta(days=days)
@@ -424,8 +424,8 @@ def export_costs_csv(filename: str, days: int = 30):
     conn = sqlite3.connect(str(db_path))
     cursor = conn.execute("""
         SELECT prompt_name, version, timestamp, tokens_in, tokens_out, estimated_costs,
-               model, provider, cost_in, cost_out, session_id, call_id,
-               user_id, project, parameters, success, error_message,
+               model, provider, cost_in, cost_out, chat_id, call_id,
+               project, parameters, success, error_message,
                context_length, temperature, max_tokens,
                hostname, environment, git_commit, execution_mode
         FROM cost_tracking 
@@ -439,8 +439,8 @@ def export_costs_csv(filename: str, days: int = 30):
         # Write header
         writer.writerow([
             'prompt_name', 'version', 'timestamp', 'tokens_in', 'tokens_out', 'estimated_costs',
-            'model', 'provider', 'cost_in', 'cost_out', 'session_id', 'call_id',
-            'user_id', 'project', 'parameters', 'success', 'error_message',
+            'model', 'provider', 'cost_in', 'cost_out', 'chat_id', 'call_id',
+            'project', 'parameters', 'success', 'error_message',
             'context_length', 'temperature', 'max_tokens',
             'hostname', 'environment', 'git_commit', 'execution_mode'
         ])

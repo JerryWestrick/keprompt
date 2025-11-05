@@ -6,7 +6,7 @@ from typing import List, Optional
 from rich.console import Console
 from .config import get_config
 
-from .AiRegistry import AiRegistry
+from .ModelManager import ModelManager
 from .keprompt_util import HORIZONTAL_LINE, TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT, VERTICAL
 from .keprompt_utils import truncate_for_display
 
@@ -183,7 +183,7 @@ class AiPrompt:
         self.toks_in: int = 0
         self.toks_out: int = 0
         self.provider: str = ""
-        self.model: str = ""
+        self.model: str = ""  # ALWAYS contains provider/model-name format
         self.api_key: str = ""
         self.vm = vm
 
@@ -233,7 +233,7 @@ class AiPrompt:
         # if 'LLM' in self.vm.debug:
         #     console.print("[bold yellow]Sending to API...[/bold yellow]")
 
-        handler = AiRegistry.create_handler(prompt=self)
+        handler = ModelManager.create_handler(prompt=self)
 
         if not handler:
             raise ValueError(f"No handler registered for {self.provider}")

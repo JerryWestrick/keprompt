@@ -23,10 +23,10 @@ class Config:
         # Default configuration
         self._config = {
             'database': {
-                'url': 'sqlite:///prompts/sessions.db'
+                'url': 'sqlite:///prompts/chats.db'
             },
-            'sessions': {
-                'enabled': True,  # Enabled by default - all executions create sessions
+            'chats': {
+                'enabled': True,  # Enabled by default - all executions create chats
                 'auto_cleanup': False,
                 'max_days': 30,
                 'max_size_gb': 2.0,
@@ -76,10 +76,10 @@ class Config:
         if db_url:
             self._config['database']['url'] = db_url
         
-        # sessions enabled override
-        sessions_enabled = os.getenv('KEPROMPT_SESSIONS')
-        if sessions_enabled is not None:
-            self._config['sessions']['enabled'] = sessions_enabled.lower() in ('true', '1', 'yes', 'on')
+        # chats enabled override
+        chats_enabled = os.getenv('KEPROMPT_CHATS')
+        if chats_enabled is not None:
+            self._config['chats']['enabled'] = chats_enabled.lower() in ('true', '1', 'yes', 'on')
     
     def get(self, section: str, key: str, default: Any = None) -> Any:
         """Get configuration value."""
@@ -87,18 +87,18 @@ class Config:
     
     def get_database_url(self) -> str:
         """Get database URL."""
-        return self.get('database', 'url', 'sqlite:///prompts/sessions.db')
+        return self.get('database', 'url', 'sqlite:///prompts/chats.db')
     
-    def is_sessions_enabled(self) -> bool:
-        """Check if sessions are enabled."""
-        return self.get('sessions', 'enabled', True)
+    def is_chats_enabled(self) -> bool:
+        """Check if chats are enabled."""
+        return self.get('chats', 'enabled', True)
     
     def get_cleanup_settings(self) -> Dict[str, Any]:
         """Get cleanup settings."""
         return {
-            'max_days': self.get('sessions', 'max_days', 30),
-            'max_size_gb': self.get('sessions', 'max_size_gb', 2.0),
-            'max_count': self.get('sessions', 'max_count', 5000)
+            'max_days': self.get('chats', 'max_days', 30),
+            'max_size_gb': self.get('chats', 'max_size_gb', 2.0),
+            'max_count': self.get('chats', 'max_count', 5000)
         }
     
     def _load_env_file(self):

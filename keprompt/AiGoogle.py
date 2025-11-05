@@ -2,7 +2,7 @@ from typing import Dict, List
 import json
 from rich.console import Console
 
-from .AiRegistry import AiRegistry
+from .ModelManager import ModelManager
 from .AiProvider import AiProvider
 from .AiPrompt import AiMessage, AiTextPart, AiCall, AiResult, AiPrompt
 from .keprompt_functions import DefinedFunctions, DefinedToolsArray
@@ -12,6 +12,8 @@ terminal_width = console.size.width
 
 
 class AiGoogle(AiProvider):
+    litellm_provider = "gemini"
+    
     def prepare_request(self, messages: List[Dict]) -> Dict:
         request = {
             "contents": messages,
@@ -70,16 +72,22 @@ class AiGoogle(AiProvider):
 
     def calculate_costs(self, tokens_in: int, tokens_out: int) -> tuple[float, float]:
         """Calculate costs based on token usage and model pricing"""
-        from .AiRegistry import AiRegistry
+        from .ModelManager import ModelManager
         
         try:
-            model = AiRegistry.get_model(self.prompt.model)
+            model = ModelManager.get_model(self.prompt.model_lookup_key)
             cost_in = tokens_in * model.input_cost
             cost_out = tokens_out * model.output_cost
             return cost_in, cost_out
         except Exception:
             # Fallback to zero costs if model not found
             return 0.0, 0.0
+
+    # def update_models(self) -> bool:
+    #     """Update models from provider API - not yet implemented"""
+    #     console.print("[yellow]Model updating not yet implemented for Google provider[/yellow]")
+    #     return False
+
 
 # Prepare Google tools array
 GoogleToolsArray = [
@@ -91,5 +99,4 @@ GoogleToolsArray = [
     for tool in DefinedToolsArray
 ]
 
-# Register handler only - models loaded from JSON files
-AiRegistry.register_handler(provider_name="Google", handler_class=AiGoogle)
+ModelManager.register_handler(provider_name="gemini", handler_class=AiGoogle)

@@ -1,0 +1,9 @@
+.prompt "name":"Find Source", "version":"1.0.0", "params":{"model":"openai/gpt-4o-mini"}
+.llm "model": "<<model>>"
+.system
+You will be given a LiteLLM json element describing an AI model that is accessible via API.
+Read the entries, find the official web page that describes the model, and add its link
+as "source" parameter.  Return the original json with the source value added.
+.user
+<<ele>>
+exec

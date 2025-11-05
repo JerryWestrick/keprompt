@@ -203,6 +203,8 @@ def execute_external_function(function_name: str, arguments: Dict[str, Any]) -> 
     return loader.execute_function(function_name, arguments, function_map)
 
 # Load external functions
+
+
 _external_function_data = load_external_functions()
 
 # Use external function definitions

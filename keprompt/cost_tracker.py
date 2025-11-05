@@ -23,7 +23,7 @@ class CostTracker:
     SQLite-based cost tracking system for KePrompt.
     
     Automatically tracks AI API costs, tokens, and execution metadata
-    to prompts/sessions.db database file.
+    to prompts/chats.db database file.
     """
     
     def __init__(self, prompts_dir: str = "prompts"):
@@ -31,10 +31,10 @@ class CostTracker:
         Initialize cost tracker.
         
         Args:
-            prompts_dir: Directory containing prompts (where sessions.db will be created)
+            prompts_dir: Directory containing prompts (where chats.db will be created)
         """
         self.prompts_dir = Path(prompts_dir)
-        self.db_path = self.prompts_dir / "sessions.db"
+        self.db_path = self.prompts_dir / "chats.db"
         self.conn = None
         self._ensure_database()
     
@@ -71,7 +71,7 @@ class CostTracker:
             provider TEXT NOT NULL,              -- AI provider
             cost_in REAL NOT NULL,              -- Input token cost
             cost_out REAL NOT NULL,             -- Output token cost
-            session_id TEXT NOT NULL,           -- Session identifier
+            chat_id TEXT NOT NULL,              -- Chat identifier
             call_id TEXT NOT NULL,              -- API call identifier
             
             -- Application-provided fields (NULL if not provided)
@@ -111,7 +111,7 @@ class CostTracker:
             "CREATE INDEX IF NOT EXISTS idx_prompt_name ON cost_tracking(prompt_name)",
             "CREATE INDEX IF NOT EXISTS idx_model ON cost_tracking(model)",
             "CREATE INDEX IF NOT EXISTS idx_project ON cost_tracking(project)",
-            "CREATE INDEX IF NOT EXISTS idx_session_id ON cost_tracking(session_id)"
+            "CREATE INDEX IF NOT EXISTS idx_chat_id ON cost_tracking(chat_id)"
         ]
         
         for index_sql in indexes:
@@ -183,7 +183,7 @@ class CostTracker:
     
     def track_execution(self,
                        prompt_name: str,
-                       session_id: str,
+                       chat_id: str,
                        call_id: str,
                        model: str,
                        provider: str,
@@ -208,7 +208,7 @@ class CostTracker:
         
         Args:
             prompt_name: Name of the prompt file (without path/extension)
-            session_id: Unique session identifier
+            chat_id: Unique chat identifier
             call_id: Unique API call identifier
             model: AI model used
             provider: AI provider
@@ -268,7 +268,7 @@ class CostTracker:
         insert_sql = """
         INSERT INTO cost_tracking (
             prompt_name, version, timestamp, tokens_in, tokens_out, estimated_costs, elapsed_time,
-            model, provider, cost_in, cost_out, session_id, call_id,
+            model, provider, cost_in, cost_out, chat_id, call_id,
             project, parameters, prompt_semantic_name, prompt_version, expected_params,
             success, error_message, context_length, temperature, max_tokens,
             hostname, environment, git_commit, execution_mode
@@ -277,7 +277,7 @@ class CostTracker:
         
         values = (
             prompt_name, __version__, timestamp, tokens_in, tokens_out, total_cost, elapsed_time,
-            model, provider, cost_in, cost_out, session_id, call_id,
+            model, provider, cost_in, cost_out, chat_id, call_id,
             project, parameters_json, 
             prompt_semantic_name, prompt_version, 
             json.dumps(expected_params) if expected_params else None,
@@ -292,12 +292,12 @@ class CostTracker:
             # Log error but don't fail execution
             print(f"Warning: Cost tracking failed: {e}", file=os.sys.stderr)
     
-    def get_session_costs(self, session_id: str) -> Dict[str, Any]:
+    def get_chat_costs(self, chat_id: str) -> Dict[str, Any]:
         """
-        Get cost summary for a specific session.
+        Get cost summary for a specific chat.
         
         Args:
-            session_id: Session identifier
+            chat_id: Chat identifier
             
         Returns:
             Dictionary with cost summary
@@ -316,10 +316,10 @@ class CostTracker:
             AVG(elapsed_time) as avg_elapsed_time,
             MAX(timestamp) as last_call
         FROM cost_tracking 
-        WHERE session_id = ?
+        WHERE chat_id = ?
         """
         
-        cursor = self.conn.execute(query, (session_id,))
+        cursor = self.conn.execute(query, (chat_id,))
         row = cursor.fetchone()
         
         if row and row[0] > 0:  # call_count > 0
@@ -387,7 +387,7 @@ def get_cost_tracker() -> CostTracker:
 
 
 def track_prompt_execution(prompt_name: str,
-                          session_id: str,
+                          chat_id: str,
                           call_id: str,
                           model: str,
                           provider: str,
@@ -406,7 +406,7 @@ def track_prompt_execution(prompt_name: str,
     tracker = get_cost_tracker()
     tracker.track_execution(
         prompt_name=prompt_name,
-        session_id=session_id,
+        chat_id=chat_id,
         call_id=call_id,
         model=model,
         provider=provider,

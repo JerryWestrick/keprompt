@@ -1,5 +1,6 @@
+.prompt "name":"Snake", "version":"1.0.0", "params":{"llm":"gpt-4o-mini"}, description:"Create a snake game"
 .# Make snake program with gpt-4o
-.llm "model": "gpt-4o"
+.llm "model": <<llm>>
 .system
 You are to provide short concise answers.
 .user

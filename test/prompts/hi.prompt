@@ -1,3 +1,4 @@
+.prompt "name":"Hi", "version":"1.0.0", "params":{"llm":"gpt-4o-mini"}, description:"Simple Hi Prompt"
 .# Ask a model Hi to test if it is callable
 .llm "model": "<<llm>>"
 .system

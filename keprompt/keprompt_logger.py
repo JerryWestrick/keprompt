@@ -52,7 +52,7 @@ class StandardLogger:
     Simplified logging system for keprompt.
     
     Supports PRODUCTION (clean STDOUT) and DEBUG (rich STDERR) modes.
-    Session details are now captured in sessions.db and viewable via session_viewer.
+    Chat details are now captured in chats.db and viewable via chat_viewer.
     """
     
     def __init__(self, prompt_name: str, mode: LogMode = LogMode.PRODUCTION, log_identifier: str = None):
@@ -200,13 +200,31 @@ class StandardLogger:
         """Log execution flow (Call-01 <--, Call-01 -->)."""
         self.log_debug(f"{direction} {message}")
     
-    def log_total_costs(self, total_tokens_in: int, total_tokens_out: int, total_cost_in: float, total_cost_out: float):
+    def log_total_costs(self, total_tokens_in: int, total_tokens_out: int, total_cost_in: float, total_cost_out: float, provider: str = "", model: str = "", chat_id: str = "", interaction_no: int = 0):
         """Log total costs when exiting keprompt."""
         total_cost = total_cost_in + total_cost_out
-        self.log_llm(f"SESSION TOTAL: Tokens In: {total_tokens_in}, Out: {total_tokens_out}, Cost In: ${total_cost_in:.6f}, Out: ${total_cost_out:.6f}, Total: ${total_cost:.6f}")
+        
+        # Format chat identification
+        chat_info = ""
+        if chat_id:
+            if interaction_no > 0:
+                chat_info = f"Chat {chat_id}:{interaction_no}"
+            else:
+                chat_info = f"Chat {chat_id}"
+        else:
+            chat_info = "Chat"
+        
+        # Format provider and model info
+        model_info = ""
+        if provider and model:
+            model_info = f" with {provider}:{model}"
+        elif model:
+            model_info = f" with {model}"
+        
+        self.log_llm(f"CHAT TOTAL: Tokens In: {total_tokens_in}, Out: {total_tokens_out}, Cost In: ${total_cost_in:.6f}, Out: ${total_cost_out:.6f}, Total: ${total_cost:.6f}{model_info}")
         
         # Also print to stderr for immediate visibility
-        print(f"Session Total Cost: ${total_cost:.6f} (In: ${total_cost_in:.6f}, Out: ${total_cost_out:.6f})", file=sys.stderr)
+        print(f"{chat_info}{model_info} Total Cost: ${total_cost:.6f} (In: ${total_cost_in:.6f}, Out: ${total_cost_out:.6f})", file=sys.stderr)
     
     def print_exception(self):
         """Print exception information."""
@@ -244,9 +262,9 @@ class StandardLogger:
         if self.mode == LogMode.DEBUG:
             self.log_msg(f"Message exchange: {len(messages)} messages")
     
-    def log_session(self, conversation_data: dict):
+    def log_chat(self, conversation_data: dict):
         """Log conversation data."""
-        self.log_msg(f"Session logged: {len(conversation_data.get('messages', []))} messages")
+        self.log_msg(f"Chat logged: {len(conversation_data.get('messages', []))} messages")
     
     def log_user_answer(self, answer: str):
         """Log user answer in conversation mode."""

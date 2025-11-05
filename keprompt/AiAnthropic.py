@@ -3,7 +3,7 @@ from typing import Dict, List
 import json
 from rich.console import Console
 
-from .AiRegistry import AiRegistry
+from .ModelManager import ModelManager
 from .AiProvider import AiProvider
 from .AiPrompt import AiMessage, AiTextPart, AiCall, AiResult, AiPrompt
 from .keprompt_functions import DefinedFunctions, DefinedToolsArray
@@ -14,10 +14,11 @@ terminal_width = console.size.width
 
 
 class AiAnthropic(AiProvider):
+    litellm_provider = "anthropic"
 
     def prepare_request(self, messages: List[Dict]) -> Dict:
         return {
-            "model": self.prompt.model,
+            "model": ModelManager.get_model(self.prompt.model).get_api_model_name(),
             "messages": messages,
             "tools": AnthropicToolsArray,
             "max_tokens": 4096
@@ -73,16 +74,21 @@ class AiAnthropic(AiProvider):
 
     def calculate_costs(self, tokens_in: int, tokens_out: int) -> tuple[float, float]:
         """Calculate costs based on token usage and model pricing"""
-        from .AiRegistry import AiRegistry
+        from .ModelManager import ModelManager
         
         try:
-            model = AiRegistry.get_model(self.prompt.model)
+            model = ModelManager.get_model(self.prompt.model_lookup_key)
             cost_in = tokens_in * model.input_cost
             cost_out = tokens_out * model.output_cost
             return cost_in, cost_out
         except Exception:
             # Fallback to zero costs if model not found
             return 0.0, 0.0
+
+    # def update_models(self) -> bool:
+    #     """Update models from Anthropic API - not yet implemented"""
+    #     console.print("[yellow]Model updating not yet implemented for Anthropic provider[/yellow]")
+    #     return False
 
 # Prepare tools for Anthropic and Google integrations
 AnthropicToolsArray = [
@@ -95,4 +101,4 @@ AnthropicToolsArray = [
 ]
 
 # Register handler only - models loaded from JSON files
-AiRegistry.register_handler(provider_name="Anthropic", handler_class=AiAnthropic)
+ModelManager.register_handler(provider_name="anthropic", handler_class=AiAnthropic)

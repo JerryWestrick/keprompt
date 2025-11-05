@@ -2,7 +2,7 @@ from typing import Dict, List
 import json
 from rich.console import Console
 
-from .AiRegistry import AiRegistry
+from .ModelManager import ModelManager
 from .AiProvider import AiProvider
 from .AiPrompt import AiMessage, AiTextPart, AiCall
 from .keprompt_functions import DefinedToolsArray
@@ -12,9 +12,11 @@ terminal_width = console.size.width
 
 
 class AiOpenAi(AiProvider):
+    litellm_provider = "openai"
+    
     def prepare_request(self, messages: List[Dict]) -> Dict:
         return {
-            "model": self.prompt.model,
+            "model": ModelManager.get_model(self.prompt.model).get_api_model_name(),
             "messages": messages,
             "tools": DefinedToolsArray
         }
@@ -76,7 +78,7 @@ class AiOpenAi(AiProvider):
     def calculate_costs(self, tokens_in: int, tokens_out: int) -> tuple[float, float]:
         """Calculate costs based on token usage and model pricing"""
         try:
-            model = AiRegistry.get_model(self.prompt.model)
+            model = ModelManager.get_model(self.prompt.model_lookup_key)
             cost_in = tokens_in * model.input_cost
             cost_out = tokens_out * model.output_cost
             return cost_in, cost_out
@@ -85,4 +87,10 @@ class AiOpenAi(AiProvider):
             return 0.0, 0.0
 
 # Register handler only - models loaded from JSON files
-AiRegistry.register_handler(provider_name="OpenAI", handler_class=AiOpenAi)
+
+    # def update_models(self) -> bool:
+    #     """Update models from provider API - not yet implemented"""
+    #     console.print("[yellow]Model updating not yet implemented for Open provider[/yellow]")
+    #     return False
+
+ModelManager.register_handler(provider_name="openai", handler_class=AiOpenAi)

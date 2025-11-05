@@ -2,7 +2,7 @@ from typing import Dict, List
 import json
 from rich.console import Console
 
-from .AiRegistry import AiRegistry
+from .ModelManager import ModelManager
 from .AiProvider import AiProvider
 from .AiPrompt import AiMessage, AiTextPart, AiCall, AiResult, AiPrompt
 from .keprompt_functions import DefinedToolsArray
@@ -12,9 +12,11 @@ terminal_width = console.size.width
 
 
 class AiDeepSeek(AiProvider):
+    litellm_provider = "deepseek"
+    
     def prepare_request(self, messages: List[Dict]) -> Dict:
         return {
-            "model": self.prompt.model,
+            "model": ModelManager.get_model(self.prompt.model).get_api_model_name(),
             "messages": messages,
             "tools": DefinedToolsArray,
             "stream": False
@@ -92,7 +94,7 @@ class AiDeepSeek(AiProvider):
 
     def calculate_costs(self, tokens_in: int, tokens_out: int) -> tuple[float, float]:
         """Calculate costs for input and output tokens using model pricing"""
-        model_info = AiRegistry.get_model(self.prompt.model)
+        model_info = ModelManager.get_model(self.prompt.model_lookup_key)
         if not model_info:
             return 0.0, 0.0
         
@@ -101,4 +103,10 @@ class AiDeepSeek(AiProvider):
         return cost_in, cost_out
 
 # Register handler only - models loaded from JSON files
-AiRegistry.register_handler(provider_name="DeepSeek", handler_class=AiDeepSeek)
+
+    # def update_models(self) -> bool:
+    #     """Update models from provider API - not yet implemented"""
+    #     console.print("[yellow]Model updating not yet implemented for DeepSeek provider[/yellow]")
+    #     return False
+
+ModelManager.register_handler(provider_name="deepseek", handler_class=AiDeepSeek)

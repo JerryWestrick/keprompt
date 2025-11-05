@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KePrompt - Web Interface</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1><img src="favicon.svg" alt="Ke" style="width: 32px; height: 32px; vertical-align: middle; margin-right: 8px;">KePrompt</h1>
+                <p class="subtitle">Prompt Engineering Tool</p>
+            </div>
+            <div class="header-info">
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <span id="status-light" style="width: 12px; height: 12px; border-radius: 50%; background: #28a745; display: inline-block;" title="Status: Ready"></span>
+                    <span id="api-status" class="status-badge">Connected</span>
+                </div>
+                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.85rem;">
+                    <input type="checkbox" id="debug-toggle" style="cursor: pointer;">
+                    <span>Debug</span>
+                </label>
+                <span id="version-info" class="version">v1.0</span>
+            </div>
+        </header>
+
+        <!-- Tab Navigation -->
+        <nav class="tab-nav">
+            <button class="tab-button active" data-tab="chats">💬 Chats</button>
+            <button class="tab-button" data-tab="prompts">📝 Prompts</button>
+            <button class="tab-button" data-tab="models">🤖 Models</button>
+            <button class="tab-button" data-tab="providers">🔌 Providers</button>
+            <button class="tab-button" data-tab="functions">⚙️ Functions</button>
+            <button class="tab-button" data-tab="database">💾 Database</button>
+            <button class="tab-button" data-tab="server">🖥️ Server</button>
+        </nav>
+
+        <!-- Tab Content -->
+        <main class="content">
+            <!-- Chats Tab -->
+            <div id="chats-tab" class="tab-content active">
+                <div class="chat-container">
+                    <!-- Chat List Panel -->
+                    <div class="chat-list-panel">
+                        <div class="chat-list-header">
+                            <h2>Conversations</h2>
+                            <button id="new-chat-btn" class="btn btn-primary">+ New Chat</button>
+                        </div>
+                        <div class="chat-search">
+                            <input type="text" id="chat-search" placeholder="🔍 Search chats..." />
+                        </div>
+                        <div id="chat-list" class="chat-list">
+                            <div class="loading">Loading chats...</div>
+                        </div>
+                    </div>
+
+                    <!-- Chat Interface Panel -->
+                    <div class="chat-interface-panel">
+                        <div id="no-chat-selected" class="no-chat-selected">
+                            <div class="empty-state">
+                                <h2>💬 Select a chat to start</h2>
+                                <p>Choose a conversation from the list or create a new one</p>
+                            </div>
+                        </div>
+                        
+                        <div id="chat-interface" class="chat-interface" style="display: none;">
+                            <!-- Chat Header -->
+                            <div class="chat-header">
+                                <div class="chat-header-info">
+                                    <h3 id="chat-title">Chat</h3>
+                                    <p id="chat-meta" class="chat-meta"></p>
+                                </div>
+                                <button id="delete-chat-btn" class="btn btn-danger-outline">🗑️ Delete</button>
+                            </div>
+
+                            <!-- Messages Area -->
+                            <div id="messages-area" class="messages-area">
+                                <!-- Messages will be dynamically inserted here -->
+                            </div>
+
+                            <!-- Input Area -->
+                            <div class="input-area">
+                                <textarea 
+                                    id="message-input" 
+                                    placeholder="Type your message..." 
+                                    rows="1"
+                                ></textarea>
+                                <button id="send-btn" class="btn btn-primary">Send</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Prompts Tab -->
+            <div id="prompts-tab" class="tab-content">
+                <div class="chat-container">
+                    <!-- Prompt List Panel -->
+                    <div class="chat-list-panel">
+                        <div class="chat-list-header">
+                            <h2>Prompts</h2>
+                            <button id="refresh-prompts-btn" class="btn btn-secondary">🔄</button>
+                        </div>
+                        <div class="chat-search">
+                            <input type="text" id="prompt-search" placeholder="🔍 Filter prompts..." />
+                        </div>
+                        <div id="prompt-list" class="chat-list">
+                            <div class="loading">Loading prompts...</div>
+                        </div>
+                    </div>
+
+                    <!-- Prompt Details Panel -->
+                    <div class="chat-interface-panel">
+                        <div id="no-prompt-selected" class="no-chat-selected">
+                            <div class="empty-state">
+                                <h2>📝 Select a prompt to view</h2>
+                                <p>Choose a prompt from the list to see its details</p>
+                            </div>
+                        </div>
+                        
+                        <div id="prompt-details" class="chat-interface" style="display: none;">
+                            <!-- Prompt Header -->
+                            <div class="chat-header">
+                                <div class="chat-header-info">
+                                    <h3 id="prompt-name">Prompt Name</h3>
+                                    <p id="prompt-meta" class="chat-meta"></p>
+                                </div>
+                            </div>
+
+                            <!-- Prompt Content Area -->
+                            <div id="prompt-content-area" class="messages-area">
+                                <!-- Prompt details will be displayed here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Models Tab -->
+            <div id="models-tab" class="tab-content">
+                <div class="tab-header">
+                    <h2>🤖 AI Models</h2>
+                    <div class="tab-actions">
+                        <input type="text" id="model-search" placeholder="🔍 Filter models..." class="search-input" />
+                        <select id="provider-filter" class="filter-select">
+                            <option value="">All Providers</option>
+                        </select>
+                        <select id="company-filter" class="filter-select">
+                            <option value="">All Companies</option>
+                        </select>
+                        <button id="refresh-models-btn" class="btn btn-secondary">🔄 Refresh</button>
+                    </div>
+                </div>
+                <div id="models-content" class="content-area">
+                    <div class="loading">Loading models...</div>
+                </div>
+            </div>
+
+            <!-- Providers Tab -->
+            <div id="providers-tab" class="tab-content">
+                <div class="tab-header">
+                    <h2>🔌 API Providers</h2>
+                    <div class="tab-actions">
+                        <button id="refresh-providers-btn" class="btn btn-secondary">🔄 Refresh</button>
+                    </div>
+                </div>
+                <div id="providers-content" class="content-area">
+                    <div class="loading">Loading providers...</div>
+                </div>
+            </div>
+
+            <!-- Functions Tab -->
+            <div id="functions-tab" class="tab-content">
+                <div class="tab-header">
+                    <h2>⚙️ Available Functions</h2>
+                    <div class="tab-actions">
+                        <input type="text" id="function-search" placeholder="🔍 Filter functions..." class="search-input" />
+                        <button id="refresh-functions-btn" class="btn btn-secondary">🔄 Refresh</button>
+                    </div>
+                </div>
+                <div id="functions-content" class="content-area">
+                    <div class="loading">Loading functions...</div>
+                </div>
+            </div>
+
+            <!-- Database Tab -->
+            <div id="database-tab" class="tab-content">
+                <div class="tab-header">
+                    <h2>💾 Database Management</h2>
+                    <div class="tab-actions">
+                        <button id="refresh-db-btn" class="btn btn-secondary">🔄 Refresh</button>
+                    </div>
+                </div>
+                <div id="database-content" class="content-area">
+                    <div class="loading">Loading database info...</div>
+                </div>
+            </div>
+
+            <!-- Server Tab -->
+            <div id="server-tab" class="tab-content">
+                <div class="tab-header">
+                    <h2>🖥️ Server Status</h2>
+                    <div class="tab-actions">
+                        <button id="refresh-server-btn" class="btn btn-secondary">🔄 Refresh</button>
+                    </div>
+                </div>
+                <div id="server-content" class="content-area">
+                    <div class="loading">Loading server info...</div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- New Chat Modal -->
+    <div id="new-chat-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Create New Chat</h2>
+                <button class="close-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="prompt-select">Select Prompt:</label>
+                    <select id="prompt-select" class="form-control">
+                        <option value="">Loading prompts...</option>
+                    </select>
+                </div>
+                <div id="prompt-params" class="form-group" style="display: none;">
+                    <label>Parameters:</label>
+                    <div id="params-container"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="cancel-chat-btn" class="btn btn-secondary">Cancel</button>
+                <button id="create-chat-btn" class="btn btn-primary">Create Chat</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirm-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="confirm-title">Confirm Action</h2>
+                <button class="close-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p id="confirm-message">Are you sure?</p>
+            </div>
+            <div class="modal-footer">
+                <button id="confirm-cancel-btn" class="btn btn-secondary">Cancel</button>
+                <button id="confirm-ok-btn" class="btn btn-danger">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
