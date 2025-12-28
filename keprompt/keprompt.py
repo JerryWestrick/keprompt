@@ -2,23 +2,20 @@ import argparse
 import getpass
 import logging
 import os
-import re
 import sys
 
 from rich.console import Console
 
 from keprompt.api import handle_json_command
 from .config import get_config
+from .CustomEncoder import CustomEncoder
 from rich.logging import RichHandler
-from rich.prompt import Prompt
+from rich.prompt import Prompt as RichPrompt
 from rich.table import Table
-from rich.text import Text
 from rich_argparse import RichHelpFormatter
 
 from .ModelManager import ModelManager
-from .keprompt_functions import DefinedToolsArray
-from .keprompt_vm import VM, print_prompt_code, print_statement_types
-from .keprompt_utils import print_simple_table, format_model_count_data, handle_error
+from .keprompt_utils import print_simple_table, format_model_count_data
 from .version import __version__
 
 console = Console()
@@ -28,33 +25,10 @@ logging.getLogger().setLevel(logging.WARNING)
 
 FORMAT = "%(message)s"
 
-# logging.basicConfig(level="NOTSET", format=FORMAT, datefmt="[%X]", handlers=[RichHandler(console=console)])
 
 logging.basicConfig(level=logging.WARNING,  format=FORMAT,datefmt="[%X]",handlers=[RichHandler(console=console, rich_tracebacks=True)])
 log = logging.getLogger(__file__)
 __all__ = ["main"]
-
-
-# def print_functions():
-#     table = Table(title="Available Functions")
-#     table.add_column("Name", style="cyan", no_wrap=True)
-#     table.add_column("Description/Parameters", style="green")
-#     # Sort by LLM name, then model.
-#     sortable_keys = [f"{ModelManager.models[model_name].company}:{model_name}" for model_name in ModelManager.models.keys()]
-#     sortable_keys.sort()
-#
-#     for tool in DefinedToolsArray:
-#         function = tool['function']
-#         name = function['name']
-#         description = function['description']
-#
-#         table.add_row(name, description,)
-#         for k,v in function['parameters']['properties'].items():
-#             table.add_row("", f"[bold blue]{k:10}[/]: {v['description']}")
-#
-#         table.add_row("","")
-#
-#     console.print(table)
 
 def matches_pattern(text: str, pattern: str) -> bool:
     """Case-insensitive pattern matching"""
@@ -68,7 +42,7 @@ def print_companies():
         {'name': 'Company', 'style': 'cyan', 'no_wrap': True},
         {'name': 'Model Count', 'style': 'green', 'justify': 'right'}
     ]
-    
+
     rows = format_model_count_data(ModelManager.models, 'company')
     print_simple_table("Available Companies (Model Creators)", columns, rows)
 
@@ -176,7 +150,7 @@ def create_dropdown(options: list[str], prompt_text: str = "Select an option") -
 
     # Get user input with validation
     while True:
-        choice = Prompt.ask(
+        choice = RichPrompt.ask(
             prompt_text,
             choices=[str(i) for i in range(1, len(options) + 1)],
             show_choices=False
@@ -205,6 +179,10 @@ def normalize_command_aliases(args: argparse.Namespace) -> argparse.Namespace:
     - functions_command: get (list, show)
     - database_command: get (list, show)
     """
+
+
+    console.print(args)
+
     # Chat command aliases
     if hasattr(args, 'chat_command') and args.chat_command:
         alias_map = {
@@ -278,117 +256,21 @@ def get_cmd_args() -> argparse.Namespace:
 
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    # Prompt commands (accept both singular and plural)
-    prompt_parser = subparsers.add_parser("prompt", aliases=["prompts"], parents=[parent], help="Prompt operations")
-    prompt_subparsers = prompt_parser.add_subparsers(dest="prompt_command", required=True)
-    prompt_get = prompt_subparsers.add_parser("get", aliases=["list"], parents=[parent], help="Get prompts")
-    prompt_get.add_argument("--name", help="Filter by prompt name")
+    # Register CLI commands via managers (clean architecture)
+    from .Prompt import PromptManager
+    from .ModelManager import ModelManager
+    from .chat_manager import ChatManager
+    from .database import DatabaseManager
+    from .api import ProviderManager, FunctionManager, ServerManager
 
-    # Models commands (accept singular alias)
-    models_parser = subparsers.add_parser("models", aliases=["model"], parents=[parent], help="Model operations")
-    models_subparsers = models_parser.add_subparsers(dest="models_command", required=True)
-    models_get = models_subparsers.add_parser("get", aliases=["list", "show"], parents=[parent], help="Get models")
-    models_get.add_argument("--name", help="Filter by model name")
-    models_get.add_argument("--provider", help="Filter by provider")
-    models_get.add_argument("--company", help="Filter by company")
-    models_update = models_subparsers.add_parser("update", parents=[parent], help="update models ")
-    models_reset = models_subparsers.add_parser("reset", parents=[parent], help="Reset models to defaults")
-    models_update.add_argument("--provider", help="Filter by provider")
+    PromptManager.register_cli(subparsers, parent)
+    ModelManager.register_cli(subparsers, parent)
+    ChatManager.register_cli(subparsers, parent)
+    DatabaseManager.register_cli(subparsers, parent)
+    ProviderManager.register_cli(subparsers, parent)
+    FunctionManager.register_cli(subparsers, parent)
+    ServerManager.register_cli(subparsers, parent)
 
-    # Provider commands (accept singular alias)
-    provider_parser = subparsers.add_parser("provider", aliases=["providers"], parents=[parent], help="Provider operations")
-    provider_subparsers = provider_parser.add_subparsers(dest="provider_command", required=True)
-    provider_subparsers.add_parser("list", aliases=["get", "show"], parents=[parent], help="List all providers")
-
-    # Functions commands (accept singular alias)
-    functions_parser = subparsers.add_parser("functions", aliases=["function"], parents=[parent], help="Function operations")
-    functions_subparsers = functions_parser.add_subparsers(dest="functions_command", required=True)
-    functions_subparsers.add_parser("get", parents=[parent], help="Get functions")
-    functions_subparsers.add_parser("update", parents=[parent], help="Update functions")
-
-    # Chat commands (primary noun), accept conversational aliases
-    chat_parser = subparsers.add_parser("chat", aliases=["chats", "conversation", "conversations"], parents=[parent], help="Chat operations")
-    chat_subparsers = chat_parser.add_subparsers(dest="chat_command", required=True)
-
-    # create/start
-    chat_create = chat_subparsers.add_parser("create", aliases=["start", "new"], parents=[parent], help="Create a new chat from a prompt")
-    chat_create.add_argument("--prompt", required=True, help="Prompt name or filter")
-    # Support both '--param name value' and '--param name=value' forms (repeatable)
-    chat_create.add_argument("--param", nargs='+', action="append", help="Parameter (name value) or (name=value), repeatable")
-
-    # list/get
-    chat_get = chat_subparsers.add_parser("get", aliases=["list", "show", "view"], parents=[parent], help="Get a chat by id or list chats")
-    chat_get.add_argument("chat_id", nargs="?", help="Chat ID (8 chars)")
-    chat_get.add_argument("--limit", type=int, help="Max number of chats to list")
-
-    # reply/answer/send/update (continue a chat)
-    chat_reply = chat_subparsers.add_parser("reply", aliases=["answer", "send", "update"], parents=[parent], help="Send a message to a chat and get a reply")
-    chat_reply.add_argument("chat_id", help="Chat ID (8 chars)")
-    chat_reply.add_argument("message", nargs="?", help="Message text (if omitted, use --answer/--message)")
-    mex = chat_reply.add_mutually_exclusive_group()
-    mex.add_argument("--answer", help="Message text (explicit)")
-    mex.add_argument("--message", help="Message text (explicit)")
-    chat_reply.add_argument("--full", action="store_true", help="Show full conversation history (default: only new messages)")
-
-    # delete/rm
-    chat_delete = chat_subparsers.add_parser("delete", aliases=["rm"], parents=[parent], help="Delete a chat or prune chats")
-    chat_delete.add_argument("chat_id", nargs="?", help="Chat ID (8 chars)")
-    # pruning options (mutually exclusive)
-    pruneg = chat_delete.add_mutually_exclusive_group()
-    pruneg.add_argument("--days", type=int, dest="max_days", help="Delete chats older than N days")
-    pruneg.add_argument("--count", type=int, dest="max_count", help="Keep only the most recent N chats")
-    pruneg.add_argument("--gb", type=float, dest="max_size_gb", help="Target max DB size in GB")
-
-    # Database commands (keep singular, but accept plural alias)
-    database_parser = subparsers.add_parser("database", aliases=["databases"], parents=[parent], help="Database operations")
-    database_subparsers = database_parser.add_subparsers(dest="database_command", required=True)
-    database_get = database_subparsers.add_parser("get", parents=[parent], help="Get database")
-    databasse_create = database_subparsers.add_parser("create", parents=[parent], help="Delete and Create new database")
-    database_delete = database_subparsers.add_parser("delete", parents=[parent], help="Delete rows from database")
-
-    # Mutually exclusive pruning options
-    pruneg = database_delete.add_mutually_exclusive_group()
-    pruneg.add_argument("--days", type=int, help="Number of days")
-    pruneg.add_argument("--count", type=int, help="Count")
-    pruneg.add_argument("--gb", type=int, help="Size in GB")
-
-    # Server commands
-    server_parser = subparsers.add_parser("server", parents=[parent], help="HTTP server operations")
-    server_subparsers = server_parser.add_subparsers(dest="server_command", required=True)
-
-    # Common arguments for all server commands
-    def add_server_scope_args(parser):
-        scope_group = parser.add_mutually_exclusive_group()
-        scope_group.add_argument(
-            "--directory",
-            help="Directory path (default: current directory)"
-        )
-        scope_group.add_argument(
-            "--all",
-            action="store_true",
-            help="Apply to all registered servers"
-        )
-
-    # server start
-    server_start = server_subparsers.add_parser("start", parents=[parent], help="Start HTTP server")
-    add_server_scope_args(server_start)
-    server_start.add_argument("--port", type=int, help="Port (auto-assigned if not specified)")
-    server_start.add_argument("--web-gui", action="store_true", help="Enable web GUI")
-    server_start.add_argument("--reload", action="store_true", help="Enable auto-reload (development)")
-    server_start.add_argument("--host", default="localhost", help="Host to bind (default: localhost)")
-
-    # server list
-    server_list = server_subparsers.add_parser("list", parents=[parent], help="List servers")
-    add_server_scope_args(server_list)
-    server_list.add_argument("--active-only", action="store_true", help="Show only running servers")
-
-    # server status
-    server_status = server_subparsers.add_parser("status", parents=[parent], help="Check server status")
-    add_server_scope_args(server_status)
-
-    # server stop
-    server_stop = server_subparsers.add_parser("stop", parents=[parent], help="Stop server")
-    add_server_scope_args(server_stop)
 
     args = parser.parse_args()
     return args
@@ -426,13 +308,14 @@ def main():
     # create prompts directory if it doesn't exist'
     if not os.path.exists('prompts'):
         os.makedirs('prompts')
+    
 
     args = get_cmd_args()
     
     # Normalize all command aliases to canonical forms
     args = normalize_command_aliases(args)
 
-    # Determine output format from flags
+    # Determine an output format from flags
     # Priority: explicit flags > auto-detect from TTY
     stdout_is_tty = sys.stdout.isatty()
     
@@ -470,9 +353,11 @@ def main():
                 success = response.get("success", True)
                 error_obj = response.get("error") if not success else None
                 data_payload = response.get("data", response)
+            elif isinstance(response, (list, tuple)):
+                # Lists/tuples can be serialized directly with CustomEncoder
+                data_payload = response
             else:
-                # Non-dict (e.g., Table). For JSON mode, we cannot serialize it directly.
-                # Provide a string representation as data.
+                # Non-serializable types (e.g., Table). Provide string representation.
                 data_payload = str(response)
 
             envelope = {
@@ -487,7 +372,7 @@ def main():
                     "version": __version__,
                 },
             }
-            sys.stdout.write(_json.dumps(envelope, indent=2) + "\n")
+            sys.stdout.write(_json.dumps(envelope, indent=2, cls=CustomEncoder) + "\n")
             sys.stdout.flush()
             if not success:
                 # Also mirror a concise error to stderr and exit non-zero
@@ -514,7 +399,7 @@ def main():
         }
         if 'output_format' in locals() and output_format == 'json':
             import json as _json
-            sys.stdout.write(_json.dumps(err_envelope, indent=2) + "\n")
+            sys.stdout.write(_json.dumps(err_envelope, indent=2, cls=CustomEncoder) + "\n")
         else:
             err_console = Console(file=sys.stderr)
             err_console.print(err_envelope)

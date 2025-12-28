@@ -151,23 +151,33 @@ class AiResult(AiMessagePart):
 
 
 class AiMessage:
-    def __init__(self, vm, role: str, content=None):
+    def __init__(self, vm, role: str, content=None, model_name: str = None, provider: str = None):
         if content is None:
             content = []
         self.role = role
         self.content: List[AiMessagePart] = content
         self.vm = vm
+        self.model_name = model_name
+        self.provider = provider
 
     def __str__(self) -> str:
-        return f"Message(role={self.role}, content={self.content})"
+        model_info = f", model={self.model_name}" if self.model_name else ""
+        return f"Message(role={self.role}{model_info}, content={self.content})"
 
     def __repr__(self) -> str:
         content_repr = ",\n\t".join(str(part) for part in self.content)
-        return f"Message(role={self.role!r}, content=[\n\t{content_repr}\n\t])\n"
+        model_info = f", model_name={self.model_name!r}, provider={self.provider!r}" if self.model_name else ""
+        return f"Message(role={self.role!r}{model_info}, content=[\n\t{content_repr}\n\t])\n"
 
     def to_json(self) -> dict:
         content = [part.to_json() for part in self.content]
-        return json.loads(json.dumps({"role": self.role, "content": content}))
+        result = {"role": self.role, "content": content}
+        # Include model metadata if available (for assistant messages)
+        if self.model_name:
+            result["model_name"] = self.model_name
+        if self.provider:
+            result["provider"] = self.provider
+        return json.loads(json.dumps(result))
 
     def print_message(self) -> str:
         content = ''
@@ -184,6 +194,7 @@ class AiPrompt:
         self.toks_out: int = 0
         self.provider: str = ""
         self.model: str = ""  # ALWAYS contains provider/model-name format
+        self.model_lookup_key: str = ""  # Model identifier for ModelManager lookups
         self.api_key: str = ""
         self.vm = vm
 

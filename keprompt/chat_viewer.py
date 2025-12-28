@@ -89,8 +89,23 @@ class ChatViewer(Screen):
             return text
         return text[:max_length-3] + "..."
     
-    def _get_role_icon(self, role: str) -> str:
-        """Get icon for message role"""
+    def _get_role_icon(self, role: str, provider: str = None) -> str:
+        """Get icon for message role, with provider-specific colors for assistant"""
+        if role == 'assistant' and provider:
+            # Provider-specific icons for assistant messages
+            provider_icons = {
+                'openrouter': '🟡',  # Yellow for OpenRouter
+                'openai': '🟢',      # Green for OpenAI
+                'anthropic': '🟣',   # Purple for Anthropic
+                'google': '🔴',      # Red for Google
+                'gemini': '🔴',      # Red for Google/Gemini
+                'mistral': '🟠',     # Orange for Mistral
+                'xai': '⚫',         # Black for XAI
+                'deepseek': '🔵',    # Blue for DeepSeek
+            }
+            return provider_icons.get(provider.lower(), '🤖')
+        
+        # Default role icons
         icons = {
             'system': '🔧',
             'user': '👤',
@@ -393,17 +408,31 @@ class ChatViewer(Screen):
                 elif isinstance(content, str):
                     text_content = content
                 
-                # Create message preview
-                icon = self._get_role_icon(role)
+                # Extract model metadata for assistant messages
+                model_name = message.get('model_name', '')
+                provider = message.get('provider', '')
+                
+                # Create message preview with model info for assistant messages
+                icon = self._get_role_icon(role, provider if role == 'assistant' else None)
                 preview = self._truncate_text(text_content) if text_content else "[Empty message]"
                 
-                msg_node = messages_node.add(f"{icon} {role.title()}: {preview}")
+                # Add model name to label for assistant messages
+                if role == 'assistant' and model_name:
+                    # Show short model name
+                    short_model = model_name.split('/')[-1] if '/' in model_name else model_name
+                    label = f"{icon} {role.title()} [{short_model}]: {preview}"
+                else:
+                    label = f"{icon} {role.title()}: {preview}"
+                
+                msg_node = messages_node.add(label)
                 msg_node.data = {
                     'type': 'message',
                     'index': i,
                     'role': role,
                     'content': text_content,
-                    'full_message': message
+                    'full_message': message,
+                    'model_name': model_name,
+                    'provider': provider
                 }
         
         # Variables section
@@ -453,18 +482,33 @@ class ChatViewer(Screen):
             role = node.data.get('role', 'unknown')
             content = node.data.get('content', '')
             full_message = node.data.get('full_message', {})
+            model_name = node.data.get('model_name', '')
+            provider = node.data.get('provider', '')
             
-            icon = self._get_role_icon(role)
+            icon = self._get_role_icon(role, provider if role == 'assistant' else None)
             
             # Store current message content and role for markdown toggle
             self.current_message_content = content
             self.current_message_role = role
             
-            # Update border title with section name
-            detail_container.border_title = f"{icon} {role.upper()} MESSAGE"
+            # Update border title with section name and model info for assistant
+            if role == 'assistant' and model_name:
+                detail_container.border_title = f"{icon} {role.upper()} MESSAGE [{model_name}]"
+            else:
+                detail_container.border_title = f"{icon} {role.upper()} MESSAGE"
+            
+            # Prepend model metadata for assistant messages
+            display_content = content
+            if role == 'assistant' and model_name:
+                metadata_header = f"[bold cyan]Model:[/bold cyan] {model_name}\n"
+                if provider:
+                    metadata_header += f"[bold cyan]Provider:[/bold cyan] {provider}\n"
+                metadata_header += "[dim]" + "─" * 60 + "[/dim]\n\n"
+                display_content = metadata_header + content
+                self.current_message_content = display_content  # Update for markdown mode
             
             # Use the new update method that respects markdown mode
-            self._update_message_display(content, role)
+            self._update_message_display(display_content, role)
             
             # Show raw content in separate container
             raw_container.border_title = "Raw Content"

@@ -2,10 +2,11 @@ from typing import Dict, List
 import json
 from rich.console import Console
 
+from . import FunctionSpace
 from .ModelManager import ModelManager
 from .AiProvider import AiProvider
-from .AiPrompt import AiMessage, AiTextPart, AiCall, AiResult, AiPrompt
-from .keprompt_functions import DefinedToolsArray
+from .AiPrompt import AiMessage, AiTextPart, AiCall
+
 
 console = Console()
 terminal_width = console.size.width
@@ -18,7 +19,7 @@ class AiDeepSeek(AiProvider):
         return {
             "model": ModelManager.get_model(self.prompt.model).get_api_model_name(),
             "messages": messages,
-            "tools": DefinedToolsArray,
+            "tools": FunctionSpace.functions.tools_array,
             "stream": False
         }
 
@@ -51,7 +52,8 @@ class AiDeepSeek(AiProvider):
             fc = part["function"]
             content.append(AiCall(vm=self.prompt.vm,id=part["id"],name=fc["name"],arguments=fc["arguments"]))
 
-        return AiMessage(vm=self.prompt.vm, role="assistant", content=content)
+        return AiMessage(vm=self.prompt.vm, role="assistant", content=content,
+                        model_name=self.prompt.model, provider=self.prompt.provider)
 
     def to_company_messages(self, messages: List[AiMessage]) -> List[Dict]:
         deepseek_messages = []

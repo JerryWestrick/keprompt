@@ -1,6 +1,0 @@
-.prompt "name":"Cost Tracking Test", "version":"1.0.0", "params":{"model":"gpt-4o-mini", "temperature":0.3}
-.# Test cost tracking implementation
-.llm {"model": "gpt-4o-mini", "temperature": 0.3}
-.system You are a helpful assistant for testing cost tracking.
-.user Say hello and confirm that cost tracking is working.
-.exec

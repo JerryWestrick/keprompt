@@ -1,0 +1,122 @@
+#!/usr/bin/env python3
+"""
+KePrompt KB Functions - External function executable for RAG/KB system.
+
+This follows the KePrompt custom function protocol and provides:
+- kb_query: Query a Knowledge Base
+- kb_list: List available KBs
+- kb_info: Get KB information
+"""
+
+import json
+import sys
+import os
+
+# Import KB functions from rag module
+try:
+    from keprompt.rag.kb_query import kb_query, kb_list, kb_info
+    KB_AVAILABLE = True
+except ImportError:
+    KB_AVAILABLE = False
+
+# Function definitions for --list-functions
+FUNCTIONS = [
+    {
+        "name": "kb_query",
+        "description": "Query a Knowledge Base and return relevant results with context",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "KB name (e.g., 'hr', 'legal')"},
+                "query": {"type": "string", "description": "Search query text"},
+                "top_k": {"type": "integer", "description": "Number of results (default: 5)"},
+                "version": {"type": "string", "description": "Specific KB version (optional, uses active by default)"}
+            },
+            "required": ["name", "query"],
+            "additionalProperties": True
+        }
+    },
+    {
+        "name": "kb_list",
+        "description": "List all available Knowledge Bases",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": False
+        }
+    },
+    {
+        "name": "kb_info",
+        "description": "Get information about a specific Knowledge Base",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "KB name"}
+            },
+            "required": ["name"],
+            "additionalProperties": False
+        }
+    }
+]
+
+
+def main():
+    if len(sys.argv) < 2:
+        print("Usage: keprompt_kb_functions [--list-functions|function_name]", file=sys.stderr)
+        sys.exit(1)
+    
+    command = sys.argv[1]
+    
+    # Handle --list-functions
+    if command == "--list-functions":
+        print(json.dumps(FUNCTIONS))
+        return 0
+    
+    # Check if KB functions are available
+    if not KB_AVAILABLE:
+        print(json.dumps({
+            "error": "KB functions not available. Install keprompt RAG module."
+        }))
+        return 1
+    
+    # Handle function calls
+    if command == "kb_query":
+        try:
+            args = json.loads(sys.stdin.read())
+            result = kb_query(**args)
+            print(result)
+            return 0
+        except Exception as e:
+            print(f"Error in kb_query: {e}", file=sys.stderr)
+            return 1
+    
+    elif command == "kb_list":
+        try:
+            result = kb_list()
+            print(json.dumps(result))
+            return 0
+        except Exception as e:
+            print(f"Error in kb_list: {e}", file=sys.stderr)
+            return 1
+    
+    elif command == "kb_info":
+        try:
+            args = json.loads(sys.stdin.read())
+            result = kb_info(**args)
+            if result:
+                print(json.dumps(result))
+            else:
+                print(json.dumps({"error": "KB not found"}))
+            return 0
+        except Exception as e:
+            print(f"Error in kb_info: {e}", file=sys.stderr)
+            return 1
+    
+    else:
+        print(f"Unknown function: {command}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

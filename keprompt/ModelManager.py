@@ -154,6 +154,40 @@ class ModelManager:
     def __init__(self, args: argparse.Namespace):
         self.args = args
 
+    @classmethod
+    def register_cli(cls, parent_subparsers: argparse._SubParsersAction, parent_parser: argparse.ArgumentParser) -> None:
+        """Register model-related CLI commands."""
+        parser = parent_subparsers.add_parser(
+            "models",
+            aliases=["model"],
+            parents=[parent_parser],
+            help="Model operations",
+        )
+        model_subparsers = parser.add_subparsers(dest="models_command", required=True)
+
+        model_get = model_subparsers.add_parser(
+            "get",
+            aliases=["list", "show"],
+            parents=[parent_parser],
+            help="List available models",
+        )
+        model_get.add_argument("--name", help="Filter by model name")
+        model_get.add_argument("--provider", help="Filter by provider")
+        model_get.add_argument("--company", help="Filter by company")
+
+        model_update = model_subparsers.add_parser(
+            "update",
+            parents=[parent_parser],
+            help="Update model registry",
+        )
+        model_update.add_argument("--provider", help="Filter by provider (deprecated)")
+
+        model_subparsers.add_parser(
+            "reset",
+            parents=[parent_parser],
+            help="Reset models to defaults",
+        )
+
 
     @classmethod
     def register_handler(cls, provider_name: str, handler_class: Type['AiProvider']) -> None:
@@ -165,9 +199,12 @@ class ModelManager:
         """Load models from LiteLLM database, filtering by registered provider litellm_provider"""
         import os
         import json
+        import time
 
         if cls._initialized:
             return
+
+        start_time = time.time()
 
         # Load from LiteLLM database in current working directory
         litellm_db_path = Path("./prompts/functions/model_prices_and_context_window.json")
@@ -218,7 +255,9 @@ class ModelManager:
 
             cls.register_models_from_dict(model_data)
             cls._initialized = True
-            print(f"Loaded {len(model_data)} models from LiteLLM database")
+            
+            elapsed = time.time() - start_time
+            print(f"[ModelManager] Loaded {len(model_data)} models from '{litellm_db_path}' in {elapsed:.4f} seconds")
             
         except Exception as e:
             tb = traceback.extract_tb(e.__traceback__)[-1]

@@ -14,7 +14,11 @@ requires-python = ">=3.8"
 dependencies = [
     "keyring>=24.0.0",
     "rich>=13.0.0",
-    "requests>=2.31.0"
+    "requests>=2.31.0",
+    "toml",
+    "dotenv",
+    "textual",
+    "rich_argparse"
 ]
 
 [project.scripts]

@@ -119,6 +119,66 @@
       "_executable": "prompts/functions/keprompt_builtins"
     },
     {
+      "name": "kb_query",
+      "description": "Query a Knowledge Base and return relevant results with context",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "KB name (e.g., 'hr', 'legal')"
+          },
+          "query": {
+            "type": "string",
+            "description": "Search query text"
+          },
+          "top_k": {
+            "type": "integer",
+            "description": "Number of results (default: 5)"
+          },
+          "version": {
+            "type": "string",
+            "description": "Specific KB version (optional, uses active by default)"
+          }
+        },
+        "required": [
+          "name",
+          "query"
+        ],
+        "additionalProperties": true
+      },
+      "_executable": "prompts/functions/keprompt_kb_functions"
+    },
+    {
+      "name": "kb_list",
+      "description": "List all available Knowledge Bases",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "_executable": "prompts/functions/keprompt_kb_functions"
+    },
+    {
+      "name": "kb_info",
+      "description": "Get information about a specific Knowledge Base",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "KB name"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "_executable": "prompts/functions/keprompt_kb_functions"
+    },
+    {
       "name": "hello",
       "description": "Say hello to someone",
       "parameters": {
@@ -158,6 +218,28 @@
         "additionalProperties": false
       },
       "_executable": "prompts/functions/my_test_function"
+    },
+    {
+      "name": "render_url_to_markdown",
+      "description": "Render a web page in a real browser and return the visible content as markdown-like text. Use this when you need to read or summarize a web page, especially if it is heavy in JavaScript.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "URL of the page to render and read"
+          },
+          "selector": {
+            "type": "string",
+            "description": "Optional CSS selector to focus on (defaults to article/main/body)."
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "additionalProperties": false
+      },
+      "_executable": "prompts/functions/render_url_to_markdown.py"
     }
   ],
   "generated_at": "/home/jerry/keprompt",

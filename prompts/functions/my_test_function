@@ -5,21 +5,6 @@ import sys
 def get_schema():
     return [
         {
-            "name": "hello",
-            "description": "Say hello to someone",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "name": {
-                        "type": "string",
-                        "description": "Name of the person to greet"
-                    }
-                },
-                "required": ["name"],
-                "additionalProperties": False
-            }
-        },
-        {
             "name": "add_numbers",
             "description": "Add two numbers together",
             "parameters": {
@@ -39,9 +24,6 @@ def get_schema():
             }
         }
     ]
-
-def hello(name: str) -> str:
-    return f"Hello, {name}! This is a custom function."
 
 def add_numbers(a: float, b: float) -> str:
     result = a + b
@@ -68,9 +50,7 @@ def main():
                 arguments = {}
                 
             # Execute the function
-            if function_name == "hello":
-                result = hello(**arguments)
-            elif function_name == "add_numbers":
+            if function_name == "add_numbers":
                 result = add_numbers(**arguments)
             else:
                 print(f"Error: Unknown function '{function_name}'", file=sys.stderr)

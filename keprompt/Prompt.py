@@ -48,30 +48,6 @@ class PromptManager:
             if prompt:
                 self.prompts.append(prompt)
 
-    # def _parse_prompt_file(self, prompt_file: str):
-    #     """Parse a prompt file into a Prompt dataclass."""
-    #     try:
-    #         with open(prompt_file, 'r') as f:
-    #             lines = f.readlines()
-    #         metadata = {}
-    #         if lines and lines[0].strip().startswith('.prompt '):
-    #             try:
-    #                 json_content = "{" + lines[0].strip()[8:] + "}"
-    #                 metadata = json.loads(json_content)
-    #             except Exception:
-    #                 pass
-    #         source = ''.join(lines)
-    #         return Prompt(
-    #             name=metadata.get("name", os.path.basename(prompt_file)),
-    #             description=metadata.get("description", ""),
-    #             parameters=metadata.get("params", {}),
-    #             source=source,
-    #             path=prompt_file
-    #         )
-    #     except Exception as e:
-    #         console.print(f"[red]Failed to parse prompt {prompt_file}: {e}[/red]")
-    #         return None
-
     def execute(self) -> Dict[str, Any]:
         """Execute the command based on the provided arguments"""
         # Normalize aliases
@@ -82,7 +58,7 @@ class PromptManager:
         # Support only the \"get\" verb for prompts (list / filter)
         if cmd == "get":
             # Use the optional name filter if supplied, otherwise match all prompts
-            pattern = getattr(self.args, "name_filter", None) or "*"
+            pattern = getattr(self.args, "name", None) or "*"
             # Reload prompts based on the pattern
             self.prompts = []  # clear any previous load
             self.load_prompts(pattern)
@@ -167,3 +143,22 @@ class PromptManager:
             return self.pretty_print()
         # default: text (no JSON mode) — ensure JSON‑serializable structure
         return {"success": True, "prompts": [p.to_dict() for p in self.prompts]}
+
+    @classmethod
+    def register_cli(cls, parent_subparsers: argparse._SubParsersAction, parent_parser: argparse.ArgumentParser) -> None:
+        """Register prompt CLI commands on the shared argparse tree."""
+        parser = parent_subparsers.add_parser(
+            "prompt",
+            aliases=["prompts"],
+            parents=[parent_parser],
+            help="Prompt operations",
+        )
+        prompt_subparsers = parser.add_subparsers(dest="prompt_command", required=True)
+
+        prompt_get = prompt_subparsers.add_parser(
+            "get",
+            aliases=["list"],
+            parents=[parent_parser],
+            help="List prompts",
+        )
+        prompt_get.add_argument("--name", help="Filter by prompt name (supports glob patterns)")

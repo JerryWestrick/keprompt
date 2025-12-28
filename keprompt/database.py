@@ -216,7 +216,24 @@ def get_database() -> Database:
 
 class DatabaseManager:
     """High-level database operations."""
-    
+
+    @classmethod
+    def register_cli(cls, parent_subparsers: argparse._SubParsersAction, parent_parser: argparse.ArgumentParser) -> None:
+        parser = parent_subparsers.add_parser(
+            "database",
+            aliases=["databases"],
+            parents=[parent_parser],
+            help="Database operations",
+        )
+        subparsers = parser.add_subparsers(dest="database_command", required=True)
+        subparsers.add_parser("get", parents=[parent_parser], help="Get database info")
+        subparsers.add_parser("create", parents=[parent_parser], help="Create (reset) database")
+        delete = subparsers.add_parser("delete", parents=[parent_parser], help="Delete/prune database")
+        prune = delete.add_mutually_exclusive_group()
+        prune.add_argument("--days", type=int, help="Number of days")
+        prune.add_argument("--count", type=int, help="Max entries")
+        prune.add_argument("--gb", type=float, help="Size in GB")
+
     def __init__(self, args: argparse.Namespace = None):
         self.args = args
         self.db = get_database()

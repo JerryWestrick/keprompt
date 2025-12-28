@@ -108,10 +108,13 @@ const API = {
         });
     },
     
-    async sendMessage(chatId, message) {
+    async sendMessage(chatId, message, variables = {}) {
         return this.request(`/chats/${chatId}/messages`, {
             method: 'PUT',
-            body: JSON.stringify({ answer: message }),
+            body: JSON.stringify({ 
+                answer: message,
+                set: variables
+            }),
         });
     },
     
@@ -325,15 +328,14 @@ async function selectChat(chatId) {
     
     try {
         const response = await API.getChat(chatId);
-        // Extract chat data from nested structure
-        const chatData = response.data[0]?.chat?.__data__ || response.data;
+        // With CustomEncoder, response.data[0] contains: {chat: {...}, messages: [...], costs: [...], vm_state: {...}, variables: {...}, statements: [...]}
+        const fullData = response.data[0];
         
-        // Parse messages_json if it's a string
-        if (chatData.messages_json && typeof chatData.messages_json === 'string') {
-            chatData.messages = JSON.parse(chatData.messages_json);
-        } else if (chatData.messages_json) {
-            chatData.messages = chatData.messages_json;
-        }
+        // Extract chat metadata (no __data__ wrapper with CustomEncoder)
+        const chatData = fullData.chat;
+        
+        // Use the pre-parsed messages array from the response
+        chatData.messages = fullData.messages || [];
         
         // Normalize timestamp field names
         if (chatData.created_timestamp && !chatData.created_at) {
@@ -341,6 +343,10 @@ async function selectChat(chatId) {
         }
         
         State.currentChat = chatData;
+        
+        // Render the full response data structure including variables, statements, vm_state, costs
+        renderTechnicalDetails(fullData);
+        
         renderChat(State.currentChat);
     } catch (error) {
         console.error('Error loading chat:', error);
@@ -387,6 +393,31 @@ function renderChat(chat) {
         
         // Determine avatar and label based on role and content
         let avatar = 'U';
+        
+        // Provider icon mapping (colored circles as emoji alternatives)
+        const providerIcons = {
+            'openrouter': '🟡',
+            'openai': '🟢',
+            'anthropic': '🟣',
+            'google': '🔴',
+            'gemini': '🔴',
+            'mistral': '🟠',
+            'xai': '⚫',
+            'deepseek': '🔵',
+        };
+        
+        // Provider color mapping (matching TUI colors)
+        const providerColors = {
+            'openrouter': '#ffc107',     // yellow
+            'openai': '#28a745',         // green
+            'anthropic': '#e83e8c',      // magenta
+            'google': '#dc3545',         // red
+            'gemini': '#dc3545',         // red
+            'mistral': '#ffeb3b',        // bright yellow
+            'xai': '#f8f9fa',            // white
+            'deepseek': '#007bff',       // blue
+        };
+        
         if (role === 'tool') {
             avatar = '🔧';
             label = '⚡ Tool Response';
@@ -400,8 +431,22 @@ function renderChat(chat) {
             const callId = firstToolCall?.id || '';
             label = `⚡ Tool Call ${callId}`;
         } else if (role === 'assistant') {
-            avatar = 'AI';
-            label = '🤖 Assistant';
+            // Get model info if available
+            const modelName = message.model_name || '';
+            const provider = message.provider || '';
+            
+            // Use provider-specific icon or default
+            avatar = provider ? (providerIcons[provider.toLowerCase()] || 'AI') : 'AI';
+            
+            // Build label with model info
+            if (modelName) {
+                const shortModel = modelName.includes('/') ? modelName.split('/').pop() : modelName;
+                const providerLower = provider.toLowerCase();
+                const color = providerColors[providerLower] || '#ffc107'; // Default to yellow
+                label = `${avatar} Assistant [<span style="color: ${color}">${shortModel}</span>]`;
+            } else {
+                label = `${avatar} Assistant`;
+            }
         } else if (role === 'user') {
             avatar = 'U';
             label = '👤 User';
@@ -601,6 +646,9 @@ async function sendMessage() {
     input.disabled = true;
     
     try {
+        // Collect variable overrides
+        const variables = collectVariableOverrides();
+        
         // Add user message to UI immediately
         const messagesArea = document.getElementById('messages-area');
         const userMessageDiv = document.createElement('div');
@@ -621,11 +669,14 @@ async function sendMessage() {
         // Clear input
         input.value = '';
         
-        // Send to API
-        const response = await API.sendMessage(State.currentChat.chat_id, message);
+        // Send to API with variables
+        const response = await API.sendMessage(State.currentChat.chat_id, message, variables);
         
         // Reload chat to get assistant response
         await selectChat(State.currentChat.chat_id);
+        
+        // Clear variables after successful send
+        clearVariableOverrides();
         
     } catch (error) {
         showError('Failed to send message');
@@ -634,6 +685,106 @@ async function sendMessage() {
         input.disabled = false;
         input.focus();
     }
+}
+
+function collectVariableOverrides() {
+    const variables = {};
+    const variableItems = document.querySelectorAll('.variable-override-item');
+    
+    variableItems.forEach(item => {
+        const nameInput = item.querySelector('.variable-name-input');
+        const valueInput = item.querySelector('.variable-value-input');
+        
+        const name = nameInput.value.trim();
+        const value = valueInput.value.trim();
+        
+        if (name && value) {
+            variables[name] = value;
+        }
+    });
+    
+    return variables;
+}
+
+function addVariableOverride(name = '', value = '') {
+    const section = document.getElementById('variable-override-section');
+    const list = document.getElementById('variable-override-list');
+    
+    // Show section if hidden
+    section.style.display = 'block';
+    
+    // Create variable item
+    const item = document.createElement('div');
+    item.className = 'variable-override-item';
+    
+    item.innerHTML = `
+        <input 
+            type="text" 
+            class="variable-name-input" 
+            placeholder="Variable name" 
+            value="${escapeHtml(name)}"
+        />
+        <input 
+            type="text" 
+            class="variable-value-input" 
+            placeholder="Value" 
+            value="${escapeHtml(value)}"
+        />
+        <button class="btn-remove" type="button">×</button>
+    `;
+    
+    // Add remove handler
+    item.querySelector('.btn-remove').addEventListener('click', () => {
+        item.remove();
+        updateVariableCount();
+        
+        // Hide section if no variables
+        if (list.children.length === 0) {
+            section.style.display = 'none';
+        }
+    });
+    
+    list.appendChild(item);
+    updateVariableCount();
+    
+    // Focus the name input
+    item.querySelector('.variable-name-input').focus();
+}
+
+function clearVariableOverrides() {
+    const list = document.getElementById('variable-override-list');
+    list.innerHTML = '';
+    
+    const section = document.getElementById('variable-override-section');
+    section.style.display = 'none';
+    
+    updateVariableCount();
+}
+
+function updateVariableCount() {
+    const count = document.querySelectorAll('.variable-override-item').length;
+    const countEl = document.getElementById('variable-count');
+    
+    if (count > 0) {
+        countEl.textContent = `${count} variable${count !== 1 ? 's' : ''}`;
+    } else {
+        countEl.textContent = '';
+    }
+}
+
+function initVariableOverrides() {
+    const addBtn = document.getElementById('add-variable-btn');
+    const collapseBtn = document.getElementById('collapse-variables-btn');
+    const section = document.getElementById('variable-override-section');
+    
+    addBtn.addEventListener('click', () => {
+        addVariableOverride();
+    });
+    
+    collapseBtn.addEventListener('click', () => {
+        section.style.display = 'none';
+        updateVariableCount();
+    });
 }
 
 // ===== New Chat Modal =====
@@ -1466,6 +1617,350 @@ function initDebugToggle() {
     });
 }
 
+// ===== Technical Details Panel =====
+function initTechnicalDetailsPanel() {
+    const toggle = document.getElementById('technical-details-toggle');
+    const panel = document.getElementById('technical-details-panel');
+    
+    if (!toggle || !panel) return;
+    
+    toggle.addEventListener('click', () => {
+        panel.classList.toggle('collapsed');
+    });
+    
+    // Tech tab switching
+    const techTabButtons = document.querySelectorAll('.tech-tab-button');
+    techTabButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            const techTab = button.dataset.techTab;
+            
+            // Update button states
+            techTabButtons.forEach(btn => btn.classList.remove('active'));
+            button.classList.add('active');
+            
+            // Update content states
+            document.querySelectorAll('.tech-tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.getElementById(`tech-${techTab}-tab`).classList.add('active');
+        });
+    });
+}
+
+function renderTechnicalDetails(chatData) {
+    // Variables Tab
+    renderVariablesTab(chatData.variables || {});
+    
+    // Statements Tab
+    renderStatementsTab(chatData.statements || []);
+    
+    // VM State Tab
+    renderVMStateTab(chatData.vm_state || {});
+    
+    // Costs Tab (we'll fetch this separately if needed)
+    renderCostsTab(chatData.costs || []);
+}
+
+function renderVariablesTab(variables) {
+    const container = document.getElementById('tech-variables-tab');
+    
+    const keys = Object.keys(variables);
+    if (keys.length === 0) {
+        container.innerHTML = '<div class="tech-empty-state">No variables defined</div>';
+        return;
+    }
+    
+    const table = createVariableTable(variables);
+    table.className = 'tech-variables-table';
+    
+    container.innerHTML = '';
+    container.appendChild(table);
+}
+
+// Recursive helper function to create variable tables
+function createVariableTable(obj, isNested = false) {
+    const table = document.createElement('table');
+    table.className = isNested ? 'tech-nested-table' : 'tech-variables-table';
+    
+    // Create header
+    const thead = document.createElement('thead');
+    thead.innerHTML = `
+        <tr>
+            <th>Name</th>
+            <th>Value</th>
+        </tr>
+    `;
+    table.appendChild(thead);
+    
+    // Create body
+    const tbody = document.createElement('tbody');
+    
+    Object.entries(obj).forEach(([key, value]) => {
+        const row = document.createElement('tr');
+        
+        // Name cell
+        const nameCell = document.createElement('td');
+        nameCell.className = isNested ? '' : 'tech-variable-name';
+        nameCell.textContent = key;
+        row.appendChild(nameCell);
+        
+        // Value cell
+        const valueCell = document.createElement('td');
+        valueCell.className = isNested ? '' : 'tech-variable-value-cell';
+        
+        // Recursively format value for display
+        if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+            // Create nested table for dictionary values (recursive)
+            const nestedTable = createVariableTable(value, true);
+            valueCell.appendChild(nestedTable);
+        } else if (Array.isArray(value)) {
+            // For arrays, show as JSON
+            valueCell.textContent = JSON.stringify(value);
+        } else {
+            // For simple values (string, number, boolean, null)
+            valueCell.textContent = String(value);
+        }
+        
+        row.appendChild(valueCell);
+        tbody.appendChild(row);
+    });
+    
+    table.appendChild(tbody);
+    return table;
+}
+
+function renderStatementsTab(statements) {
+    const container = document.getElementById('tech-statements-tab');
+    
+    if (!statements || statements.length === 0) {
+        container.innerHTML = '<div class="tech-empty-state">No statements recorded</div>';
+        return;
+    }
+    
+    const list = document.createElement('div');
+    list.className = 'tech-statements-list';
+    
+    statements.forEach((stmt, index) => {
+        const item = document.createElement('div');
+        item.className = 'tech-statement-item';
+        
+        const keyword = stmt.keyword || '';
+        const value = stmt.value || '';
+        
+        item.innerHTML = `
+            <div class="tech-statement-num">${index + 1}</div>
+            <div class="tech-statement-keyword">${escapeHtml(keyword)}</div>
+            <div class="tech-statement-value">${escapeHtml(value)}</div>
+        `;
+        
+        list.appendChild(item);
+    });
+    
+    container.innerHTML = '';
+    container.appendChild(list);
+}
+
+function renderVMStateTab(vmState) {
+    const container = document.getElementById('tech-vmstate-tab');
+    
+    if (!vmState || Object.keys(vmState).length === 0) {
+        container.innerHTML = '<div class="tech-empty-state">No VM state available</div>';
+        return;
+    }
+    
+    const grid = document.createElement('div');
+    grid.className = 'tech-vm-state-grid';
+    
+    // Model Configuration Section
+    const modelSection = createVMStateSection('Model Configuration', {
+        'Model': vmState.model_name || 'N/A',
+        'Provider': vmState.provider || 'N/A',
+        'Company': vmState.company || 'N/A'
+    });
+    grid.appendChild(modelSection);
+    
+    // Token & Cost Section
+    const costSection = createVMStateSection('Tokens & Cost', {
+        'Tokens In': (vmState.toks_in || 0).toLocaleString(),
+        'Tokens Out': (vmState.toks_out || 0).toLocaleString(),
+        'Cost In': `$${(vmState.cost_in || 0).toFixed(6)}`,
+        'Cost Out': `$${(vmState.cost_out || 0).toFixed(6)}`,
+        'Total Cost': `$${((vmState.cost_in || 0) + (vmState.cost_out || 0)).toFixed(6)}`
+    });
+    grid.appendChild(costSection);
+    
+    // Execution Section
+    const execSection = createVMStateSection('Execution', {
+        'Interaction #': vmState.interaction_no || 0,
+        'IP': vmState.ip || 0,
+        'Log Mode': vmState.log_mode || 'N/A'
+    });
+    grid.appendChild(execSection);
+    
+    // Prompt Info Section
+    if (vmState.prompt_name || vmState.prompt_version) {
+        const promptSection = createVMStateSection('Prompt Info', {
+            'Name': vmState.prompt_name || 'N/A',
+            'Version': vmState.prompt_version || 'N/A'
+        });
+        grid.appendChild(promptSection);
+    }
+    
+    container.innerHTML = '';
+    container.appendChild(grid);
+}
+
+function createVMStateSection(title, items) {
+    const section = document.createElement('div');
+    section.className = 'tech-vm-state-section';
+    
+    const titleEl = document.createElement('h4');
+    titleEl.textContent = title;
+    section.appendChild(titleEl);
+    
+    Object.entries(items).forEach(([label, value]) => {
+        const item = document.createElement('div');
+        item.className = 'tech-vm-state-item';
+        item.innerHTML = `
+            <span class="tech-vm-state-label">${escapeHtml(label)}:</span>
+            <span class="tech-vm-state-value">${escapeHtml(String(value))}</span>
+        `;
+        section.appendChild(item);
+    });
+    
+    return section;
+}
+
+function renderCostsTab(costs) {
+    const container = document.getElementById('tech-costs-tab');
+    
+    // Debug logging
+    console.log('=== COSTS DEBUG ===');
+    console.log('costs parameter:', costs);
+    console.log('costs type:', typeof costs);
+    console.log('costs.length:', costs ? costs.length : 'undefined');
+    console.log('costs[0]:', costs && costs[0] ? costs[0] : 'no first element');
+    if (costs && costs[0]) {
+        console.log('costs[0].tokens_in:', costs[0].tokens_in);
+        console.log('costs[0].model:', costs[0].model);
+        console.log('costs[0].provider:', costs[0].provider);
+    }
+    console.log('==================');
+    
+    if (!costs || costs.length === 0) {
+        container.innerHTML = '<div class="tech-empty-state">No cost tracking data available</div>';
+        return;
+    }
+    
+    // Calculate totals
+    const totals = costs.reduce((acc, cost) => ({
+        tokensIn: acc.tokensIn + (cost.tokens_in || 0),
+        tokensOut: acc.tokensOut + (cost.tokens_out || 0),
+        costIn: acc.costIn + parseFloat(cost.cost_in || 0),
+        costOut: acc.costOut + parseFloat(cost.cost_out || 0),
+        time: acc.time + parseFloat(cost.elapsed_time || 0)
+    }), { tokensIn: 0, tokensOut: 0, costIn: 0, costOut: 0, time: 0 });
+    
+    const table = document.createElement('table');
+    table.className = 'tech-costs-table';
+    
+    table.innerHTML = `
+        <thead>
+            <tr>
+                <th>Call</th>
+                <th>Provider</th>
+                <th>Model</th>
+                <th>Tokens In</th>
+                <th>Tokens Out</th>
+                <th>Cost In</th>
+                <th>Cost Out</th>
+                <th>Total Cost</th>
+                <th>Time (s)</th>
+            </tr>
+        </thead>
+        <tbody>
+            ${costs.map((cost, index) => {
+                const tokensIn = cost.tokens_in || 0;
+                const tokensOut = cost.tokens_out || 0;
+                const costIn = parseFloat(cost.cost_in || 0);
+                const costOut = parseFloat(cost.cost_out || 0);
+                const totalCost = costIn + costOut;
+                const elapsedTime = parseFloat(cost.elapsed_time || 0);
+                const model = cost.model || 'N/A';
+                const provider = cost.provider || 'N/A';
+                const callId = cost.call_id || 'N/A';
+                
+                // Helper to format cost with appropriate precision
+                const formatCost = (value) => {
+                    if (value === 0) return '$0.00';
+                    if (value < 0.000001) return `$${value.toExponential(2)}`;
+                    if (value < 0.01) return `$${value.toFixed(8)}`;
+                    return `$${value.toFixed(6)}`;
+                };
+                
+                // Provider color mapping
+                const providerColors = {
+                    'openrouter': '#ffc107',
+                    'openai': '#28a745',
+                    'anthropic': '#e83e8c',
+                    'google': '#dc3545',
+                    'gemini': '#dc3545',
+                    'mistral': '#ffeb3b',
+                    'xai': '#6c757d',
+                    'deepseek': '#007bff',
+                };
+                const color = providerColors[provider.toLowerCase()] || '#6c757d';
+                
+                return `
+                    <tr>
+                        <td style="font-family: monospace; font-size: 0.85rem;">${escapeHtml(callId)}</td>
+                        <td><span style="color: ${color}; font-weight: 500;">${escapeHtml(provider)}</span></td>
+                        <td style="font-size: 0.85rem;">${escapeHtml(model)}</td>
+                        <td style="text-align: right;">${tokensIn.toLocaleString()}</td>
+                        <td style="text-align: right;">${tokensOut.toLocaleString()}</td>
+                        <td style="text-align: right;">${formatCost(costIn)}</td>
+                        <td style="text-align: right;">${formatCost(costOut)}</td>
+                        <td style="text-align: right; font-weight: 500;">${formatCost(totalCost)}</td>
+                        <td style="text-align: right;">${elapsedTime.toFixed(2)}</td>
+                    </tr>
+                `;
+            }).join('')}
+        </tbody>
+        <tfoot>
+            <tr style="font-weight: bold; background: #f8f9fa;">
+                <td colspan="3">TOTALS</td>
+                <td style="text-align: right;">${totals.tokensIn.toLocaleString()}</td>
+                <td style="text-align: right;">${totals.tokensOut.toLocaleString()}</td>
+                <td style="text-align: right;">${(() => {
+                    const value = totals.costIn;
+                    if (value === 0) return '$0.00';
+                    if (value < 0.000001) return `$${value.toExponential(2)}`;
+                    if (value < 0.01) return `$${value.toFixed(8)}`;
+                    return `$${value.toFixed(6)}`;
+                })()}</td>
+                <td style="text-align: right;">${(() => {
+                    const value = totals.costOut;
+                    if (value === 0) return '$0.00';
+                    if (value < 0.000001) return `$${value.toExponential(2)}`;
+                    if (value < 0.01) return `$${value.toFixed(8)}`;
+                    return `$${value.toFixed(6)}`;
+                })()}</td>
+                <td style="text-align: right; color: #28a745;">${(() => {
+                    const value = totals.costIn + totals.costOut;
+                    if (value === 0) return '$0.00';
+                    if (value < 0.000001) return `$${value.toExponential(2)}`;
+                    if (value < 0.01) return `$${value.toFixed(8)}`;
+                    return `$${value.toFixed(6)}`;
+                })()}</td>
+                <td style="text-align: right;">${totals.time.toFixed(2)}</td>
+            </tr>
+        </tfoot>
+    `;
+    
+    container.innerHTML = '';
+    container.appendChild(table);
+}
+
 // ===== Initialize Application =====
 async function init() {
     // Initialize debug toggle first
@@ -1480,6 +1975,8 @@ async function init() {
     initDeleteChat();
     initMessageInput();
     initSearchAndFilters();
+    initTechnicalDetailsPanel();
+    initVariableOverrides();
     
     // Load initial content
     loadChats();

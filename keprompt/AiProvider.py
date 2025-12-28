@@ -11,7 +11,7 @@ from rich import json
 from rich.console import Console
 from rich.progress import TimeElapsedColumn, Progress
 
-from .keprompt_functions import DefinedFunctions
+from . import FunctionSpace
 from .keprompt_util import VERTICAL
 
 console = Console()
@@ -217,7 +217,7 @@ class AiProvider(abc.ABC):
             try:
                 # Track function execution timing
                 func_start_time = time.time()
-                result = DefinedFunctions[part.name](**part.arguments)
+                result = FunctionSpace.functions.functions[part.name](**part.arguments)
                 func_elapsed_time = time.time() - func_start_time
 
                 # Log function result using structured logging

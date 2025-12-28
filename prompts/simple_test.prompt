@@ -1,9 +1,0 @@
-.prompt "name":"Simple Hello Test", "version":"1.0.0", "params":{"llm":"openai/gpt-4o-mini"}
-.llm "model": "<<llm>>"
-.print llm=<<llm>>
-.system This is system text...
-and this is also system text
-.user This is user text
-and this is user text also
-Howdy Sir!
-.exec

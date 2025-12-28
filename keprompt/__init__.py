@@ -1,5 +1,8 @@
 """KePrompt package"""
 
+from .keprompt_function_space import FunctionSpace
+
+
 from .AiPrompt import AiPrompt
 from .AiProvider import AiProvider
 from .AiAnthropic import AiAnthropic

@@ -19,11 +19,31 @@ def get_webpage_content(url: str) -> str:
         error_msg = e.stderr.strip() or e.stdout.strip()
         raise Exception(f"Error fetching URL '{url}': {error_msg}")
 
-def readfile(filename: str) -> str:
-    """Read contents of a local file."""
+def readfile(filename: str, offset: int | None = None, length: int | None = None) -> str:
+    """Read contents of a local file, or a byte range if offset/length are provided.
+
+    Offsets and lengths are interpreted as byte positions in the file's UTF-8 encoding.
+    If offset and length are both None, the entire file is read as text.
+    """
     try:
-        with open(filename, 'r', encoding='utf-8') as file:
-            return file.read()
+        # Whole-file text read (existing behavior)
+        if offset is None and length is None:
+            with open(filename, "r", encoding="utf-8") as file:
+                return file.read()
+
+        # Byte-range read, then decode as UTF-8
+        with open(filename, "rb") as file:
+            if offset is not None:
+                file.seek(offset)
+            data = file.read(length) if length is not None else file.read()
+        try:
+            return data.decode("utf-8")
+        except UnicodeDecodeError as e:
+            abs_path = os.path.abspath(filename)
+            raise Exception(
+                f"Selected byte range in file '{filename}' (resolved to '{abs_path}') "
+                f"is not valid UTF-8: {e}"
+            )
     except Exception as err:
         abs_path = os.path.abspath(filename)
         raise Exception(f"Error accessing file '{filename}' (resolved to '{abs_path}'): {err}")
@@ -79,9 +99,9 @@ def execcmd(cmd: str) -> str:
     except Exception as e:
         return f"Unexpected error: {str(e)}"
 
-def askuser(question: str) -> str:
-    """Ask user for input."""
-    return input(f"{question}: ")
+# def askuser(question: str) -> str:
+#     """Ask user for input."""
+#     return input(f"{question}: ")
 
 def wwwget(url: str) -> str:
     """Retrieve webpage content."""
@@ -94,11 +114,22 @@ def wwwget(url: str) -> str:
 FUNCTION_DEFINITIONS = [
     {
         "name": "readfile",
-        "description": "Read the contents of a named file",
+        "description": "Read the contents of a named file, optionally from a specific byte range",
         "parameters": {
             "type": "object",
             "properties": {
-                "filename": {"type": "string", "description": "The name of the file to read"}
+                "filename": {
+                    "type": "string",
+                    "description": "The name of the file to read"
+                },
+                "offset": {
+                    "type": "integer",
+                    "description": "Optional byte offset into the file (UTF-8). If omitted, reading starts at the beginning."
+                },
+                "length": {
+                    "type": "integer",
+                    "description": "Optional number of bytes to read from the offset. If omitted, reads to end of file."
+                }
             },
             "required": ["filename"],
             "additionalProperties": False
@@ -141,18 +172,18 @@ FUNCTION_DEFINITIONS = [
             "additionalProperties": False
         }
     },
-    {
-        "name": "askuser",
-        "description": "Get clarification by asking the user a question",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "question": {"type": "string", "description": "Question to ask the user"}
-            },
-            "required": ["question"],
-            "additionalProperties": False
-        }
-    },
+    # {
+    #     "name": "askuser",
+    #     "description": "Get clarification by asking the user a question",
+    #     "parameters": {
+    #         "type": "object",
+    #         "properties": {
+    #             "question": {"type": "string", "description": "Question to ask the user"}
+    #         },
+    #         "required": ["question"],
+    #         "additionalProperties": False
+    #     }
+    # },
     {
         "name": "write_base64_file",
         "description": "Decode base64 content and write the decoded data to a named file",
@@ -174,7 +205,7 @@ FUNCTIONS = {
     "wwwget": wwwget, 
     "writefile": writefile,
     "execcmd": execcmd,
-    "askuser": askuser,
+    # "askuser": askuser,
     "write_base64_file": write_base64_file
 }
 

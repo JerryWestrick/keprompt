@@ -5,24 +5,20 @@ import os
 import sys
 import time
 import uuid
-from typing import cast, List
 
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
 
+from . import FunctionSpace
 from .config import get_config
 from rich.logging import RichHandler
 from rich.table import Table
 
 from .ModelManager import ModelManager, AiModel
-from  .keprompt_functions import DefinedFunctions, readfile
-from .AiPrompt import AiTextPart, AiImagePart, AiCall, AiResult, AiPrompt, AiMessage, MAX_LINE_LENGTH
-from  .keprompt_util import TOP_LEFT, BOTTOM_LEFT, VERTICAL, HORIZONTAL, TOP_RIGHT, RIGHT_TRIANGLE, \
-    LEFT_TRIANGLE, \
-    HORIZONTAL_LINE, BOTTOM_RIGHT, CIRCLE, backup_file
+from .AiPrompt import AiTextPart, AiImagePart, AiPrompt, MAX_LINE_LENGTH
+from  .keprompt_util import VERTICAL, RIGHT_TRIANGLE, LEFT_TRIANGLE, HORIZONTAL_LINE, CIRCLE
 from .keprompt_logger import StandardLogger, LogMode
-from .cost_tracker import track_prompt_execution
 
 console = Console()
 terminal_width = console.size.width
@@ -63,8 +59,6 @@ def print_prompt_code(prompt_files: list[str]) -> None:
 
 class StmtSyntaxError(Exception):
     pass
-
-from enum import Enum
 
 class PromptResolutionError(Exception):
     pass
@@ -518,10 +512,11 @@ class VM:
         # Store simple, JSON-safe metadata for use in prompts and logging
         self.vdict['provider'] = self.provider
         self.vdict['filename'] = self.filename
-        # Keep a simple string name for backward compatibility in prompts that expect <<model>>
-        self.vdict['model_name'] = self.model_name
-        # Expose a dict so prompts can access nested fields like <<model.provider>>
-        self.vdict['model'] = {
+        # Keep model as the string name (don't overwrite if set by .set or .exec)
+        if 'model' not in self.vdict or not isinstance(self.vdict['model'], str):
+            self.vdict['model'] = self.model_name
+        # Expose metadata dict so prompts can access nested fields like <<model_info.provider>>
+        self.vdict['model_info'] = {
             'name': self.model_name,
             'provider': self.provider,
             'company': getattr(self.model, 'company', ''),
@@ -535,17 +530,9 @@ class VM:
     def execute(self) -> None:
         """Execute the statements in the prompt file using the new standard logging system."""
         
-        # Output chat ID at start
-        # console.print(f"[dim]Chat: {self.prompt_uuid}[/dim]")
-        
         # Set initial prompt ID for logging context
         initial_prompt_id = f"{self.prompt_uuid}-init"
         self.logger.set_prompt_id(initial_prompt_id)
-        
-        # Log chat start
-        # if self.log_mode in [LogMode.LOG, LogMode.DEBUG]:
-        #     header_name = self.filename or "chat"
-        #     self.logger.log_info(f"Starting execution of {header_name}")
 
         # Execute all statements
         while self.ip < len(self.statements):
@@ -787,10 +774,21 @@ class StmtCmd(StmtPrompt):
     """
     Handles the execution of a command defined in a prompt file.
 
-    This class represents a `.cmd` keyword statement in the prompt file. The statement 
-    specifies a function to be executed along with arguments. The `execute` method 
-    parses the command, validates it against the available functions in `DefinedFunctions`, 
-    executes the function, and appends the function's output to the AI prompt context.
+    This class represents a `.cmd` keyword statement in the prompt file. 
+    The statement specifies a function to be executed along with arguments.
+    
+    Syntax:
+        .cmd function_name(param=value,...)
+        .cmd function_name(param=value,...) as variable_name
+    
+    When "as variable_name" is specified:
+        - Result is stored in the named variable
+        - Result is NOT appended to the current message
+        - Result is still available in <<last_response>>
+    
+    When "as variable_name" is omitted:
+        - Result is appended to the current message content
+        - Result is stored in <<last_response>>
 
     Attributes:
         msg_no (int): The message number in the execution sequence.
@@ -806,32 +804,69 @@ class StmtCmd(StmtPrompt):
         """Execute a command that was defined in a prompt file (.prompt)"""
         super().execute(vm)
 
-        function_name, args = self.value.split('(', maxsplit=1)
+
+        if self.vm.vm_debug:
+            print(f"VM-DEBUG .cmd EXEC: {FunctionSpace.functions.tools_array}",file=sys.stderr)
+
+        # Check for optional "as variable_name" clause
+        variable_name = None
+        value = self.value.strip()
+
+        if ' as ' in value:
+            # Split on " as " to separate function call from variable assignment
+            func_part, variable_name = value.rsplit(' as ', 1)
+            variable_name = variable_name.strip()
+            
+            # Validate variable name is not empty
+            if not variable_name:
+                raise StmtSyntaxError(f"{vm.filename}:{self.msg_no} .cmd syntax error: variable name required after 'as'")
+            
+            # Validate variable name follows Python naming rules
+            import re
+            if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', variable_name):
+                raise StmtSyntaxError(f"{vm.filename}:{self.msg_no} .cmd syntax error: invalid variable name '{variable_name}'")
+            
+            value = func_part.strip()
+
+        # Parse the function call
+        function_name, args = value.split('(', maxsplit=1)
+        function_name = function_name.strip()
         args = args[:-1]
         args_list = args.split(",")
         function_args = {}
 
-        for arg in args_list:
-            name, value = arg.split("=", maxsplit=1)
-            function_args[name] = value
+        if args:
+            for arg in args_list:
+                name, arg_value = arg.split("=", maxsplit=1)
+                function_args[name.strip()] = arg_value.strip()
 
-        if function_name not in DefinedFunctions:
+        # Check if function exists in function_array
+        function_exists = any(f['name'] == function_name for f in FunctionSpace.functions.function_array)
+        
+        if not function_exists:
             vm.print(
                 f"[bold red]Error executing {function_name}({function_args}): {function_name} is not defined.[/bold red]")
             raise Exception(f"{function_name} is not defined.")
 
         try:
-            text = DefinedFunctions[function_name](**function_args)
+            # Use FunctionSpace.call() method which handles both internal and external functions
+            text = FunctionSpace.functions.call(function_name, function_args)
         except Exception as err:
             vm.print(f"Error executing {function_name}({function_args})): {str(err)}")
             raise err
 
-        if len(vm.prompt.messages):
-            last_msg = vm.prompt.messages[-1]
-            last_msg.content.append(AiTextPart(vm=vm, text=text))
-        vm.set_variable('last_response', text) # set last_response to result 
+        # Store in last_response (always)
+        vm.set_variable('last_response', text)
 
-        vm.ip += 1  # Increment the ip...
+        # Conditional: append to message OR store in custom variable
+        if variable_name:
+            # Store in custom variable only
+            vm.set_variable(variable_name, text)
+        else:
+            # Original behavior: append to current message
+            if len(vm.prompt.messages):
+                last_msg = vm.prompt.messages[-1]
+                last_msg.content.append(AiTextPart(vm=vm, text=text))
 
 
 class StmtComment(StmtPrompt):
@@ -926,6 +961,57 @@ class StmtExec(StmtPrompt):
         
         header = f"[bold white]{VERTICAL}[/][white]{self.msg_no:02}[/] [cyan]{self.keyword:<8}[/]"
 
+        # Determine model parameters
+        if self.value.strip():
+            # .exec has explicit params - parse and use
+            value = vm.substitute(self.value.strip())
+            try:
+                if value.startswith('{'):
+                    params = json.loads(value)
+                else:
+                    params = {'model': value}
+            except json.JSONDecodeError as e:
+                vm.logger.log_error(f".exec params parse error: {e}")
+                raise StmtSyntaxError(f".exec syntax: invalid JSON '{self.value}': {e}")
+        else:
+            # No explicit params - get model from vdict
+            if 'model' not in vm.vdict:
+                raise StmtSyntaxError(
+                    f".exec error: No model specified. Set model via:\n"
+                    f"  .prompt \"params\":{{\"model\":\"...\"}}\n"
+                    f"  .set model <model_name>"
+                )
+            params = {'model': vm.vdict['model']}
+            # Include other LLM params from vdict if present
+            for key in ['temperature', 'max_tokens', 'top_p', 'top_k']:
+                if key in vm.vdict:
+                    params[key] = vm.vdict[key]
+        
+        # Load the model (single point of instantiation)
+        try:
+            vm.load_llm(params)
+        except ValueError as e:
+            raise StmtSyntaxError(f".exec error: {e}")
+        except Exception as e:
+            vm.logger.log_error(f".exec unexpected error: {e}")
+            raise StmtSyntaxError(f".exec error: {e}")
+        
+        # Get API key for this provider
+        config = get_config()
+        api_key = config.get_api_key(vm.provider)
+        if not api_key:
+            error_msg = config.get_missing_key_error(vm.provider)
+            vm.logger.log_error(error_msg)
+            sys.exit(1)
+        
+        vm.api_key = api_key
+        
+        # Sync prompt object with VM state (THE FIX!)
+        vm.prompt.api_key = vm.api_key
+        vm.prompt.provider = vm.provider
+        vm.prompt.model = vm.model.model
+        vm.prompt.model_lookup_key = vm.model_name  # Set the lookup key for ModelManager
+        
         start_time = time.time()
         
         # Generate unique call identifier using UUID with exec format
@@ -1041,6 +1127,8 @@ class StmtExit(StmtPrompt):
             vm.logger.log_total_costs(vm.toks_in, vm.toks_out, vm.cost_in, vm.cost_out, vm.provider, vm.model_name, vm.prompt_uuid, vm.interaction_no)
 
 
+
+
 class StmtInclude(StmtPrompt):
     """
     Handles the execution of an include statement in the prompt file.
@@ -1064,7 +1152,7 @@ class StmtInclude(StmtPrompt):
     def execute(self, vm: VM) -> None:
         super().execute(vm)
         filename = vm.substitute(self.value)
-        lines = readfile(filename=filename)
+        lines = FunctionSpace.functions.call('readfile', {'filename': filename})
         last_msg = vm.prompt.messages[-1]
         last_msg.content.append(AiTextPart(vm=vm, text=lines))
 
@@ -1090,71 +1178,6 @@ class StmtImage(StmtPrompt):
         super().execute(vm)
         filename = self.value
         vm.prompt.add_message(vm=vm, role="user", content=[AiImagePart(vm=self.vm, filename=filename)])
-
-
-class StmtLlm(StmtPrompt):
-    """
-    Handles the execution of an LLM (Language Learning Model) setup in the Virtual Machine (VM).
-
-    This class represents a `.llm` keyword statement in the prompt file. 
-    It is responsible for configuring the LLM's model parameters, fetching the API key, 
-    and ensuring required settings are loaded into the VM for interaction with the defined LLM.
-
-    Attributes:
-        msg_no (int): The message number in the execution sequence.
-        keyword (str): The statement keyword (e.g., '.llm').
-        value (str): The parameters for the LLM's configuration, typically in JSON format.
-
-    Methods:
-        execute(vm: VM): Parses the parameters for the LLM, validates the configuration, 
-                         loads the model into the VM, and retrieves the necessary API key.
-    """
-
-    def execute(self, vm: VM) -> None:
-        super().execute(vm)
-        try:
-            if vm.llm:
-                raise (StmtSyntaxError(f".llm syntax: only one .lls statement allowed in vm {vm.filename}"))
-
-            if self.value[0] != '{':
-                self.value = "{" + self.value + "}"
-
-            value = self.vm.substitute(self.value)
-
-            try:
-                params = json.loads(value)
-            except Exception as e:
-                vm.logger.log_error(f"Error parsing .llm parameters: {str(e)}")
-                vm.logger.print_exception()
-                sys.exit(9)
-
-            if not isinstance(params, dict):
-                raise (StmtSyntaxError(
-                    f".llm syntax: parameters expected dict, but got {type(params).__name__}: {self.value}"))
-
-            if 'model' not in params:
-                raise (StmtSyntaxError(f".llm syntax:  'model' parameter is required but missing {self.value}"))
-
-            vm.load_llm(params)
-
-        except Exception as err:
-            vm.logger.print_exception()
-            sys.exit(9)
-
-        # Now we that we have loaded the LLM,  we will load the API_KEY
-        config = get_config()
-        api_key = config.get_api_key(vm.model.provider)
-
-        if not api_key:
-            error_msg = config.get_missing_key_error(vm.model.provider)
-            vm.logger.log_error(error_msg)
-            sys.exit(1)
-
-        vm.llm['API_KEY'] = api_key
-        vm.api_key = api_key
-        vm.prompt.api_key = vm.api_key
-        vm.prompt.provider = vm.model.provider
-        vm.prompt.model = vm.model.model  # Always contains provider/model-name
 
 
 class StmtSystem(StmtPrompt):
@@ -1381,7 +1404,6 @@ StatementTypes: dict[str, type(StmtPrompt)] = {
     '.exit': StmtExit,
     '.image': StmtImage,
     '.include': StmtInclude,
-    '.llm': StmtLlm,
     '.print': StmtPrint,
     '.prompt': StmtPromptMeta,
     '.set': StmtSet,
@@ -1411,14 +1433,14 @@ def print_statement_types():
         '.#': 'Comment statement - ignored during execution',
         '.assistant': 'Add an assistant message to the chat context',
         '.clear': 'Delete specified files or file patterns from the system',
-        '.cmd': 'Execute a defined function with specified arguments',
+        '.cmd': 'Execute a defined function with specified arguments; optionally store result in variable with "as var_name"',
         '.debug': 'Display VM state information for debugging purposes',
         '.exec': 'Execute the current prompt context with the configured LLM',
         '.exit': 'Terminate prompt execution',
         '.image': 'Add an image file to the chat context',
         '.include': 'Include content from another file into the current context',
-        '.llm': 'Configure the Language Learning Model and its parameters',
         '.print': 'Output text to STDOUT with variable substitution (production output)',
+        '.prompt': 'Define prompt metadata (name, version, params)',
         '.set': 'Set variables including Prefix/Postfix for configurable substitution delimiters',
         '.system': 'Add a system message to the chat context',
         '.text': 'Add text content to the current message context',
@@ -1436,8 +1458,8 @@ def print_statement_types():
         '.exit': 'user',
         '.image': 'user',
         '.include': 'user',
-        '.llm': 'user',
         '.print': 'user',
+        '.prompt': 'user',
         '.set': 'user',
         '.system': 'user',
         '.text': 'user',

@@ -77,6 +77,36 @@
                                 <button id="delete-chat-btn" class="btn btn-danger-outline">🗑️ Delete</button>
                             </div>
 
+                            <!-- Technical Details Panel -->
+                            <div id="technical-details-panel" class="technical-details-panel collapsed">
+                                <div class="technical-details-header" id="technical-details-toggle">
+                                    <span class="toggle-icon">▶</span>
+                                    <span class="toggle-text">🔧 Technical Details</span>
+                                </div>
+                                <div class="technical-details-content">
+                                    <div class="technical-details-tabs">
+                                        <button class="tech-tab-button active" data-tech-tab="variables">Variables</button>
+                                        <button class="tech-tab-button" data-tech-tab="statements">Statements</button>
+                                        <button class="tech-tab-button" data-tech-tab="vmstate">VM State</button>
+                                        <button class="tech-tab-button" data-tech-tab="costs">Costs</button>
+                                    </div>
+                                    <div class="technical-details-body">
+                                        <div id="tech-variables-tab" class="tech-tab-content active">
+                                            <!-- Variables will be displayed here -->
+                                        </div>
+                                        <div id="tech-statements-tab" class="tech-tab-content">
+                                            <!-- Statements will be displayed here -->
+                                        </div>
+                                        <div id="tech-vmstate-tab" class="tech-tab-content">
+                                            <!-- VM State will be displayed here -->
+                                        </div>
+                                        <div id="tech-costs-tab" class="tech-tab-content">
+                                            <!-- Cost details will be displayed here -->
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
                             <!-- Messages Area -->
                             <div id="messages-area" class="messages-area">
                                 <!-- Messages will be dynamically inserted here -->
@@ -84,11 +114,29 @@
 
                             <!-- Input Area -->
                             <div class="input-area">
-                                <textarea 
-                                    id="message-input" 
-                                    placeholder="Type your message..." 
-                                    rows="1"
-                                ></textarea>
+                                <div style="display: flex; flex-direction: column; flex: 1; gap: 0.5rem;">
+                                    <textarea 
+                                        id="message-input" 
+                                        placeholder="Type your message..." 
+                                        rows="1"
+                                    ></textarea>
+                                    
+                                    <!-- Variable Override Section -->
+                                    <div id="variable-override-section" class="variable-override-section" style="display: none;">
+                                        <div class="variable-override-header">
+                                            <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);">Variable Overrides</span>
+                                            <button id="collapse-variables-btn" class="btn-icon" title="Collapse">▼</button>
+                                        </div>
+                                        <div id="variable-override-list" class="variable-override-list">
+                                            <!-- Variable pairs will be added here -->
+                                        </div>
+                                    </div>
+                                    
+                                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                        <button id="add-variable-btn" class="btn btn-secondary" style="font-size: 0.8rem;">+ Add Variable</button>
+                                        <span id="variable-count" style="font-size: 0.75rem; color: var(--text-muted);"></span>
+                                    </div>
+                                </div>
                                 <button id="send-btn" class="btn btn-primary">Send</button>
                             </div>
                         </div>

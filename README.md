@@ -30,6 +30,13 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 pip install keprompt
 ```
 
+To install in developers mode use:
+```bash
+pip install -e ~/keprompt/ 
+```
+
+
+
 ### 2. Initialize your workspace
 ```bash
 keprompt database create

@@ -1,12 +1,11 @@
-import time
 from typing import Dict, List
-import json
 from rich.console import Console
 
+from . import FunctionSpace
 from .ModelManager import ModelManager
 from .AiProvider import AiProvider
-from .AiPrompt import AiMessage, AiTextPart, AiCall, AiResult, AiPrompt
-from .keprompt_functions import DefinedFunctions, DefinedToolsArray
+from .AiPrompt import AiMessage, AiTextPart, AiCall
+
 
 
 console = Console()
@@ -44,10 +43,11 @@ class AiAnthropic(AiProvider):
             elif part["type"] == "tool_use":
                 content.append(AiCall(vm=self.prompt.vm, id=part["id"],name=part["name"], arguments=part["input"]))
 
-        return AiMessage(vm=self.prompt.vm, role="assistant", content=content)
+        return AiMessage(vm=self.prompt.vm, role="assistant", content=content,
+                        model_name=self.prompt.model, provider=self.prompt.provider)
     def to_company_messages(self, messages: List) -> List[Dict]:
 
-        company_mesages = []
+        company_messages = []
         for msg in messages:
             content = []
             if msg.role == "system":
@@ -61,9 +61,9 @@ class AiAnthropic(AiProvider):
                     else: raise Exception(f"Unknown part type: {part.type}")
 
                 role = "assistant" if msg.role == "assistant" else "user"
-                company_mesages.append({"role": role, "content": content})
+                company_messages.append({"role": role, "content": content})
 
-        return company_mesages
+        return company_messages
 
     def extract_token_usage(self, response: Dict) -> tuple[int, int]:
         """Extract token usage from Anthropic API response"""
@@ -97,7 +97,7 @@ AnthropicToolsArray = [
         "description": tool['function']['description'],
         "input_schema": tool['function']['parameters'],
     }
-    for tool in DefinedToolsArray
+    for tool in FunctionSpace.functions.tools_array
 ]
 
 # Register handler only - models loaded from JSON files

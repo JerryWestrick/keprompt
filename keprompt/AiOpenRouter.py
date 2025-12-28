@@ -3,10 +3,11 @@ import json
 import requests
 from rich.console import Console
 
+from . import FunctionSpace
 from .ModelManager import ModelManager
 from .AiProvider import AiProvider
 from .AiPrompt import AiMessage, AiTextPart, AiCall
-from .keprompt_functions import DefinedToolsArray
+
 
 console = Console()
 terminal_width = console.size.width
@@ -19,7 +20,7 @@ class AiOpenRouter(AiProvider):
         return {
             "model": ModelManager.get_model(self.prompt.model).get_api_model_name(),
             "messages": messages,
-            "tools": DefinedToolsArray
+            "tools": FunctionSpace.functions.tools_array
         }
 
     def get_api_url(self) -> str:
@@ -43,7 +44,8 @@ class AiOpenRouter(AiProvider):
         for tool_call in choice.get("tool_calls", []):
             content.append(AiCall(vm=self.prompt.vm,name=tool_call["function"]["name"],arguments=tool_call["function"]["arguments"],id=tool_call["id"]))
 
-        return AiMessage(vm=self.prompt.vm, role="assistant", content=content)
+        return AiMessage(vm=self.prompt.vm, role="assistant", content=content, 
+                        model_name=self.prompt.model, provider=self.prompt.provider)
 
     def extract_token_usage(self, response: Dict) -> tuple[int, int]:
         """Extract token usage from OpenRouter API response"""

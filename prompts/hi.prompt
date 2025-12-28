@@ -1,0 +1,10 @@
+.prompt "name":"Hi", "version":"1.0.0", "params":{"llm":"openrouter/openai/gpt-oss-120b"}, "description":"Simple Hi Prompt"
+.# Ask a model Hi to test if it is callable
+.llm "model": "<<llm>>"
+.system
+You are a cheerful assistant willing to help.
+.user
+Hi <<llm>>!
+.exec
+.print <<last_response>>
+.exit

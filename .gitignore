@@ -47,3 +47,4 @@ poetry.lock
 .env
 vscode-extension/
 
+/old/

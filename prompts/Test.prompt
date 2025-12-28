@@ -1,6 +1,9 @@
-.prompt "name":"Web Scraper Test", "version":"1.0.0", "params":{"llm":"openai/gpt-oss-120b"}
-.# Make snake program with gpt-4o
-.llm "model": "<<llm>>"
-.cmd wwwget(url=https://ai.google.dev/gemini-api/docs/models)
-.print <<last_response>>
+.prompt "name":"Test", "version":"1.0", "description":"test the new change model in chat feature", "params":{"model":"openrouter/openai/gpt-oss-20b"}
+.user Hello what model are you?
+.exec
+.user Ignoring the previous info in conversation...  From your training what model are you?
+.set model mistral/codestral-latest
+.exec
+.user Ignoring the previous info in conversation...  From your training what model are you?
+.exec {"model":"anthropic/claude-3-haiku-20240307"}
 .exit

@@ -2,10 +2,11 @@ from typing import Dict, List
 import json
 from rich.console import Console
 
+from . import FunctionSpace
 from .ModelManager import ModelManager
 from .AiProvider import AiProvider
 from .AiPrompt import AiMessage, AiTextPart, AiCall, AiResult, AiPrompt
-from .keprompt_functions import DefinedFunctions, DefinedToolsArray
+
 
 console = Console()
 terminal_width = console.size.width
@@ -41,7 +42,8 @@ class AiGoogle(AiProvider):
                 fc = part["functionCall"]
                 content.append(AiCall(vm=self.prompt.vm,name=fc["name"],arguments=fc.get("args", {}),id=fc.get("id", "")))
 
-        return AiMessage(vm=self.prompt.vm, role="assistant", content=content)
+        return AiMessage(vm=self.prompt.vm, role="assistant", content=content,
+                        model_name=self.prompt.model, provider=self.prompt.provider)
 
     def to_company_messages(self, messages: List[AiMessage]) -> List[Dict]:
         google_messages = []
@@ -96,7 +98,7 @@ GoogleToolsArray = [
         "description": tool['function']['description'],
         "parameters": {k: v for k, v in tool['function']['parameters'].items() if k != 'additionalProperties'}
     }
-    for tool in DefinedToolsArray
+    for tool in FunctionSpace.functions.tools_array
 ]
 
 ModelManager.register_handler(provider_name="gemini", handler_class=AiGoogle)

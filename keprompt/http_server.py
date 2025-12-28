@@ -21,6 +21,7 @@ except ImportError:
     sys.exit(1)
 
 from .api import handle_json_command
+from .CustomEncoder import CustomEncoder
 from .version import __version__
 
 
@@ -61,6 +62,7 @@ class ChatCreate(BaseModel):
 class ChatUpdate(BaseModel):
     """Request model for updating a chat"""
     answer: str
+    set: Optional[Dict[str, str]] = {}
 
 
 class ErrorResponse(BaseModel):
@@ -118,6 +120,11 @@ def call_api(args: argparse.Namespace) -> Dict[str, Any]:
                 status_code=400,
                 detail=response
             )
+        
+        # Serialize using CustomEncoder (like CLI does) to handle Peewee models
+        # Then parse back to get plain dict without __data__ wrappers
+        json_str = json.dumps(response, cls=CustomEncoder)
+        response = json.loads(json_str)
         
         return response
         
@@ -232,7 +239,13 @@ def setup_routes(app: FastAPI, enable_web_gui: bool = False) -> None:
     @app.put("/api/chats/{chat_id}/messages")
     async def update_chat(chat_id: str, update_data: ChatUpdate):
         """Add a message to an existing chat"""
-        args = build_args('chat', 'update', chat_id=chat_id, answer=update_data.answer, message=None, full=False)
+        # Convert set dict to list format expected by ChatManager
+        set_list = []
+        if update_data.set:
+            for key, value in update_data.set.items():
+                set_list.append([key, value])
+        
+        args = build_args('chat', 'update', chat_id=chat_id, answer=update_data.answer, message=None, full=False, set=set_list if set_list else None)
         return call_api(args)
     
     @app.delete("/api/chats/{chat_id}")

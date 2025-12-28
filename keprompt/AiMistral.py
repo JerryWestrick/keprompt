@@ -1,10 +1,11 @@
 from typing import Dict, List
 from rich.console import Console
 
+from . import FunctionSpace
 from .ModelManager import ModelManager
 from .AiProvider import AiProvider
 from .AiPrompt import AiMessage, AiTextPart, AiCall
-from .keprompt_functions import DefinedToolsArray
+
 
 console = Console()
 terminal_width = console.size.width
@@ -14,7 +15,7 @@ class AiMistral(AiProvider):
     litellm_provider = "mistral"
     
     def prepare_request(self, messages: List[Dict]) -> Dict:
-        return {"model": ModelManager.get_model(self.prompt.model).get_api_model_name(),"messages": messages,"tools": DefinedToolsArray,"tool_choice": "auto"}
+        return {"model": ModelManager.get_model(self.prompt.model).get_api_model_name(),"messages": messages,"tools": FunctionSpace.functions.tools_array,"tool_choice": "auto"}
 
     def get_api_url(self) -> str:
         return "https://api.mistral.ai/v1/chat/completions"
@@ -36,7 +37,8 @@ class AiMistral(AiProvider):
         for tool_call in tool_calls:
             content.append(AiCall(vm=self.prompt.vm,name=tool_call["function"]["name"],arguments=tool_call["function"]["arguments"],id=tool_call["id"]))
 
-        return AiMessage(vm=self.prompt.vm, role="assistant", content=content)
+        return AiMessage(vm=self.prompt.vm, role="assistant", content=content,
+                        model_name=self.prompt.model, provider=self.prompt.provider)
 
     def to_company_messages(self, messages: List[AiMessage]) -> List[Dict]:
         mistral_messages = []

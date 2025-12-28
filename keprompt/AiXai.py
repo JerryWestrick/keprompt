@@ -2,10 +2,10 @@ from typing import Dict, List
 import json
 from rich.console import Console
 
+from . import FunctionSpace
 from .ModelManager import ModelManager
 from .AiProvider import AiProvider
 from .AiPrompt import AiMessage, AiTextPart, AiCall
-from .keprompt_functions import DefinedToolsArray
 
 console = Console()
 terminal_width = console.size.width
@@ -15,7 +15,7 @@ class AiXai(AiProvider):
     litellm_provider = "xai"
     
     def prepare_request(self, messages: List[Dict]) -> Dict:
-        return {"model": ModelManager.get_model(self.prompt.model).get_api_model_name(),"messages": messages,"tools": DefinedToolsArray,"tool_choice": "auto"}
+        return {"model": ModelManager.get_model(self.prompt.model).get_api_model_name(),"messages": messages,"tools": FunctionSpace.functions.tools_array,"tool_choice": "auto"}
 
     def get_api_url(self) -> str:
         return "https://api.x.ai/v1/chat/completions"
@@ -33,7 +33,8 @@ class AiXai(AiProvider):
         for tc in choice.get("tool_calls", []):
             content.append(AiCall(vm=self.prompt.vm,name=tc["function"]["name"],arguments=tc["function"]["arguments"],id=tc["id"]))
 
-        return AiMessage(vm=self.prompt.vm, role="assistant", content=content)
+        return AiMessage(vm=self.prompt.vm, role="assistant", content=content,
+                        model_name=self.prompt.model, provider=self.prompt.provider)
 
     def to_company_messages(self, messages: List[AiMessage]) -> List[Dict]:
         xai_messages = []

@@ -30,6 +30,72 @@ from .keprompt_vm import VM
 class ChatManager:
     """High-level Chat operations """
 
+    @classmethod
+    def register_cli(cls, parent_subparsers: argparse._SubParsersAction, parent_parser: argparse.ArgumentParser) -> None:
+        parser = parent_subparsers.add_parser(
+            "chat",
+            aliases=["chats", "conversation", "conversations"],
+            parents=[parent_parser],
+            help="Chat operations",
+        )
+        subparsers = parser.add_subparsers(dest="chat_command", required=True)
+
+        create = subparsers.add_parser(
+            "create",
+            aliases=["start", "new"],
+            parents=[parent_parser],
+            help="Create a new chat from a prompt",
+        )
+        create.add_argument("--prompt", required=True, help="Prompt name or filter")
+        create.add_argument(
+            "--set",
+            nargs=2,
+            action="append",
+            metavar=("VAR", "VALUE"),
+            help="Set variable (repeatable): --set model gpt-4 --set temperature 0.7",
+        )
+
+        get_cmd = subparsers.add_parser(
+            "get",
+            aliases=["list", "show", "view"],
+            parents=[parent_parser],
+            help="Get a chat by id or list chats",
+        )
+        get_cmd.add_argument("chat_id", nargs="?", help="Chat ID (8 chars)")
+        get_cmd.add_argument("--limit", type=int, help="Max number of chats to list")
+
+        reply = subparsers.add_parser(
+            "reply",
+            aliases=["answer", "send", "update"],
+            parents=[parent_parser],
+            help="Send a message to a chat and get a reply",
+        )
+        reply.add_argument("chat_id", help="Chat ID (8 chars)")
+        reply.add_argument("message", nargs="?", help="Message text (if omitted, use --answer/--message)")
+        mex = reply.add_mutually_exclusive_group()
+        mex.add_argument("--answer", help="Message text (explicit)")
+        mex.add_argument("--message", help="Message text (explicit)")
+        reply.add_argument("--full", action="store_true", help="Show full conversation history")
+        reply.add_argument(
+            "--set",
+            nargs=2,
+            action="append",
+            metavar=("VAR", "VALUE"),
+            help="Set variable for this reply (repeatable): --set model gpt-4",
+        )
+
+        delete = subparsers.add_parser(
+            "delete",
+            aliases=["rm"],
+            parents=[parent_parser],
+            help="Delete a chat or prune chats",
+        )
+        delete.add_argument("chat_id", nargs="?", help="Chat ID (8 chars)")
+        prune = delete.add_mutually_exclusive_group()
+        prune.add_argument("--days", type=int, dest="max_days", help="Delete chats older than N days")
+        prune.add_argument("--count", type=int, dest="max_count", help="Keep only the most recent N chats")
+        prune.add_argument("--gb", type=float, dest="max_size_gb", help="Target max DB size in GB")
+
     def __init__(self, args: argparse.Namespace = None):
         self.args = args
         self.db_manager = get_db_manager()
@@ -190,6 +256,7 @@ class ChatManager:
                 vm.llm = {"model": vm.model_name}
                 vm.prompt.company = vm.model.company
                 vm.prompt.model = vm.model.model  # Always contains provider/model-name
+                vm.prompt.model_lookup_key = vm.model_name  # Set the lookup key for ModelManager
                 vm.prompt.provider = vm.model.provider
                 vm.provider = vm.model.provider
 
@@ -218,6 +285,9 @@ class ChatManager:
         for msg_data in messages_data:
             role = msg_data.get("role", "")
             content_data = msg_data.get("content", [])
+            # Extract model metadata if present (for assistant messages)
+            model_name = msg_data.get("model_name")
+            provider = msg_data.get("provider")
 
             # Reconstruct message parts
             content_parts = []
@@ -247,9 +317,10 @@ class ChatManager:
                         )
                     )
 
-            # Add message to prompt
+            # Add message to prompt with model metadata
             vm.prompt.messages.append(
-                AiMessage(vm=vm, role=role, content=content_parts)
+                AiMessage(vm=vm, role=role, content=content_parts,
+                         model_name=model_name, provider=provider)
             )
 
         # Restore variables
@@ -482,27 +553,10 @@ class ChatManager:
         from .keprompt_vm import PromptResolutionError
 
         prompt_ref = getattr(self.args, "prompt", None)
-        param_pairs = getattr(self.args, "param", None)  # list of token lists from argparse
-        if not param_pairs:
-            param_pairs = []
-
-        # Normalize params: support ['name','value'] and ['name=value'] and multi-word values
-        params_dict = {}
-        for entry in param_pairs:
-            if not entry:
-                continue
-            if len(entry) == 1:
-                token = str(entry[0])
-                if '=' in token:
-                    k, v = token.split('=', 1)
-                    params_dict[str(k).strip()] = v
-                else:
-                    # Bare flag-style param, set to true
-                    params_dict[str(token).strip()] = True
-            else:
-                k = str(entry[0]).strip()
-                v = " ".join(entry[1:])
-                params_dict[k] = v
+        set_params = getattr(self.args, "set", None) or []
+        
+        # Convert --set parameters to dict
+        params_dict = {var: value for var, value in set_params}
 
         # Helper to fail consistently
         def fail(msg: str):
@@ -515,10 +569,9 @@ class ChatManager:
         if not prompt_ref:
             return fail("--prompt is required")
 
-
         # Instantiate VM with internal prompt resolution and default globals
         try:
-            vm = VM(prompt_ref=prompt_ref, params=params_dict, log_mode=LogMode.PRODUCTION)
+            vm = VM(prompt_ref=prompt_ref, params=params_dict, log_mode=LogMode.PRODUCTION, vm_debug=False)
         except PromptResolutionError as e:
             return fail(str(e))
         except Exception as e:
@@ -538,10 +591,32 @@ class ChatManager:
         if getattr(self.args, "pretty", False):
             table = Table(title=f"Conversation {vm.prompt_uuid}[{vm.prompt_name}:{vm.prompt_version}]")
             table.add_column("Role", style="cyan", no_wrap=True)
+            table.add_column("Model", style="yellow", no_wrap=True)
             table.add_column("Message", style="green")
 
             for msg in vm.prompt.messages:
                 role = msg.role
+                # Get model info if available (for assistant messages)
+                model_display = ""
+                if role == "assistant" and hasattr(msg, 'model_name') and msg.model_name:
+                    # Show short model name with provider-based color
+                    short_model = msg.model_name.split('/')[-1] if '/' in msg.model_name else msg.model_name
+                    provider = getattr(msg, 'provider', '').lower()
+                    
+                    # Provider color mapping
+                    provider_colors = {
+                        'openrouter': 'yellow',
+                        'openai': 'green',
+                        'anthropic': 'magenta',
+                        'google': 'red',
+                        'gemini': 'red',
+                        'mistral': 'bright_yellow',
+                        'xai': 'white',
+                        'deepseek': 'blue',
+                    }
+                    color = provider_colors.get(provider, 'yellow')
+                    model_display = f"[{color}]{short_model}[/{color}]"
+                
                 txt = ''
                 for part in msg.content:
                     # Handle text parts
@@ -558,7 +633,7 @@ class ChatManager:
                 
                 if txt:
                     md = Markdown(txt[:-1])
-                    table.add_row(self.colorize(role,role), md)
+                    table.add_row(self.colorize(role,role), model_display, md)
 
             return table
 
@@ -572,6 +647,11 @@ class ChatManager:
         vm = self.load_vm(chat_id)
         if not vm:
             return f"Chat {chat_id} not found or failed to load"
+
+        # Apply any --set parameter overrides
+        set_params = getattr(self.args, "set", None) or []
+        for var, value in set_params:
+            vm.add_statement(keyword=".set", value=f"{var} {value}")
 
         vm.add_statement(keyword=".user", value=answer)
         vm.add_statement(keyword=".exec", value='')
