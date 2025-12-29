@@ -413,6 +413,51 @@ keprompt chats get a1b2c3d4
 keprompt chats get --limit 10
 ```
 
+### View Conversation Formats
+
+KePrompt offers multiple viewing formats to help you understand and debug your conversations:
+
+```bash
+# View conversation messages (default)
+keprompt chats get a1b2c3d4 --format=messages
+
+# View prompt source code (statements)
+keprompt chats get a1b2c3d4 --format=statements
+
+# View cost summary and metadata
+keprompt chats get a1b2c3d4 --format=summary
+
+# View raw JSON data
+keprompt chats get a1b2c3d4 --format=raw
+```
+
+**Format Aliases** (shortcuts for convenience):
+- `--format=msg` / `msgs` / `message` → messages view
+- `--format=stmt` / `stmts` / `statement` → statements view  
+- `--format=sum` → summary view
+- `--format=json` → raw JSON view
+
+**Format Descriptions:**
+
+| Format | Purpose | Shows |
+|--------|---------|-------|
+| `messages` | View the conversation | User/assistant dialogue with model info |
+| `statements` | View source code | Prompt statements (`.user`, `.exec`, `.set`, etc.) |
+| `summary` | View metrics | Costs, tokens, API calls, timing |
+| `raw` | View complete data | Full JSON with all metadata |
+
+**Examples:**
+```bash
+# Debug which statements were executed
+keprompt chats get a1b2c3d4 --format=stmt --pretty
+
+# Quick cost check
+keprompt chats get a1b2c3d4 --format=sum --pretty
+
+# Export conversation for analysis
+keprompt chats get a1b2c3d4 --format=json > conversation.json
+```
+
 ### Clean Up
 ```bash
 # Delete specific conversation
