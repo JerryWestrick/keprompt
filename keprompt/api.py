@@ -20,35 +20,6 @@ from .server_registry import sync_registry, get_server, list_servers, get_target
 
 from rich.console import Console
 
-class JSONResponse:
-    """Standard JSON response format for all API commands"""
-    
-    @staticmethod
-    def success(data: Any, message: str = None) -> Dict[str, Any]:
-        """Create a successful JSON response"""
-        response = {
-            "success": True,
-            "data": data,
-            "timestamp": datetime.now().isoformat()
-        }
-        if message:
-            response["message"] = message
-        return response
-    
-    @staticmethod
-    def error(message: str, error_code: str = None, details: Any = None) -> Dict[str, Any]:
-        """Create an error JSON response"""
-        response = {
-            "success": False,
-            "error": message,
-            "timestamp": datetime.now().isoformat()
-        }
-        if error_code:
-            response["error_code"] = error_code
-        if details:
-            response["details"] = details
-        return response
-
 console = Console()
 
 
@@ -67,8 +38,8 @@ class ProviderManager():
         )
         subparsers = parser.add_subparsers(dest="provider_command", required=True)
         subparsers.add_parser(
-            "list",
-            aliases=["get", "show"],
+            "get",
+            aliases=["list", "show"],
             parents=[parent_parser],
             help="List all providers",
         )
@@ -79,7 +50,7 @@ class ProviderManager():
     def execute(self):
         cmd = self.args.provider_command
 
-        if cmd in ('list', 'get', 'show'):
+        if cmd in ('get', 'list', 'show'):
             # Ensure models are loaded
             ModelManager._load_all_models()
 
@@ -96,33 +67,13 @@ class ProviderManager():
 
             provider_list = sorted(providers.values(), key=lambda x: x["name"])
 
-            if getattr(self.args, "pretty", False):
-                table = Table(title="Available Providers")
-                table.add_column("Provider", style="cyan", no_wrap=True)
-                table.add_column("Model Count", style="green", justify="right")
-
-                # Provider color mapping
-                provider_colors = {
-                    'openrouter': 'yellow',
-                    'openai': 'green',
-                    'anthropic': 'magenta',
-                    'gemini': 'red',
-                    'google': 'red',
-                    'mistral': 'bright_yellow',
-                    'xai': 'white',
-                    'deepseek': 'blue',
-                }
-                
-                for provider in provider_list:
-                    provider_name = provider["name"]
-                    color = provider_colors.get(provider_name.lower(), 'cyan')
-                    colored_name = f"[{color}]{provider_name}[/{color}]"
-                    table.add_row(colored_name, str(provider["models_count"]))
-
-                return table
-
-            # default: JSON
-            return {"success": True, "data": provider_list, "timestamp": datetime.now().isoformat()}
+            # Return JSON with object_type for OutputFormatter
+            return {
+                "success": True,
+                "object_type": "provider_list",
+                "data": provider_list,
+                "timestamp": datetime.now().isoformat()
+            }
 
         return {"success": False, "error": f"Unknown provider command: {cmd}", "timestamp": datetime.now().isoformat()}
 
@@ -156,29 +107,14 @@ class FunctionManager():
 
 
     def execute(self):
-
         cmd = self.args.functions_command
 
-        if getattr(self.args, "pretty", False):
-            table = Table(title="Available Functions")
-            table.add_column("Name", style="cyan", no_wrap=True)
-            table.add_column("Description/Parameters", style="green")
-
-            for tool in FunctionSpace.functions.tools_array:
-                function = tool['function']
-                name = function['name']
-                description = function['description']
-
-                table.add_row(name, description,)
-                for k, v in function.get('parameters', {}).get('properties', {}).items():
-                    table.add_row("", f"[bold blue]{k:10}[/]: {v.get('description', '')}")
-
-                table.add_row("", "")
-
-            return table
-
-        # default: text
-        return {"success": True, "data": FunctionSpace.functions.tools_array, "timestamp": datetime.now().isoformat()}
+        # Return JSON data - OutputFormatter will handle pretty display
+        return {
+            "success": True,
+            "data": FunctionSpace.functions.tools_array,
+            "timestamp": datetime.now().isoformat()
+        }
 
 
 class ServerManager:
@@ -205,7 +141,7 @@ class ServerManager:
         start.add_argument("--reload", action="store_true", help="Enable auto-reload (development)")
         start.add_argument("--host", default="localhost", help="Host to bind (default: localhost)")
 
-        listing = subparsers.add_parser("list", parents=[parent_parser], help="List servers")
+        listing = subparsers.add_parser("get", aliases=["list"], parents=[parent_parser], help="List servers")
         add_server_scope_args(listing)
         listing.add_argument("--active-only", action="store_true", help="Show only running servers")
 
@@ -225,16 +161,21 @@ class ServerManager:
         # Auto-sync registry before every operation
         sync_registry()
         
+        # Handle aliases (since alias normalization is disabled)
         if cmd == 'start':
             return self._start_server()
-        elif cmd == 'list':
+        elif cmd in ('get', 'list'):  # 'list' is alias for 'get'
             return self._list_servers()
         elif cmd == 'status':
             return self._status_servers()
         elif cmd == 'stop':
             return self._stop_servers()
         else:
-            return JSONResponse.error(f"Unknown server command: {cmd}")
+            return {
+                "success": False,
+                "error": f"Unknown server command: {cmd}",
+                "timestamp": datetime.now().isoformat()
+            }
     
     def _start_server(self):
         """Start HTTP server"""
@@ -243,12 +184,14 @@ class ServerManager:
 
         # Validate: cannot use --all with start
         if getattr(self.args, 'all', False):
-            return JSONResponse.error(
-                "Cannot start all servers at once. "
-                "Start each server individually with 'keprompt server start' "
-                "or 'keprompt server start --directory <path>'",
-                error_code="INVALID_OPERATION"
-            )
+            return {
+                "success": False,
+                "error": "Cannot start all servers at once. "
+                        "Start each server individually with 'keprompt server start' "
+                        "or 'keprompt server start --directory <path>'",
+                "error_code": "INVALID_OPERATION",
+                "timestamp": datetime.now().isoformat()
+            }
         
         # Get target directory
         directory = self.args.directory if hasattr(self.args, 'directory') and self.args.directory else str(Path.cwd().resolve())
@@ -257,15 +200,17 @@ class ServerManager:
         # Check if already running
         existing = get_server(directory)
         if existing and existing.status == 'running':
-            return JSONResponse.error(
-                f"Server already running for {directory}",
-                error_code="ALREADY_RUNNING",
-                details={
+            return {
+                "success": False,
+                "error": f"Server already running for {directory}",
+                "error_code": "ALREADY_RUNNING",
+                "details": {
                     "directory": directory,
                     "port": existing.port,
                     "pid": existing.pid
-                }
-            )
+                },
+                "timestamp": datetime.now().isoformat()
+            }
         
         # Find port
         port = self.args.port if hasattr(self.args, 'port') and self.args.port else find_free_port()
@@ -284,13 +229,21 @@ class ServerManager:
         # Start server (this will not return until server stops)
         try:
             run_http_server(args=server_args, working_directory=directory)
-            return JSONResponse.success({
-                "started": True,
-                "directory": directory,
-                "port": port
-            })
+            return {
+                "success": True,
+                "data": {
+                    "started": True,
+                    "directory": directory,
+                    "port": port
+                },
+                "timestamp": datetime.now().isoformat()
+            }
         except Exception as e:
-            return JSONResponse.error(f"Failed to start server: {str(e)}")
+            return {
+                "success": False,
+                "error": f"Failed to start server: {str(e)}",
+                "timestamp": datetime.now().isoformat()
+            }
     
     def _list_servers(self):
         """List servers"""
@@ -299,36 +252,7 @@ class ServerManager:
         
         servers = list_servers(all_servers=all_servers, active_only=active_only)
         
-        if getattr(self.args, "pretty", False):
-            title = "Server Registry"
-            if active_only:
-                title += " (Active Only)"
-            
-            table = Table(title=title)
-            table.add_column("Directory", style="cyan", no_wrap=False)
-            table.add_column("Port", style="green", justify="right")
-            table.add_column("PID", style="yellow", justify="right")
-            table.add_column("Status", style="magenta")
-            table.add_column("Started", style="dim")
-            table.add_column("Web GUI", style="blue")
-            
-            for server in servers:
-                status_style = "green" if server.status == 'running' else "red"
-                table.add_row(
-                    server.directory,
-                    str(server.port),
-                    str(server.pid),
-                    f"[{status_style}]{server.status}[/]",
-                    server.started_at.strftime("%Y-%m-%d %H:%M:%S"),
-                    "Yes" if server.web_gui_enabled else "No"
-                )
-            
-            if not servers:
-                table.add_row("No servers found", "", "", "", "", "")
-            
-            return table
-        
-        # JSON format
+        # Convert to JSON format
         server_list = []
         for server in servers:
             server_list.append({
@@ -341,7 +265,11 @@ class ServerManager:
                 "web_gui_enabled": server.web_gui_enabled
             })
         
-        return JSONResponse.success(server_list)
+        return {
+            "success": True,
+            "data": server_list,
+            "timestamp": datetime.now().isoformat()
+        }
     
     def _status_servers(self):
         """Check server status"""
@@ -368,27 +296,11 @@ class ServerManager:
                     "running": False
                 })
         
-        if getattr(self.args, "pretty", False):
-            table = Table(title="Server Status")
-            table.add_column("Directory", style="cyan")
-            table.add_column("Status", style="magenta")
-            table.add_column("Port", style="green")
-            table.add_column("PID", style="yellow")
-            
-            for status in statuses:
-                status_text = status["status"]
-                status_style = "green" if status["running"] else "red"
-                
-                table.add_row(
-                    status["directory"],
-                    f"[{status_style}]{status_text}[/]",
-                    str(status.get("port", "N/A")),
-                    str(status.get("pid", "N/A"))
-                )
-            
-            return table
-        
-        return JSONResponse.success(statuses)
+        return {
+            "success": True,
+            "data": statuses,
+            "timestamp": datetime.now().isoformat()
+        }
     
     def _stop_servers(self):
         """Stop servers"""
@@ -405,23 +317,11 @@ class ServerManager:
                 "stopped": success
             })
         
-        if getattr(self.args, "pretty", False):
-            table = Table(title="Stop Server Results")
-            table.add_column("Directory", style="cyan")
-            table.add_column("Result", style="magenta")
-            
-            for result in results:
-                result_style = "green" if result["stopped"] else "red"
-                result_text = "Stopped" if result["stopped"] else "Not running"
-                
-                table.add_row(
-                    result["directory"],
-                    f"[{result_style}]{result_text}[/]"
-                )
-            
-            return table
-        
-        return JSONResponse.success(results)
+        return {
+            "success": True,
+            "data": results,
+            "timestamp": datetime.now().isoformat()
+        }
 
 
 def handle_json_command(args: argparse.Namespace) -> dict[str, Any]:

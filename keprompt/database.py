@@ -298,11 +298,31 @@ class DatabaseManager:
         if not chat:
             return None
         
-        costs = list(CostTracking.select().where(CostTracking.chat_id == chat_id).order_by(CostTracking.msg_no))
+        cost_records = CostTracking.select().where(CostTracking.chat_id == chat_id).order_by(CostTracking.msg_no)
+        
+        # Serialize cost records to dicts
+        costs_list = []
+        for cost in cost_records:
+            costs_list.append({
+                'chat_id': cost.chat_id,
+                'msg_no': cost.msg_no,
+                'call_id': cost.call_id,
+                'timestamp': cost.timestamp.isoformat() if cost.timestamp else None,
+                'tokens_in': cost.tokens_in,
+                'tokens_out': cost.tokens_out,
+                'cost_in': float(cost.cost_in),
+                'cost_out': float(cost.cost_out),
+                'estimated_costs': float(cost.estimated_costs),
+                'elapsed_time': float(cost.elapsed_time),
+                'model': cost.model,
+                'provider': cost.provider,
+                'success': cost.success,
+                'error_message': cost.error_message,
+            })
         
         return {
-            'chat': chat,
-            'costs': costs,
+            'chat': chat,  # Keep the Chat object for web GUI compatibility
+            'costs': costs_list,
             'messages': json.loads(chat.messages_json) if chat.messages_json else [],
             'vm_state': json.loads(chat.vm_state_json) if chat.vm_state_json else {},
             'variables': json.loads(chat.variables_json) if chat.variables_json else {},

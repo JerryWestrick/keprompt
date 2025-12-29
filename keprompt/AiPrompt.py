@@ -151,7 +151,7 @@ class AiResult(AiMessagePart):
 
 
 class AiMessage:
-    def __init__(self, vm, role: str, content=None, model_name: str = None, provider: str = None):
+    def __init__(self, vm, role: str, content=None, model_name: str = None, provider: str = None, stmt_no: int = None):
         if content is None:
             content = []
         self.role = role
@@ -159,6 +159,7 @@ class AiMessage:
         self.vm = vm
         self.model_name = model_name
         self.provider = provider
+        self.stmt_no = stmt_no if stmt_no is not None else vm.ip
 
     def __str__(self) -> str:
         model_info = f", model={self.model_name}" if self.model_name else ""
@@ -177,6 +178,9 @@ class AiMessage:
             result["model_name"] = self.model_name
         if self.provider:
             result["provider"] = self.provider
+        # Include statement number for execution tracing
+        if self.stmt_no is not None:
+            result["stmt_no"] = self.stmt_no
         return json.loads(json.dumps(result))
 
     def print_message(self) -> str:

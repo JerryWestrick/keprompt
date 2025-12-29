@@ -167,62 +167,65 @@ def get_new_api_key() -> None:
     config = get_config()
     config.set_api_key(company, api_key)
 
-def normalize_command_aliases(args: argparse.Namespace) -> argparse.Namespace:
+def extract_alias_mappings(parser: argparse.ArgumentParser) -> dict[str, str]:
     """
-    Normalize all command aliases to their canonical forms.
-    This provides uniform aliasing throughout the system.
+    Extract alias→canonical name mappings from parser structure.
+    This introspects argparse to discover all aliases automatically,
+    providing a single source of truth.
     
-    Alias mappings:
-    - chat_command: get (list, show, view), create (start, new), update (reply, answer, send), delete (rm)
-    - prompt_command: get (list)
-    - models_command: get (list, show)
-    - functions_command: get (list, show)
-    - database_command: get (list, show)
+    Returns:
+        Dictionary mapping alias names to their canonical names
+        Example: {'list': 'get', 'show': 'get', 'start': 'create'}
     """
+    mappings = {}
+    
+    def walk_actions(action_group):
+        """Recursively walk through parser actions to find subparsers"""
+        for action in action_group._actions:
+            if isinstance(action, argparse._SubParsersAction):
+                # Track the first (canonical) name for each parser object
+                # _name_parser_map preserves insertion order (Python 3.7+)
+                parser_to_canonical = {}
+                
+                for name, subparser in action._name_parser_map.items():
+                    parser_id = id(subparser)
+                    
+                    if parser_id not in parser_to_canonical:
+                        # First occurrence - this is the canonical name
+                        parser_to_canonical[parser_id] = name
+                    else:
+                        # Subsequent occurrence - this is an alias
+                        canonical = parser_to_canonical[parser_id]
+                        mappings[name] = canonical
+                
+                # Recurse into each unique subparser
+                seen_subparsers = set()
+                for subparser in action._name_parser_map.values():
+                    if id(subparser) not in seen_subparsers:
+                        seen_subparsers.add(id(subparser))
+                        walk_actions(subparser)
+    
+    walk_actions(parser)
+    return mappings
 
 
-    console.print(args)
-
-    # Chat command aliases
-    if hasattr(args, 'chat_command') and args.chat_command:
-        alias_map = {
-            'list': 'get',
-            'show': 'get',
-            'view': 'get',
-            'start': 'create',
-            'new': 'create',
-            'reply': 'update',
-            'answer': 'update',
-            'send': 'update',
-            'rm': 'delete',
-        }
-        if args.chat_command in alias_map:
-            args.chat_command = alias_map[args.chat_command]
+def normalize_command_aliases(args: argparse.Namespace, parser: argparse.ArgumentParser) -> argparse.Namespace:
+    """
+    Normalize all command aliases to their canonical forms using parser introspection.
     
-    # Prompt command aliases
-    if hasattr(args, 'prompt_command') and args.prompt_command:
-        if args.prompt_command in ('list', 'show'):
-            args.prompt_command = 'get'
+    IMPORTANT: We extract ALL aliases but this creates conflicts when different
+    managers use the same command name differently (e.g., 'start' is canonical
+    in ServerManager but an alias in ChatManager).
     
-    # Models command aliases
-    if hasattr(args, 'models_command') and args.models_command:
-        if args.models_command in ('list', 'show'):
-            args.models_command = 'get'
-    
-    # Functions command aliases
-    if hasattr(args, 'functions_command') and args.functions_command:
-        if args.functions_command in ('list', 'show'):
-            args.functions_command = 'get'
-    
-    # Database command aliases
-    if hasattr(args, 'database_command') and args.database_command:
-        if args.database_command in ('list', 'show'):
-            args.database_command = 'get'
-    
+    For the first release, we're disabling alias normalization to avoid bugs.
+    Managers will need to handle aliases themselves in their execute() methods.
+    """
+    # Alias normalization disabled for first release to avoid cross-manager conflicts
+    # Each manager must handle its own aliases in execute()
     return args
 
 
-def get_cmd_args() -> argparse.Namespace:
+def get_cmd_args() -> tuple[argparse.ArgumentParser, argparse.Namespace]:
     """
     Parse command‑line arguments for the object‑first CLI.
 
@@ -231,6 +234,9 @@ def get_cmd_args() -> argparse.Namespace:
         keprompt prompt get --name my_prompt    # filter prompts by name
         keprompt models get --provider OpenRouter
         keprompt chat reply <id> --answer "Hello"
+    
+    Returns:
+        Tuple of (parser, parsed_args) for use in alias normalization
     """
     # Create parent parser with shared flags (can appear after subcommand)
     parent = argparse.ArgumentParser(add_help=False)
@@ -273,7 +279,7 @@ def get_cmd_args() -> argparse.Namespace:
 
 
     args = parser.parse_args()
-    return args
+    return parser, args
 
 from pathlib import Path
 
@@ -310,10 +316,10 @@ def main():
         os.makedirs('prompts')
     
 
-    args = get_cmd_args()
+    parser, args = get_cmd_args()
     
-    # Normalize all command aliases to canonical forms
-    args = normalize_command_aliases(args)
+    # Normalize all command aliases to canonical forms using parser introspection
+    args = normalize_command_aliases(args, parser)
 
     # Determine an output format from flags
     # Priority: explicit flags > auto-detect from TTY
@@ -339,11 +345,13 @@ def main():
     try:
         response = handle_json_command(args)
 
-        # Build standardized envelope for machine output
+        # Use OutputFormatter for both JSON and pretty output
+        from .output_formatter import OutputFormatter
+        from rich.table import Table
+        
         if output_format == "json":
             from datetime import datetime
-            import json as _json
-
+            
             # Determine success and error
             success = True
             error_obj = None
@@ -354,7 +362,6 @@ def main():
                 error_obj = response.get("error") if not success else None
                 data_payload = response.get("data", response)
             elif isinstance(response, (list, tuple)):
-                # Lists/tuples can be serialized directly with CustomEncoder
                 data_payload = response
             else:
                 # Non-serializable types (e.g., Table). Provide string representation.
@@ -372,8 +379,12 @@ def main():
                     "version": __version__,
                 },
             }
-            sys.stdout.write(_json.dumps(envelope, indent=2, cls=CustomEncoder) + "\n")
+            
+            # Use OutputFormatter for JSON serialization (handles Peewee, datetime, etc.)
+            json_output = OutputFormatter.format(envelope, format_type="json")
+            sys.stdout.write(json_output + "\n")
             sys.stdout.flush()
+            
             if not success:
                 # Also mirror a concise error to stderr and exit non-zero
                 err_console = Console(file=sys.stderr)
@@ -381,14 +392,15 @@ def main():
                 sys.exit(1)
             return
 
-        # Human/table output path
-        if isinstance(response, dict):
-            # Keep legacy behavior but avoid non-serializable Namespace in output
-            response.setdefault('success', True)
-            response['command'] = vars(args)
+        # Pretty/table output path - use OutputFormatter
+        # If response is already a Rich Table (legacy), print it directly
+        if isinstance(response, Table):
             console.print(response)
         else:
-            console.print(response)
+            # Convert JSON response to Rich table using OutputFormatter
+            # OutputFormatter will extract object_type from the response dict
+            formatted_output = OutputFormatter.format(response, format_type="pretty")
+            console.print(formatted_output)
     except Exception as e:
         # Standardize error handling
         err_envelope = {

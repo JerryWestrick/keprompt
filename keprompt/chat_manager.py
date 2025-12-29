@@ -63,6 +63,12 @@ class ChatManager:
         )
         get_cmd.add_argument("chat_id", nargs="?", help="Chat ID (8 chars)")
         get_cmd.add_argument("--limit", type=int, help="Max number of chats to list")
+        get_cmd.add_argument(
+            "--format",
+            choices=["full", "statements", "statement", "stmts", "stmt", "messages", "message", "msgs", "msg", "summary", "sum", "raw", "json"],
+            default="full",
+            help="Display format: statements/stmt (source code), messages/msg (conversation), summary/sum (metadata), raw/json (JSON)"
+        )
 
         reply = subparsers.add_parser(
             "reply",
@@ -427,30 +433,9 @@ class ChatManager:
         # Pretty output: return Rich tables when requested
         if getattr(self.args, "pretty", False):
             from rich.console import Console
-            if chat_id:
-                data = self.get_chat(chat_id)
-                title = f"Chat Details | {chat_id}"
-                table = Table(title=title)
-                table.add_column("Field", style="cyan", no_wrap=True)
-                table.add_column("Value", style="green")
-
-                def _fmt(v):
-                    try:
-                        if isinstance(v, (dict, list)):
-                            return json.dumps(v, default=str)
-                        if hasattr(v, "isoformat"):
-                            return v.isoformat()
-                        return str(v)
-                    except Exception:
-                        return str(v)
-
-                if isinstance(data, dict):
-                    for k, v in data.items():
-                        table.add_row(str(k), _fmt(v))
-                else:
-                    table.add_row("data", _fmt(data))
-                return table
-            else:
+            # Only keep pretty formatting for chat list (table makes sense)
+            # For single chat details, return JSON for OutputFormatter to handle
+            if not chat_id:
                 chats = self.list_chats(limit=limit or 100)
                 table = Table(title="Recent Chats")
                 table.add_column("Chat ID", style="cyan", no_wrap=True)
@@ -478,7 +463,19 @@ class ChatManager:
 
         # Default: JSON/text structures
         if chat_id:
-            return [self.get_chat(chat_id)]
+            chat_data = self.get_chat(chat_id)
+            # Add format parameter for OutputFormatter
+            if isinstance(chat_data, dict):
+                format_param = getattr(self.args, "format", "full")
+                chat_data["_view_format"] = format_param
+                # For HTTP API, wrap in array; for CLI, return direct
+                if getattr(self.args, "pretty", False):
+                    # CLI pretty mode - return chat_data directly for OutputFormatter
+                    return chat_data
+                else:
+                    # HTTP API mode - wrap in success envelope with array
+                    return {"success": True, "data": [chat_data]}
+            return chat_data
         if limit:
             return self.list_chats(limit=limit)
         return self.list_chats()
@@ -587,57 +584,25 @@ class ChatManager:
         # Persist the new chat
         self.save_chat(vm)
 
-        # Extract last assistant textual response
-        if getattr(self.args, "pretty", False):
-            table = Table(title=f"Conversation {vm.prompt_uuid}[{vm.prompt_name}:{vm.prompt_version}]")
-            table.add_column("Role", style="cyan", no_wrap=True)
-            table.add_column("Model", style="yellow", no_wrap=True)
-            table.add_column("Message", style="green")
-
-            for msg in vm.prompt.messages:
-                role = msg.role
-                # Get model info if available (for assistant messages)
-                model_display = ""
-                if role == "assistant" and hasattr(msg, 'model_name') and msg.model_name:
-                    # Show short model name with provider-based color
-                    short_model = msg.model_name.split('/')[-1] if '/' in msg.model_name else msg.model_name
-                    provider = getattr(msg, 'provider', '').lower()
-                    
-                    # Provider color mapping
-                    provider_colors = {
-                        'openrouter': 'yellow',
-                        'openai': 'green',
-                        'anthropic': 'magenta',
-                        'google': 'red',
-                        'gemini': 'red',
-                        'mistral': 'bright_yellow',
-                        'xai': 'white',
-                        'deepseek': 'blue',
-                    }
-                    color = provider_colors.get(provider, 'yellow')
-                    model_display = f"[{color}]{short_model}[/{color}]"
-                
-                txt = ''
-                for part in msg.content:
-                    # Handle text parts
-                    if hasattr(part, "text") and part.text:
-                        txt += f"{part.text}\n"
-                    # Handle tool calls (AiCall)
-                    elif isinstance(part, AiCall):
-                        args_str = ', '.join(f"{k}={v}" for k, v in part.arguments.items())
-                        txt += f"**Call** `{part.name}({args_str})` [id={part.id}]\n"
-                    # Handle tool results (AiResult)
-                    elif isinstance(part, AiResult):
-                        result_preview = str(part.result)[:200] + '...' if len(str(part.result)) > 200 else str(part.result)
-                        txt += f"**Result** `{part.name}()`: {result_preview} [id={part.id}]\n"
-                
-                if txt:
-                    md = Markdown(txt[:-1])
-                    table.add_row(self.colorize(role,role), model_display, md)
-
-            return table
-
-        return self.success(vm=vm, elapsed_time=(end_time - start_time).total_seconds(), params_dict=params_dict)
+        # Return conversation data with object_type for OutputFormatter
+        return {
+            "success": True,
+            "object_type": "chat_conversation",
+            "chat_id": vm.prompt_uuid,
+            "prompt_name": vm.prompt_name,
+            "prompt_version": vm.prompt_version,
+            "messages": vm.prompt.to_json(),
+            "metadata": {
+                "total_cost": float(getattr(vm, "cost_in", 0.0) + getattr(vm, "cost_out", 0.0)),
+                "tokens_in": getattr(vm, "toks_in", 0),
+                "tokens_out": getattr(vm, "toks_out", 0),
+                "elapsed_time": (end_time - start_time).total_seconds(),
+                "model": getattr(vm, "model_name", ""),
+                "provider": getattr(getattr(vm, "model", None), "provider", getattr(vm, "provider", "")),
+                "api_calls": getattr(vm, "interaction_no", 0),
+            },
+            "params": params_dict,
+        }
 
     def execute_update(self):
         chat_id = getattr(self.args, "chat_id", None)
@@ -719,18 +684,18 @@ class ChatManager:
         if getattr(self.args, "message", None) and not getattr(self.args, "answer", None):
             setattr(self.args, "answer", getattr(self.args, "message"))
 
-        # Get command (aliases are already normalized by normalize_command_aliases())
+        # Get command and handle aliases (since global normalization is disabled)
         cmd = getattr(self.args, "chat_command", None)
 
         data = "unknown command"
         try:
-            if cmd == "get":
+            if cmd in ('get', 'list', 'show', 'view'):  # Handle aliases
                 data = self.execute_get()
-            if cmd == 'delete':
+            elif cmd in ('delete', 'rm'):  # Handle aliases
                 data = self.execute_delete()
-            if cmd == "create":
+            elif cmd in ('create', 'start', 'new'):  # Handle aliases
                 data = self.execute_create()
-            if cmd == "update":
+            elif cmd in ('reply', 'update', 'answer', 'send'):  # Handle aliases
                 data = self.execute_update()
         except Exception as e:
             data = {"success": False, "error": str(e), "timestamp": datetime.now().isoformat()}
