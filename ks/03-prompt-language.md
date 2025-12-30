@@ -82,7 +82,42 @@ Multi-line same as `.user`.
 ```
 .assistant <text>
 ```
-For few-shot examples or conversation history.
+For few-shot examples or conversation history. Creates assistant message with text content.
+
+### `.tool_call` - Tool/Function Call (Manual)
+```
+.tool_call function_name(param=value,...) id=call_id
+```
+Manually create assistant message with tool call. Used for:
+- Debugging tool interactions
+- Testing function handling
+- Creating example conversations with tools
+- Conversation replay
+
+**Example:**
+```
+.tool_call readfile(filename="data.txt") id=call_abc123
+```
+
+Creates `AiMessage(role='assistant', content=[AiCall(...)])`.
+
+### `.tool_result` - Tool Result (Manual)
+```
+.tool_result id=call_id name=function_name
+result content (can be multi-line)
+```
+Manually create tool message with function result. Used for:
+- Providing pre-computed results
+- Testing LLM response to tool results
+- Creating complete conversation examples
+
+**Example:**
+```
+.tool_result id=call_abc123 name=readfile
+File contents: Lorem ipsum dolor sit amet...
+```
+
+Creates `AiMessage(role='tool', content=[AiResult(...)])`.
 
 ### `.print` - Output to STDOUT
 ```

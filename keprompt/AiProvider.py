@@ -152,6 +152,7 @@ class AiProvider(abc.ABC):
             call_line = f"{call_msg:<{line_len}}[bold white]{VERTICAL}[/]"
             self.prompt.vm.logger.log_execution(f"{header}[green]{call_line}[/]")
 
+        # Iterates API calls until no function calls remain
         while do_again:
             call_count += 1
             do_again = False

@@ -724,6 +724,169 @@ class StmtAssistant(StmtPrompt):
             vm.prompt.add_message(vm=vm, role='assistant', content=[AiTextPart(vm=vm, text=self.value)])
 
 
+class StmtToolCall(StmtPrompt):
+    """
+    Handles the execution of a tool call statement in the VM.
+    
+    Creates an AiMessage with role='assistant' containing an AiCall.
+    This represents the LLM requesting to execute a tool/function.
+    
+    Syntax: .tool_call function_name(param=value,...) id=call_id
+    
+    Example:
+        .tool_call readfile(filename="data.txt") id=call_abc123
+    
+    Attributes:
+        msg_no (int): The message number in the execution sequence.
+        keyword (str): The keyword associated with the statement (e.g., '.tool_call').
+        value (str): The tool call specification.
+    
+    Methods:
+        execute(vm: VM): Parses the tool call and creates an assistant message with AiCall.
+    """
+    
+    def execute(self, vm: VM) -> None:
+        super().execute(vm)
+        
+        # Parse the statement value
+        # Format: "function_name(param1=value1, param2=value2) id=call_id"
+        
+        # Extract call_id
+        if ' id=' not in self.value:
+            raise StmtSyntaxError(f".tool_call syntax error: missing id=call_id in '{self.value}'")
+        
+        func_part, id_part = self.value.rsplit(' id=', 1)
+        call_id = id_part.strip()
+        
+        # Extract function name and arguments
+        if '(' not in func_part:
+            raise StmtSyntaxError(f".tool_call syntax error: missing function arguments in '{func_part}'")
+        
+        function_name, args_str = func_part.split('(', 1)
+        function_name = function_name.strip()
+        args_str = args_str.rstrip(')')
+        
+        # Parse arguments (simple key=value parsing)
+        arguments = {}
+        if args_str.strip():
+            # Split by comma, but be careful with quoted strings
+            import re
+            # Simple parsing: split on commas not inside quotes
+            args_list = []
+            current_arg = ""
+            in_quotes = False
+            quote_char = None
+            
+            for char in args_str + ',':
+                if char in ('"', "'") and (not in_quotes or char == quote_char):
+                    in_quotes = not in_quotes
+                    quote_char = char if in_quotes else None
+                    current_arg += char
+                elif char == ',' and not in_quotes:
+                    if current_arg.strip():
+                        args_list.append(current_arg.strip())
+                    current_arg = ""
+                else:
+                    current_arg += char
+            
+            for arg in args_list:
+                if '=' not in arg:
+                    raise StmtSyntaxError(f".tool_call syntax error: invalid argument '{arg}'")
+                
+                key, value = arg.split('=', 1)
+                key = key.strip()
+                value = value.strip()
+                
+                # Handle quoted strings
+                if (value.startswith('"') and value.endswith('"')) or \
+                   (value.startswith("'") and value.endswith("'")):
+                    value = value[1:-1]
+                # Try to parse as boolean
+                elif value.lower() == 'true':
+                    value = True
+                elif value.lower() == 'false':
+                    value = False
+                # Try to parse as number
+                else:
+                    try:
+                        value = int(value)
+                    except ValueError:
+                        try:
+                            value = float(value)
+                        except ValueError:
+                            pass  # Keep as string
+                
+                arguments[key] = value
+        
+        # Create AiCall and add to messages
+        from .AiPrompt import AiCall
+        tool_call = AiCall(vm=vm, name=function_name, arguments=arguments, id=call_id)
+        
+        # Add as assistant message
+        vm.prompt.add_message(vm=vm, role='assistant', content=[tool_call])
+
+
+class StmtToolResult(StmtPrompt):
+    """
+    Handles the execution of a tool result statement in the VM.
+    
+    Creates an AiMessage with role='tool' containing an AiResult.
+    This represents the result of a tool/function execution being sent back to the LLM.
+    
+    Syntax: .tool_result id=call_id name=function_name
+            result content (can be multi-line)
+    
+    Example:
+        .tool_result id=call_abc123 name=readfile
+        File contents: Lorem ipsum dolor sit amet...
+    
+    Attributes:
+        msg_no (int): The message number in the execution sequence.
+        keyword (str): The keyword associated with the statement (e.g., '.tool_result').
+        value (str): The tool result specification and content.
+    
+    Methods:
+        execute(vm: VM): Parses the tool result and creates a tool message with AiResult.
+    """
+    
+    def execute(self, vm: VM) -> None:
+        super().execute(vm)
+        
+        # Parse the statement value
+        # First line: "id=call_id name=function_name"
+        # Rest: result content
+        
+        lines = self.value.split('\n', 1)
+        header = lines[0]
+        result_content = lines[1] if len(lines) > 1 else ""
+        
+        # Parse header
+        if 'id=' not in header:
+            raise StmtSyntaxError(f".tool_result syntax error: missing id=call_id in '{header}'")
+        if 'name=' not in header:
+            raise StmtSyntaxError(f".tool_result syntax error: missing name=function_name in '{header}'")
+        
+        # Extract id and name using simple parsing
+        parts = header.split()
+        call_id = None
+        function_name = None
+        
+        for part in parts:
+            if part.startswith('id='):
+                call_id = part[3:].strip()
+            elif part.startswith('name='):
+                function_name = part[5:].strip()
+        
+        if not call_id or not function_name:
+            raise StmtSyntaxError(f".tool_result syntax error: could not parse id and name from '{header}'")
+        
+        # Create AiResult and add to messages
+        from .AiPrompt import AiResult
+        tool_result = AiResult(vm=vm, name=function_name, id=call_id, result=result_content)
+        
+        # Add as tool message
+        vm.prompt.add_message(vm=vm, role='tool', content=[tool_result])
+
 
 class StmtClear(StmtPrompt):
     """
@@ -1409,6 +1572,8 @@ StatementTypes: dict[str, type(StmtPrompt)] = {
     '.set': StmtSet,
     '.system': StmtSystem,
     '.text': StmtText,
+    '.tool_call': StmtToolCall,
+    '.tool_result': StmtToolResult,
     '.user': StmtUser,
 }
 
@@ -1444,6 +1609,8 @@ def print_statement_types():
         '.set': 'Set variables including Prefix/Postfix for configurable substitution delimiters',
         '.system': 'Add a system message to the chat context',
         '.text': 'Add text content to the current message context',
+        '.tool_call': 'Create assistant message with tool/function call request (for conversation replay)',
+        '.tool_result': 'Create tool message with function execution result (for conversation replay)',
         '.user': 'Add a user message to the chat context',
     }
 
@@ -1463,6 +1630,8 @@ def print_statement_types():
         '.set': 'user',
         '.system': 'user',
         '.text': 'user',
+        '.tool_call': 'llm',
+        '.tool_result': 'system',
         '.user': 'user',
     }
 

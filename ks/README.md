@@ -13,14 +13,21 @@ KePrompt is a sophisticated command-line tool and framework for prompt engineeri
 - **[02-cli-interface.md](02-cli-interface.md)** - Complete command-line interface documentation
 - **[03-prompt-language.md](03-prompt-language.md)** - The .prompt file language specification
 - **[04-web-gui.md](04-web-gui.md)** - Web-based graphical interface
+- **[05-knowledge-engineers-guide.md](05-knowledge-engineers-guide.md)** - Practical prompt engineering guide
 
 ## Quick Navigation
+
+### For Knowledge Engineers (Prompt Designers)
+Start with:
+1. [05-knowledge-engineers-guide.md](05-knowledge-engineers-guide.md) - **Practical guide with examples**
+2. [03-prompt-language.md](03-prompt-language.md) - Statement reference
+3. [01-overview.md](01-overview.md) - System architecture
 
 ### For AI Assistants
 Start with:
 1. [01-overview.md](01-overview.md) - Understand the system
 2. [03-prompt-language.md](03-prompt-language.md) - Learn the language
-3. [02-cli-interface.md](02-cli-interface.md) - Understand the CLI
+3. [05-knowledge-engineers-guide.md](05-knowledge-engineers-guide.md) - Practical techniques
 
 ### For Developers
 Start with:
@@ -28,10 +35,10 @@ Start with:
 2. [02-cli-interface.md](02-cli-interface.md) - CLI implementation
 3. [03-prompt-language.md](03-prompt-language.md) - Language specification
 
-### For Users
+### For End Users
 Start with:
 1. [02-cli-interface.md](02-cli-interface.md) - Command-line usage
-2. [03-prompt-language.md](03-prompt-language.md) - Writing prompts
+2. [05-knowledge-engineers-guide.md](05-knowledge-engineers-guide.md) - Writing effective prompts
 3. [04-web-gui.md](04-web-gui.md) - Using the web interface
 
 ## Key Features
