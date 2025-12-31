@@ -40,8 +40,9 @@ pip install -e ~/keprompt/
 ### 2. Initialize your workspace
 ```bash
 keprompt database create
+keprompt models update
 ```
-This creates the `prompts/` directory and initializes the database.
+This creates the `prompts/` directory, initializes the database, and downloads the model registry.
 
 ### 3. Set up your API key
 ```bash

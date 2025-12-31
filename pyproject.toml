@@ -12,13 +12,16 @@ authors = [
 ]
 requires-python = ">=3.8"
 dependencies = [
-    "keyring>=24.0.0",
+    "python-dotenv>=1.0.0",
     "rich>=13.0.0",
+    "rich_argparse>=1.0.0",
     "requests>=2.31.0",
-    "toml",
-    "dotenv",
-    "textual",
-    "rich_argparse"
+    "textual>=0.41.0",
+    "toml>=0.10.2",
+    "peewee>=3.17.0",
+    "fastapi>=0.104.0",
+    "uvicorn>=0.24.0",
+    "markdown-it-py>=3.0.0",
 ]
 
 [project.scripts]
@@ -28,8 +31,16 @@ keprompt = "keprompt.keprompt:main"
 dev = [
     "pytest>=7.0.0",
     "black>=23.0.0",
-    "isort>=5.12.0"
+    "isort>=5.12.0",
+    "build>=0.10.0",
+    "twine>=4.0.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/JerryWestrick/keprompt"
+Documentation = "https://github.com/JerryWestrick/keprompt/tree/main/ks"
+Repository = "https://github.com/JerryWestrick/keprompt"
+Issues = "https://github.com/JerryWestrick/keprompt/issues"
 
 [tool.setuptools.dynamic]
 version = {attr = "keprompt.version.__version__"}
