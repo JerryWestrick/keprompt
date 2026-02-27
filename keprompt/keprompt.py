@@ -18,6 +18,8 @@ from .ModelManager import ModelManager
 from .keprompt_utils import print_simple_table, format_model_count_data
 from .version import __version__
 
+from .terminal_output import terminal_output
+
 console = Console()
 console.size = console.size
 
@@ -268,6 +270,7 @@ def get_cmd_args() -> tuple[argparse.ArgumentParser, argparse.Namespace]:
     from .chat_manager import ChatManager
     from .database import DatabaseManager
     from .api import ProviderManager, FunctionManager, ServerManager
+    from .workspace_manager import WorkspaceManager
 
     PromptManager.register_cli(subparsers, parent)
     ModelManager.register_cli(subparsers, parent)
@@ -276,6 +279,7 @@ def get_cmd_args() -> tuple[argparse.ArgumentParser, argparse.Namespace]:
     ProviderManager.register_cli(subparsers, parent)
     FunctionManager.register_cli(subparsers, parent)
     ServerManager.register_cli(subparsers, parent)
+    WorkspaceManager.register_cli(subparsers, parent)
 
 
     args = parser.parse_args()
@@ -336,6 +340,11 @@ def main():
         output_format = "table" if stdout_is_tty else "json"
         setattr(args, "pretty", stdout_is_tty)
 
+    # Configure terminal output routing as early as possible.
+    # This flushes any buffered import-time output into either stdout (pretty)
+    # or into the JSON envelope `stdout` field (json).
+    terminal_output.configure("capture" if output_format == "json" else "stdout")
+
     console = Console()
     if args.dump:
         console.print(f"[bold cyan]keprompt[/] [dim]v{__version__}[/] - [bold green]Prompt Engineering Tool[/]")
@@ -371,10 +380,14 @@ def main():
                 "success": success,
                 "data": data_payload if success else None,
                 "error": error_obj if not success else None,
+                "stdout": terminal_output.get_stdout() or None,
                 "meta": {
                     "schema_version": 1,
                     "command": f"{args.command}",
                     "args": vars(args),
+                    # If command returns variables (e.g., chat create/new), expose
+                    # them in meta for machine consumers.
+                    "variables": (response.get("variables") if isinstance(response, dict) else None),
                     "timestamp": datetime.utcnow().isoformat() + "Z",
                     "version": __version__,
                 },
@@ -407,6 +420,7 @@ def main():
             "success": False,
             "data": None,
             "error": {"code": "INTERNAL", "message": str(e)},
+            "stdout": terminal_output.get_stdout() or None,
             "meta": {"schema_version": 1, "command": f"{getattr(args, 'command', '?')}", "version": __version__},
         }
         if 'output_format' in locals() and output_format == 'json':

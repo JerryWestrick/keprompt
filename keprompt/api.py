@@ -344,6 +344,9 @@ def handle_json_command(args: argparse.Namespace) -> dict[str, Any]:
             cmd_manager = DatabaseManager(args)
         elif command == 'server':
             cmd_manager = ServerManager(args)
+        elif command in ('init', 'workspace'):
+            from .workspace_manager import WorkspaceManager
+            cmd_manager = WorkspaceManager(args)
         else:
             raise Exception(f"Unknown Object '{command}'")
 
