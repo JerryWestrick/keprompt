@@ -2,6 +2,7 @@ include README.md
 include LICENSE
 recursive-include keprompt *
 recursive-include keprompt/web_gui *
+recursive-include keprompt/defaults *
 recursive-exclude keprompt __pycache__
 recursive-exclude keprompt *.pyc
 recursive-exclude logs *

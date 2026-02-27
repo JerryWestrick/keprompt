@@ -92,12 +92,12 @@ EOF
 
 Run it with a parameter:
 ```bash
-keprompt chats create --prompt analyze --param filename "README.md"
+keprompt chats create --prompt analyze --set filename "README.md"
 ```
 
 Run it with 2 parameters:
 ```bash
-keprompt chats create --prompt analyze --param filename "README.md" --param model "openrouter/openai/gpt-oss-20b"
+keprompt chats create --prompt analyze --set filename "README.md" --set model "openrouter/openai/gpt-oss-20b"
 ```
 
 ## Modern CLI Interface
@@ -123,7 +123,7 @@ keprompt <object> <verb> [options]
 keprompt prompts get
 
 # Create a new conversation
-keprompt chats create --prompt hello --param name "Alice"
+keprompt chats create --prompt hello --set name "Alice"
 
 # Continue a conversation
 keprompt chats reply <chat-id> "Tell me more"
@@ -179,9 +179,63 @@ Then open your browser to `http://localhost:8080`
 | `.llm` | Configure AI model | `.llm {"model": "gpt-4o"}` |
 | `.system` | Set system message | `.system You are a helpful assistant` |
 | `.user` | Add user message | `.user What is the weather like?` |
+| `.tool_call` | **Represent an LLM tool call** (manual/replay/debug) | `.tool_call readfile(filename="data.txt") id=call_abc123` |
+| `.tool_result` | **Represent a tool result** (manual/replay/debug) | `.tool_result id=call_abc123 name=readfile` |
 | `.exec` | Send to AI and get response | `.exec` |
 | `.cmd` | Call a function | `.cmd readfile(filename="data.txt")` |
 | `.print` | Output to console | `.print The result is: <<last_response>>` |
+
+### Representing LLM Tool Calls and Tool Results
+
+KePrompt supports two *statement* types that let you represent **tool calls produced by the LLM API** and the corresponding **tool responses**.
+
+These are most useful for:
+- Replaying/debugging conversations
+- Creating test fixtures / example chats
+- Manually reconstructing a conversation that includes tool use
+
+They are distinct from `.cmd`, which **executes** a local function during prompt execution.
+
+#### `.tool_call` (LLM → tool)
+
+**Syntax**
+```text
+.tool_call function_name(param=value, ...) id=call_id
+```
+
+**Example**
+```text
+.tool_call readfile(filename="data.txt") id=call_001
+```
+
+#### `.tool_result` (tool → LLM)
+
+**Syntax**
+```text
+.tool_result id=call_id name=function_name
+<result text can be multi-line>
+```
+
+**Example**
+```text
+.tool_result id=call_001 name=readfile
+File contents:
+Hello from data.txt
+```
+
+#### End-to-end example (manual reconstruction)
+```text
+.prompt "name":"Toolcall Example", "version":"1.0.0", "params":{"model":"gpt-4o-mini"}
+.user Please read data.txt and summarize it.
+
+# These two statements represent what the *LLM API* would have produced,
+# and the corresponding tool response KePrompt would send back:
+.tool_call readfile(filename="data.txt") id=call_001
+.tool_result id=call_001 name=readfile
+Hello from data.txt
+
+.assistant Summary: The file contains a short greeting.
+```
 
 ### Prompt Metadata (Required)
 
@@ -217,14 +271,13 @@ Use `<<variable>>` syntax for substitution:
 .user Hello <<name>>, today is <<date>>
 
 # Run with parameters
-keprompt chats create --prompt greeting --param name "Alice" --param date "Monday"
+keprompt chats create --prompt greeting --set name "Alice" --set date "Monday"
 ```
 
 ### Built-in Functions
 - `readfile(filename)` - Read file contents
 - `writefile(filename, content)` - Write to file (with backup)
 - `wwwget(url)` - Fetch web content
-- `askuser(question)` - Prompt user for input
 - `execcmd(cmd)` - Execute shell command
 
 ## Common Workflows
@@ -241,7 +294,7 @@ Based on this information, provide a comprehensive overview with key facts and r
 .exec
 EOF
 
-keprompt chats create --prompt research --param topic "Artificial_Intelligence"
+keprompt chats create --prompt research --set topic "Artificial_Intelligence"
 ```
 
 ### Code Review
@@ -258,7 +311,7 @@ Focus on: code quality, potential bugs, performance, and best practices.
 .exec
 EOF
 
-keprompt chats create --prompt review --param codefile "src/main.py"
+keprompt chats create --prompt review --set codefile "src/main.py"
 ```
 
 ### Interactive Chat Session
@@ -383,7 +436,7 @@ cat > prompts/weather_check.prompt << 'EOF'
 .exec
 EOF
 
-keprompt chats create --prompt weather_check --param city "San Francisco"
+keprompt chats create --prompt weather_check --set city "San Francisco"
 ```
 
 For comprehensive documentation on creating custom functions, see [ks/creating-keprompt-functions.context.md](ks/creating-keprompt-functions.context.md)
@@ -518,6 +571,14 @@ keprompt chats get --json | jq '.data[] | select(.total_cost > 0.01)'
 
 # Get chat ID programmatically
 CHAT_ID=$(keprompt chats create --prompt hello --json | jq -r '.data.chat_id')
+
+# Extract a value from the JSON output (example: last_response)
+# (Requires jq: https://stedolan.github.io/jq/)
+keprompt chat new --prompt Test --json | jq -r '.meta.variables.last_response'
+
+# If you don't have jq, you can do the same with python3:
+keprompt chat new --prompt Test --json | \
+  python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["meta"]["variables"]["last_response"])'
 ```
 
 ## Tips & Best Practices
@@ -626,3 +687,5 @@ KePrompt is open source! Contributions welcome at [GitHub](https://github.com/Je
 ---
 
 *KePrompt: Making AI interaction simple, powerful, and cost-effective.*
+
+

@@ -19,6 +19,7 @@ from .ModelManager import ModelManager, AiModel
 from .AiPrompt import AiTextPart, AiImagePart, AiPrompt, MAX_LINE_LENGTH
 from  .keprompt_util import VERTICAL, RIGHT_TRIANGLE, LEFT_TRIANGLE, HORIZONTAL_LINE, CIRCLE
 from .keprompt_logger import StandardLogger, LogMode
+from .terminal_output import terminal_output
 
 console = Console()
 terminal_width = console.size.width
@@ -1447,14 +1448,21 @@ class StmtPrint(StmtPrompt):
         # Substitute variables and print to STDOUT (production channel)
         output_text = vm.substitute(self.value)
         md = Markdown(output_text)
-        console.print(Panel(md,
-                            title=f"[bold cyan]chat {vm.prompt_uuid}:{vm.interaction_no}[/bold cyan]",
-                            border_style="cyan",
-                            padding=(0, 0),
-                            expand=False,
-                            highlight=True),
-                            markup=True,
-                           soft_wrap=True)
+        # Route through the unified terminal output channel so:
+        # - pretty mode: this prints normally to stdout
+        # - --json mode: this is captured into the JSON envelope's `stdout`
+        terminal_output.print(
+            Panel(
+                md,
+                title=f"[bold cyan]chat {vm.prompt_uuid}:{vm.interaction_no}[/bold cyan]",
+                border_style="cyan",
+                padding=(0, 0),
+                expand=False,
+                highlight=True,
+            ),
+            markup=True,
+            soft_wrap=True,
+        )
 
 
 class StmtPromptMeta(StmtPrompt):

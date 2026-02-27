@@ -12,6 +12,8 @@ from dataclasses import dataclass, field, asdict
 from typing import Dict, Any
 from pathlib import Path
 
+from .terminal_output import terminal_output
+
 
 
 @dataclass
@@ -210,7 +212,7 @@ class ModelManager:
         litellm_db_path = Path("./prompts/functions/model_prices_and_context_window.json")
 
         if not os.path.exists(litellm_db_path):
-            print(f"Warning: LiteLLM database not found at {litellm_db_path}")
+            terminal_output.print(f"Warning: LiteLLM database not found at {litellm_db_path}", markup=False)
             return
         
         try:
@@ -257,13 +259,19 @@ class ModelManager:
             cls._initialized = True
             
             elapsed = time.time() - start_time
-            print(f"[ModelManager] Loaded {len(model_data)} models from '{litellm_db_path}' in {elapsed:.4f} seconds")
+            terminal_output.print(
+                f"[ModelManager] Loaded {len(model_data)} models from '{litellm_db_path}' in {elapsed:.4f} seconds",
+                markup=False,
+            )
             
         except Exception as e:
             tb = traceback.extract_tb(e.__traceback__)[-1]
             source_file = tb.filename
             line_no = tb.lineno
-            print(f"Warning: Failed to load models at {source_file}:{line_no} from LiteLLM database: {e}")
+            terminal_output.print(
+                f"Warning: Failed to load models at {source_file}:{line_no} from LiteLLM database: {e}",
+                markup=False,
+            )
 
 
     @classmethod

@@ -272,8 +272,6 @@ Please summarize it.
 
 - `readfile(filename)` - Read file contents
 - `writefile(filename, content)` - Write to file
-- `wwwget(url)` - Fetch URL
-- `askuser(question)` - Interactive prompt
 - `execcmd(cmd)` - Execute shell command
 
 #### Custom Functions
@@ -765,12 +763,13 @@ If successful, provide a summary.
 
 ### Additional Resources
 
-- [03-prompt-language.md](03-prompt-language.md) - Complete statement reference
-- [02-cli-interface.md](02-cli-interface.md) - Command-line usage
+- [01-prompt-language.md](01-prompt-language.md) - Complete statement reference
+- [03-statements-and-messages.md](03-statements-and-messages.md) - Deep architecture dive
 - [creating-keprompt-functions.context.md](creating-keprompt-functions.context.md) - Custom functions
-- [../ontology/02-statements-and-messages.md](../ontology/02-statements-and-messages.md) - Deep architecture dive
 
 ---
 
 *KePrompt Knowledge Engineer's Guide v1.0*
 *For KePrompt v2.0+*
+
+

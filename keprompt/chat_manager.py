@@ -371,6 +371,20 @@ class ChatManager:
         """Get chat with all related data."""
         return self.db_manager.get_chat_with_costs(chat_id)
 
+    @staticmethod
+    def _extract_first_question(messages_json: str) -> str:
+        """Extract the text of the first user message from messages_json."""
+        try:
+            messages = json.loads(messages_json) if messages_json else []
+            for msg in messages:
+                if msg.get("role") == "user":
+                    for part in msg.get("content", []):
+                        if part.get("type") == "text" and part.get("text"):
+                            return part["text"]
+        except (json.JSONDecodeError, TypeError):
+            pass
+        return ""
+
     def list_chats(self, limit: int = 100) -> list:
         """List recent chats."""
         chats = self.db_manager.list_chats(limit=limit)
@@ -395,7 +409,7 @@ class ChatManager:
                     total_elapsed_time = sum(float(rec.elapsed_time) for rec in cost_records)
             except Exception:
                 pass
-            
+
             result.append({
                 "chat_id": conv.chat_id,
                 "created_timestamp": (
@@ -411,6 +425,7 @@ class ChatManager:
                 "provider": provider,
                 "model": model_name,
                 "total_time": total_elapsed_time,
+                "first_question": self._extract_first_question(conv.messages_json),
             })
         return result
 
@@ -447,6 +462,7 @@ class ChatManager:
                 table.add_column("API Calls", style="blue", justify="right")
                 table.add_column("Time (s)", style="white", justify="right")
                 table.add_column("Total Cost", style="white", justify="right")
+                table.add_column("First Question", style="white", max_width=60)
 
                 for s in chats:
                     sid = s.get("chat_id", "")
@@ -458,7 +474,8 @@ class ChatManager:
                     calls = str(s.get("total_api_calls", ""))
                     time_val = f"{float(s.get('total_time', 0.0)):.2f}"
                     cost = f"{float(s.get('total_cost', 0.0)):.6f}"
-                    table.add_row(sid, created, prompt, ver, provider, model, calls, time_val, cost)
+                    question = s.get("first_question", "")
+                    table.add_row(sid, created, prompt, ver, provider, model, calls, time_val, cost, question)
                 return table
 
         # Default: JSON/text structures
@@ -591,6 +608,9 @@ class ChatManager:
             "chat_id": vm.prompt_uuid,
             "prompt_name": vm.prompt_name,
             "prompt_version": vm.prompt_version,
+            # Expose resolved variable dictionary (JSON-serializable) so the CLI
+            # can optionally include it in the JSON envelope meta.
+            "variables": self._make_variables_serializable(vm.vdict),
             "messages": vm.prompt.to_json(),
             "metadata": {
                 "total_cost": float(getattr(vm, "cost_in", 0.0) + getattr(vm, "cost_out", 0.0)),

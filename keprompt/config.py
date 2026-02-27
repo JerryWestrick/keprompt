@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 from dotenv import load_dotenv
 
+from .terminal_output import terminal_output
+
 
 class Config:
     """Configuration manager for KePrompt."""
@@ -51,7 +53,10 @@ class Config:
                     self._merge_config(file_config)
                     break
                 except Exception as e:
-                    print(f"Warning: Error loading config from {config_path}: {e}")
+                    terminal_output.print(
+                        f"Warning: Error loading config from {config_path}: {e}",
+                        markup=False,
+                    )
         
         # Load .env file if configured
         self._load_env_file()
@@ -110,7 +115,10 @@ class Config:
             try:
                 load_dotenv(env_path)
             except Exception as e:
-                print(f"Warning: Error loading .env file from {env_path}: {e}")
+                terminal_output.print(
+                    f"Warning: Error loading .env file from {env_path}: {e}",
+                    markup=False,
+                )
     
     def get_env_file_path(self) -> str:
         """Get the path to the .env file."""
@@ -148,7 +156,10 @@ class Config:
                             key, value = line.split('=', 1)
                             env_content[key.strip()] = value.strip()
             except Exception as e:
-                print(f"Warning: Error reading existing .env file: {e}")
+                terminal_output.print(
+                    f"Warning: Error reading existing .env file: {e}",
+                    markup=False,
+                )
         
         # Update the API key
         env_content[key_var] = api_key
@@ -159,7 +170,10 @@ class Config:
                 for key, value in env_content.items():
                     f.write(f"{key}={value}\n")
         except Exception as e:
-            print(f"Error: Could not write to .env file {env_file_path}: {e}")
+            terminal_output.print(
+                f"Error: Could not write to .env file {env_file_path}: {e}",
+                markup=False,
+            )
             raise
     
     def get_missing_key_error(self, provider: str) -> str:

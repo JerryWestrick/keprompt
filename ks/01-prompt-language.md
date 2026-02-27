@@ -135,7 +135,6 @@ Built-in functions:
 - `readfile(filename)` - Read file
 - `writefile(filename, content)` - Write file  
 - `wwwget(url)` - Fetch URL
-- `askuser(question)` - Interactive prompt
 - `execcmd(cmd)` - Execute shell
 
 **Without `as`:** Result appends to current message + stored in `last_response`
@@ -257,3 +256,4 @@ Auto-added if missing.
 
 ---
 *KePrompt v2.0 - Model loading moved to .exec*
+

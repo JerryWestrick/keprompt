@@ -16,6 +16,8 @@ from typing import Dict, Any, Optional
 from rich.console import Console
 from rich.logging import RichHandler
 
+from .terminal_output import terminal_output
+
 
 class LogMode(Enum):
     """Logging modes for keprompt."""
@@ -222,9 +224,14 @@ class StandardLogger:
             model_info = f" with {model}"
         
         self.log_llm(f"CHAT TOTAL: Tokens In: {total_tokens_in}, Out: {total_tokens_out}, Cost In: ${total_cost_in:.6f}, Out: ${total_cost_out:.6f}, Total: ${total_cost:.6f}{model_info}")
-        
-        # Also print to stderr for immediate visibility
-        print(f"{chat_info}{model_info} Total Cost: ${total_cost:.6f} (In: ${total_cost_in:.6f}, Out: ${total_cost_out:.6f})", file=sys.stderr)
+
+        # Emit user-visible summary via the unified terminal output channel.
+        # In --json mode this will be captured into the JSON envelope `stdout`
+        # instead of being printed (and potentially polluting merged streams).
+        terminal_output.print(
+            f"{chat_info}{model_info} Total Cost: ${total_cost:.6f} (In: ${total_cost_in:.6f}, Out: ${total_cost_out:.6f})",
+            markup=False,
+        )
     
     def print_exception(self):
         """Print exception information."""

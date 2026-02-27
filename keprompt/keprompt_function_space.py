@@ -6,6 +6,8 @@ import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Callable
 
+from .terminal_output import terminal_output
+
 # Capture the project directory where KePrompt was started
 # (can be overridden for testing or special setups)
 PROJECT_DIR = Path(os.environ.get("KEPROMPT_PROJECT_DIR", os.getcwd()))
@@ -64,7 +66,10 @@ class FunctionSpace:
         self.tools_array = self._build_tools_array(definitions)
         self._create_callable_wrappers(definitions)
         end_time = time.time()
-        print(f"[FunctionSpace] Loaded {len(self.tools_array)} routines from '{self.directory}' in {end_time - start_time:.4f} seconds")
+        terminal_output.print(
+            f"[FunctionSpace] Loaded {len(self.tools_array)} routines from '{self.directory}' in {end_time - start_time:.4f} seconds",
+            markup=False,
+        )
 
     # ------------------------------------------------------------------
     # DISCOVER EXECUTABLE FUNCTION PROVIDERS
