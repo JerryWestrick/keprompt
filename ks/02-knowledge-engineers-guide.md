@@ -432,7 +432,7 @@ Note: Messages still accumulate, but you control what the LLM focuses on.
 .exec
 
 # Use with variables:
-# keprompt --prompt template --set role "financial" --set task "Analyze Q4 earnings"
+# keprompt chat new --prompt template --set role "financial" --set task "Analyze Q4 earnings"
 ```
 
 ### Dynamic Prompt Generation
@@ -544,7 +544,7 @@ Note: Messages still accumulate, but you control what the LLM focuses on.
 #### 4. Use --vm-debug Flag
 
 ```bash
-keprompt --prompt test.prompt --vm-debug
+keprompt chat new --prompt test --vm-debug
 # Shows statement execution flow
 ```
 

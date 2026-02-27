@@ -39,10 +39,11 @@ pip install -e ~/keprompt/
 
 ### 2. Initialize your workspace
 ```bash
-keprompt database create
-keprompt models update
+keprompt init
 ```
-This creates the `prompts/` directory, initializes the database, and downloads the model registry.
+This creates the `prompts/` directory, copies a default `hello.prompt`, installs default functions, initializes the database, and downloads the model registry — all in one command.
+
+Use `keprompt init --force` to overwrite existing files.
 
 ### 3. Set up your API key
 ```bash
@@ -52,24 +53,19 @@ export ANTHROPIC_API_KEY="sk-ant-..."
 # ... or add to ~/.env
 ```
 
-### 4. Create your first prompt
+### 4. Run the included hello prompt
 ```bash
-cat > prompts/hello.prompt << 'EOF'
-.prompt "name":"Hello Assistant", "version":"1.0.0", "params":{}
-.# My first keprompt file
-.llm {"model": "gpt-4o-mini"}
-.system You are a helpful assistant.
-.user Hello! Please introduce yourself and explain what you can help with.
-.exec
-EOF
-```
-
-### 5. Run your prompt
-```bash
-keprompt chats create --prompt hello
+keprompt chat new --prompt hello
 ```
 
 🎉 **You should see the AI's response!** The system automatically tracks costs and saves the conversation.
+
+Try it with different models and questions:
+```bash
+keprompt chat new --prompt hello --model anthropic/claude-sonnet-4-20250514
+keprompt chat new --prompt hello --set question 'tell me a joke'
+keprompt chat new --prompt hello --model deepseek/deepseek-chat --set question 'what is 2+2?'
+```
 
 ## Your First Real Prompt
 
@@ -109,6 +105,7 @@ keprompt <object> <verb> [options]
 ```
 
 ### Core Objects
+- **init** - Initialize workspace (one-stop setup)
 - **prompts** - List and manage prompt files
 - **chats** - Create and manage conversations
 - **models** - Browse available AI models
@@ -138,7 +135,7 @@ keprompt models get --company OpenAI
 keprompt server start --web-gui
 ```
 
-See the full CLI reference in [ks/02-cli-interface.md](ks/02-cli-interface.md)
+See the [Knowledge Engineer's Guide](ks/02-knowledge-engineers-guide.md) for the full reference.
 
 ## Web GUI Interface
 
@@ -664,9 +661,9 @@ keprompt server --help
 
 ## Documentation
 
-- [CLI Interface](ks/02-cli-interface.md) - Complete command reference
-- [Prompt Language](ks/03-prompt-language.md) - Writing .prompt files
-- [Web GUI](ks/04-web-gui.md) - Using the web interface
+- [Prompt Language](ks/01-prompt-language.md) - Writing .prompt files
+- [Knowledge Engineer's Guide](ks/02-knowledge-engineers-guide.md) - Comprehensive guide
+- [Statements & Messages](ks/03-statements-and-messages.md) - Architecture reference
 - [Creating Functions](ks/creating-keprompt-functions.context.md) - Custom function development
 
 ## What's Next?

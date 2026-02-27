@@ -1,0 +1,15 @@
+.prompt "name":"hello", "version":"1.0.0", "params":{"model":"openai/gpt-4o", "question":"what model are you?"}
+
+.# Hello World prompt for KePrompt
+.# Usage:
+.#   keprompt chat new --prompt hello
+.#   keprompt chat new --prompt hello --model anthropic/claude-sonnet-4-20250514
+.#   keprompt chat new --prompt hello --model deepseek/deepseek-chat
+.#   keprompt chat new --prompt hello --set question 'what is 2+2?'
+.#   keprompt chat new --prompt hello --model openai/gpt-4o --set question 'tell me a joke'
+
+.system You are a helpful assistant. Keep your answers brief.
+
+.user <<question>>
+
+.exec
