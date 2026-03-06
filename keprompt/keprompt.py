@@ -399,9 +399,15 @@ def main():
             sys.stdout.flush()
             
             if not success:
+                # Include chat_id in envelope when available (e.g. error chats saved to DB)
+                if isinstance(response, dict) and response.get("chat_id"):
+                    envelope["chat_id"] = response["chat_id"]
                 # Also mirror a concise error to stderr and exit non-zero
                 err_console = Console(file=sys.stderr)
-                err_console.print(f"[red]Error:[/] {error_obj if isinstance(error_obj, str) else envelope['error']}")
+                err_msg = error_obj if isinstance(error_obj, str) else envelope['error']
+                err_console.print(f"[red]Error:[/] {err_msg}")
+                if isinstance(response, dict) and response.get("chat_id"):
+                    err_console.print(f"[dim]Chat saved as[/] [cyan]{response['chat_id']}[/] [dim]— inspect with:[/] keprompt chat get {response['chat_id']}")
                 sys.exit(1)
             return
 
@@ -409,6 +415,12 @@ def main():
         # If response is already a Rich Table (legacy), print it directly
         if isinstance(response, Table):
             console.print(response)
+        elif isinstance(response, dict) and response.get("success") is False:
+            err_console = Console(file=sys.stderr)
+            err_console.print(f"[red]Error:[/] {response.get('error', 'Unknown error')}")
+            if response.get("chat_id"):
+                err_console.print(f"[dim]Chat saved as[/] [cyan]{response['chat_id']}[/] [dim]— inspect with:[/] keprompt chat get {response['chat_id']}")
+            sys.exit(1)
         else:
             # Convert JSON response to Rich table using OutputFormatter
             # OutputFormatter will extract object_type from the response dict

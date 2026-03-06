@@ -64,6 +64,14 @@ class StmtSyntaxError(Exception):
 class PromptResolutionError(Exception):
     pass
 
+class VMExecutionError(Exception):
+    """Raised when a statement fails during VM execution.
+    Carries the original exception and the statement index."""
+    def __init__(self, message: str, stmt_index: int, original_error: Exception):
+        super().__init__(message)
+        self.stmt_index = stmt_index
+        self.original_error = original_error
+
 
 class VM:
     """Class to hold Prompt Virtual Machine execution state"""
@@ -560,7 +568,11 @@ class VM:
                     
             except Exception as e:
                 self.logger.log_error(f"Error executing statement {self.ip}: {str(e)}")
-                sys.exit(9)
+                raise VMExecutionError(
+                    f"Error executing statement {self.ip}: {str(e)}",
+                    stmt_index=self.ip,
+                    original_error=e,
+                )
 
             if stmt.keyword == '.exit':
                 break
@@ -637,7 +649,11 @@ class VM:
                 stmt.execute(self)
             except Exception as e:
                 self.logger.log_error(f"Error executing statement {stmt_no}: {str(e)}")
-                sys.exit(9)
+                raise VMExecutionError(
+                    f"Error executing statement {stmt_no}: {str(e)}",
+                    stmt_index=stmt_no,
+                    original_error=e,
+                )
 
             if stmt.keyword == '.exit':
                 break

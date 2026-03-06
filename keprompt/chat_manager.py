@@ -24,7 +24,7 @@ from .ModelManager import ModelManager
 from .config import get_config
 from .AiPrompt import AiCall, AiResult, AiMessage
 from .keprompt_logger import LogMode, StandardLogger
-from .keprompt_vm import VM
+from .keprompt_vm import VM, VMExecutionError
 
 
 class ChatManager:
@@ -147,8 +147,8 @@ class ChatManager:
     # --------------------------------------------------------------------- #
     #  Persistence helpers
     # --------------------------------------------------------------------- #
-    def save_chat(self, vm) -> str:
-        """Save chat from VM state."""
+    def save_chat(self, vm, error: str = None) -> str:
+        """Save chat from VM state. If error is provided, it is stored in vm_state."""
 
         # Prepare chat data
         messages_json = json.dumps(vm.prompt.to_json())
@@ -173,6 +173,11 @@ class ChatManager:
             "prompt_name": getattr(vm, "prompt_name", None),
             "prompt_version": getattr(vm, "prompt_version", None),
         }
+        if error:
+            vm_state["status"] = "error"
+            vm_state["error"] = error
+        else:
+            vm_state["status"] = "ok"
         vm_state_json = json.dumps(vm_state)
 
         # Prepare variables (make serializable)
@@ -594,6 +599,18 @@ class ChatManager:
         start_time = datetime.now()
         try:
             vm.execute()
+        except VMExecutionError as e:
+            # Save the chat with error info so the user can inspect what was sent
+            try:
+                self.save_chat(vm, error=str(e))
+            except Exception:
+                pass  # don't mask the original error
+            return {
+                "success": False,
+                "error": str(e),
+                "chat_id": vm.prompt_uuid,
+                "timestamp": datetime.now().isoformat(),
+            }
         except Exception as e:
             return fail(f"Execution failed: {e}")
         end_time = datetime.now()
@@ -646,7 +663,19 @@ class ChatManager:
         messages_before = len(vm.prompt.messages)
         
         start_time = datetime.now()
-        vm.execute()
+        try:
+            vm.execute()
+        except VMExecutionError as e:
+            try:
+                self.save_chat(vm, error=str(e))
+            except Exception:
+                pass
+            return {
+                "success": False,
+                "error": str(e),
+                "chat_id": vm.prompt_uuid,
+                "timestamp": datetime.now().isoformat(),
+            }
         end_time = datetime.now()
         self.save_chat(vm)
         if getattr(self.args, "pretty", False):
