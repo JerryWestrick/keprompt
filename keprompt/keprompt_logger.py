@@ -109,17 +109,14 @@ class StandardLogger:
         if self.mode == LogMode.DEBUG:
             self._write_to_stderr(f"[cyan]MSG: {message}[/cyan]")
     
-    def log_error(self, message: str, exit_code: int = 1):
-        """Log error message and exit."""
+    def log_error(self, message: str):
+        """Log error message."""
         # Always write to STDERR (all modes)
         print(f"Error: {message}", file=sys.stderr)
-        
+
         # Rich formatting in debug mode
         if self.mode == LogMode.DEBUG:
             self.console.print(f"[bold red]Error: {message}[/bold red]")
-        
-        # Exit with error code
-        sys.exit(exit_code)
     
     def log_warning(self, message: str):
         """Log warning message."""
