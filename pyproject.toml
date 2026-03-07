@@ -44,7 +44,7 @@ Repository = "https://github.com/JerryWestrick/keprompt"
 Issues = "https://github.com/JerryWestrick/keprompt/issues"
 
 [tool.setuptools.package-data]
-keprompt = ["web_gui/*", "defaults/functions/*"]
+keprompt = ["web_gui/*", "defaults/*.prompt", "defaults/functions/*"]
 
 [tool.setuptools.dynamic]
 version = {attr = "keprompt.version.__version__"}
