@@ -57,7 +57,7 @@ class AiGoogle(AiProvider):
             for part in msg.content:
                 if   part.type == "text":       content.append({"text": part.text})
                 elif part.type == "image_url":  content.append({"inlineData": {"mimeType": part.media_type,"data": part.file_contents}})
-                elif part.type == "call":       content.append({"functionCall": {"name": part.name,"args": json.loads(part.arguments)}})
+                elif part.type == "call":       content.append({"functionCall": {"name": part.name,"args": part.arguments}})
                 elif part.type == "result":     content.append({"functionResponse": {"name": part.name,"response": part.result,"id": part.id or ""}})
                 else: raise Exception(f"Unknown part type: {part.type}")
 

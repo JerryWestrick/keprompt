@@ -103,7 +103,11 @@ class AiCall(AiMessagePart):
         super().__init__(vm=vm, part_type="call")
         self.name = name
         self.id = id
-        self.arguments = json.loads(arguments) if isinstance(arguments, str) else arguments
+        if isinstance(arguments, str):
+            from .json_utils import safe_json_loads
+            self.arguments = safe_json_loads(arguments, context=f"tool_call arguments for '{name}'")
+        else:
+            self.arguments = arguments
             
     def __str__(self) -> str:
         return f"Call(name={self.name}, id={self.id}, arguments={self.arguments})"

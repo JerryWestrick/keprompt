@@ -112,6 +112,7 @@ class FunctionManager():
         # Return JSON data - OutputFormatter will handle pretty display
         return {
             "success": True,
+            "object_type": "function_list",
             "data": FunctionSpace.functions.tools_array,
             "timestamp": datetime.now().isoformat()
         }

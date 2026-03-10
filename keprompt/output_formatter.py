@@ -111,6 +111,8 @@ class OutputFormatter:
         # Handle special object types with custom formatting
         if object_type == "provider_list":
             return cls._format_provider_list(data, title)
+        elif object_type == "function_list":
+            return cls._format_function_list(data, title)
         elif object_type == "chat_conversation":
             return cls._format_chat_conversation(data, title)
         
@@ -134,6 +136,41 @@ class OutputFormatter:
         
         return table
     
+    @classmethod
+    def _format_function_list(cls, data: Dict, title: Optional[str] = None) -> Table:
+        """Format function list with parameters as sub-rows"""
+        functions = data.get("data", [])
+
+        table = Table(title=title or "Available Functions", show_lines=False)
+        table.add_column("Function", style="cyan", no_wrap=True, width=18)
+        table.add_column("Parameter", style="yellow", no_wrap=True, width=14)
+        table.add_column("Type", style="magenta", no_wrap=True, width=8)
+        table.add_column("Description", style="green", ratio=1)
+
+        for tool in functions:
+            func = tool.get("function", tool)
+            name = func.get("name", "")
+            desc = func.get("description", "")
+            params = func.get("parameters", {})
+            props = params.get("properties", {})
+            required = set(params.get("required", []))
+
+            # Function description row — description goes in the last column for full width
+            has_params = bool(props)
+            table.add_row(f"[bold]{name}[/bold]", "", "", f"[italic]{desc}[/italic]", end_section=not has_params)
+
+            # Parameter rows
+            param_list = list(props.items())
+            for i, (pname, pinfo) in enumerate(param_list):
+                ptype = pinfo.get("type", "")
+                pdesc = pinfo.get("description", "")
+                req = "[bold]*[/bold]" if pname in required else ""
+                last = (i == len(param_list) - 1)
+                table.add_row("", f"  {pname}{req}", ptype, pdesc, end_section=last)
+
+        table.caption = "* = required"
+        return table
+
     @classmethod
     def _format_chat_detail(cls, data: Dict, view_format: str, title: Optional[str] = None) -> Any:
         """
