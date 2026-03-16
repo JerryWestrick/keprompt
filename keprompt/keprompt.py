@@ -376,6 +376,10 @@ def main():
                 # Non-serializable types (e.g., Table). Provide string representation.
                 data_payload = str(response)
 
+            # Promote chat-specific top-level fields when present
+            ai_response = response.get("ai_response") if isinstance(response, dict) else None
+            chat_id = response.get("chat_id") if isinstance(response, dict) else None
+
             envelope = {
                 "success": success,
                 "data": data_payload if success else None,
@@ -387,27 +391,31 @@ def main():
                     "args": vars(args),
                     # If command returns variables (e.g., chat create/new), expose
                     # them in meta for machine consumers.
-                    "variables": (response.get("variables") if isinstance(response, dict) else None),
+                    "variables": (data_payload.get("variables") if isinstance(data_payload, dict) else None),
                     "timestamp": datetime.utcnow().isoformat() + "Z",
                     "version": __version__,
                 },
             }
-            
+
+            # Include ai_response and chat_id at top level when present
+            # (chat new / chat reply responses)
+            if ai_response is not None:
+                envelope["ai_response"] = ai_response
+            if chat_id is not None:
+                envelope["chat_id"] = chat_id
+
             # Use OutputFormatter for JSON serialization (handles Peewee, datetime, etc.)
             json_output = OutputFormatter.format(envelope, format_type="json")
             sys.stdout.write(json_output + "\n")
             sys.stdout.flush()
-            
+
             if not success:
-                # Include chat_id in envelope when available (e.g. error chats saved to DB)
-                if isinstance(response, dict) and response.get("chat_id"):
-                    envelope["chat_id"] = response["chat_id"]
                 # Also mirror a concise error to stderr and exit non-zero
                 err_console = Console(file=sys.stderr)
                 err_msg = error_obj if isinstance(error_obj, str) else envelope['error']
                 err_console.print(f"[red]Error:[/] {err_msg}")
-                if isinstance(response, dict) and response.get("chat_id"):
-                    err_console.print(f"[dim]Chat saved as[/] [cyan]{response['chat_id']}[/] [dim]— inspect with:[/] keprompt chat get {response['chat_id']}")
+                if chat_id:
+                    err_console.print(f"[dim]Chat saved as[/] [cyan]{chat_id}[/] [dim]— inspect with:[/] keprompt chat get {chat_id}")
                 sys.exit(1)
             return
 

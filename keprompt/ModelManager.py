@@ -310,7 +310,7 @@ class ModelManager:
         if self.args.models_command not in supported_commands:
             return {
                 "success": False,
-                "data": [f"Unsupported command '{self.args.models_command}' for ModelManager.  Expected one of {supported_commands}"],
+                "error": f"Unsupported command '{self.args.models_command}' for ModelManager.  Expected one of {supported_commands}",
                 "timestamp": datetime.now().isoformat()
             }
         self._load_all_models()
@@ -341,7 +341,7 @@ class ModelManager:
             reset_to_defaults()
             return {
                 "success": True,
-                "data": "Models have been reset to bundled defaults.",
+                "data": {"message": "Models have been reset to bundled defaults."},
                 "timestamp": datetime.now().isoformat()
             }
 
@@ -379,7 +379,7 @@ class ModelManager:
                 # Return JSON format
                 return {
                     "success": True,
-                    "data": message,
+                    "data": {"message": message},
                     "timestamp": datetime.now().isoformat()
                 }
                     

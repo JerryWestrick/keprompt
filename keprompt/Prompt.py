@@ -142,7 +142,7 @@ class PromptManager:
         if getattr(self.args, "pretty", False):
             return self.pretty_print()
         # default: text (no JSON mode) — ensure JSON‑serializable structure
-        return {"success": True, "prompts": [p.to_dict() for p in self.prompts]}
+        return {"success": True, "data": [p.to_dict() for p in self.prompts], "timestamp": datetime.now().isoformat()}
 
     @classmethod
     def register_cli(cls, parent_subparsers: argparse._SubParsersAction, parent_parser: argparse.ArgumentParser) -> None:

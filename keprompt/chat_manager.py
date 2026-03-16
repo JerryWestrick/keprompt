@@ -495,20 +495,21 @@ class ChatManager:
                     # CLI pretty mode - return chat_data directly for OutputFormatter
                     return chat_data
                 else:
-                    # HTTP API mode - wrap in success envelope with array
-                    return {"success": True, "data": [chat_data]}
+                    return {"success": True, "data": [chat_data], "timestamp": datetime.now().isoformat()}
             return chat_data
-        if limit:
-            return self.list_chats(limit=limit)
-        return self.list_chats()
+        chats = self.list_chats(limit=limit) if limit else self.list_chats()
+        return {"success": True, "data": chats, "timestamp": datetime.now().isoformat()}
 
     def execute_delete(self):
         chat_id = getattr(self.args, "chat_id", None)
 
         if chat_id:
             ok = self.delete_chat(chat_id)
-            msg = f"chat id {chat_id} {'deleted' if ok else 'not deleted'}"
-            return  [msg]
+            return {
+                "success": True,
+                "data": {"chat_id": chat_id, "deleted": ok},
+                "timestamp": datetime.now().isoformat(),
+            }
         else:
             # Cleanup mode
             max_days = getattr(self.args, "max_days", None)
@@ -519,10 +520,15 @@ class ChatManager:
                 max_count=max_count,
                 max_size_gb=max_size_gb,
             )
-            return result
+            return {
+                "success": True,
+                "data": result,
+                "timestamp": datetime.now().isoformat(),
+            }
 
-    def success(self, vm: VM, elapsed_time: float, params_dict: dict=None) -> dict:
-        # Extract last assistant textual response
+    @staticmethod
+    def _extract_ai_response(vm: VM) -> str:
+        """Extract the last assistant textual response from a VM."""
         ai_response = ""
         if getattr(vm, "prompt", None) and vm.prompt.messages:
             for message in reversed(vm.prompt.messages):
@@ -534,6 +540,10 @@ class ChatManager:
                     break
         if not ai_response and hasattr(vm, "last_response"):
             ai_response = vm.last_response
+        return ai_response
+
+    def success(self, vm: VM, elapsed_time: float, params_dict: dict=None) -> dict:
+        ai_response = self._extract_ai_response(vm)
 
         metadata = {
             "total_cost": float(getattr(vm, "cost_in", 0.0) + getattr(vm, "cost_out", 0.0)),
@@ -547,10 +557,15 @@ class ChatManager:
 
         return {
             "success": True,
+            "object_type": "chat_conversation",
             "chat_id": vm.prompt_uuid,
             "ai_response": ai_response,
-            "metadata": metadata,
-            "params": params_dict,
+            "data": {
+                "chat_id": vm.prompt_uuid,
+                "metadata": metadata,
+                "params": params_dict,
+            },
+            "timestamp": datetime.now().isoformat(),
         }
 
     def colorize(self, role: str, txt: str) -> str:
@@ -579,11 +594,11 @@ class ChatManager:
 
         # Helper to fail consistently
         def fail(msg: str):
-            return [{
+            return {
                 "success": False,
                 "error": msg,
                 "timestamp": datetime.now().isoformat(),
-            }]
+            }
 
         if not prompt_ref:
             return fail("--prompt is required")
@@ -618,27 +633,35 @@ class ChatManager:
         # Persist the new chat
         self.save_chat(vm)
 
+        # Extract last assistant textual response
+        ai_response = self._extract_ai_response(vm)
+
         # Return conversation data with object_type for OutputFormatter
         return {
             "success": True,
             "object_type": "chat_conversation",
             "chat_id": vm.prompt_uuid,
-            "prompt_name": vm.prompt_name,
-            "prompt_version": vm.prompt_version,
-            # Expose resolved variable dictionary (JSON-serializable) so the CLI
-            # can optionally include it in the JSON envelope meta.
-            "variables": self._make_variables_serializable(vm.vdict),
-            "messages": vm.prompt.to_json(),
-            "metadata": {
-                "total_cost": float(getattr(vm, "cost_in", 0.0) + getattr(vm, "cost_out", 0.0)),
-                "tokens_in": getattr(vm, "toks_in", 0),
-                "tokens_out": getattr(vm, "toks_out", 0),
-                "elapsed_time": (end_time - start_time).total_seconds(),
-                "model": getattr(vm, "model_name", ""),
-                "provider": getattr(getattr(vm, "model", None), "provider", getattr(vm, "provider", "")),
-                "api_calls": getattr(vm, "interaction_no", 0),
+            "ai_response": ai_response,
+            "data": {
+                "chat_id": vm.prompt_uuid,
+                "prompt_name": vm.prompt_name,
+                "prompt_version": vm.prompt_version,
+                # Expose resolved variable dictionary (JSON-serializable) so the CLI
+                # can optionally include it in the JSON envelope meta.
+                "variables": self._make_variables_serializable(vm.vdict),
+                "messages": vm.prompt.to_json(),
+                "metadata": {
+                    "total_cost": float(getattr(vm, "cost_in", 0.0) + getattr(vm, "cost_out", 0.0)),
+                    "tokens_in": getattr(vm, "toks_in", 0),
+                    "tokens_out": getattr(vm, "toks_out", 0),
+                    "elapsed_time": (end_time - start_time).total_seconds(),
+                    "model": getattr(vm, "model_name", ""),
+                    "provider": getattr(getattr(vm, "model", None), "provider", getattr(vm, "provider", "")),
+                    "api_calls": getattr(vm, "interaction_no", 0),
+                },
+                "params": params_dict,
             },
-            "params": params_dict,
+            "timestamp": datetime.now().isoformat(),
         }
 
     def execute_update(self):

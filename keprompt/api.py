@@ -369,5 +369,5 @@ def handle_json_command(args: argparse.Namespace) -> dict[str, Any]:
                 lno = tb.tb_lineno
                 tb = tb.tb_next
 
-        response = {'success': False, 'source': f'{src}:{lno}', 'error': f'Command failed: {etext}'}
+        response = {'success': False, 'source': f'{src}:{lno}', 'error': f'Command failed: {etext}', 'timestamp': datetime.now().isoformat()}
         return response

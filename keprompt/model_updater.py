@@ -13,7 +13,7 @@ import requests
 
 from .ModelManager import ModelManager, AiModel
 
-console = Console()
+console = Console(stderr=True)
 
 def update_models(target: str = None, api_key: str = None) -> None:
     """
