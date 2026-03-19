@@ -14,6 +14,28 @@ KePrompt lets you work with multiple AI providers (OpenAI, Anthropic, Google, an
 - **Web GUI**: Modern browser-based interface for interactive prompt development
 - **Production ready**: Built-in logging, error handling, and debugging tools
 
+## Prompt Engineering for Production
+
+KePrompt is more than a prompting tool — it's a prompt engineering platform built around a key architectural principle: **the separation of application code and AI prompting logic**.
+
+### Separation of Application and AI Prompting
+
+Your application calls KePrompt; all prompting logic — model selection, system prompts, parameters, function declarations — lives in `.prompt` files. When a newer or cheaper model becomes available, you rewrite the prompt file. The application code doesn't change.
+
+This separation turns prompt changes from code deployments into configuration updates, letting prompt engineers and developers work independently.
+
+### Production Observability and Regression Testing
+
+Every API call is logged in SQLite with full detail: request, response, token counts, costs, and execution timing. This production data becomes the foundation for rigorous prompt engineering:
+
+1. **Extract** real production interactions from the database
+2. **Build** regression test suites from actual usage patterns
+3. **Rewrite** the prompt for a new model or optimization goal
+4. **Test** the new prompt against production examples
+5. **Validate** not just correctness, but also speed and cost — ensuring the new prompt meets performance and budget targets before it goes live
+
+This closed loop — production data in, validated prompt out — is what elevates KePrompt from a "cute way to do AI prompting" to a proper prompt and knowledge engineering platform.
+
 ## Quick Start
 
 ### 0. Prepare Your Working Directory
