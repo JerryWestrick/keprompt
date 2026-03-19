@@ -15,6 +15,7 @@ Line-based DSL. Statements start with `.` prefix. Lines without `.` continue the
 | `.user` | `.user <text>` | User message (multi-line) |
 | `.assistant` | `.assistant <text>` | Assistant message for few-shot examples |
 | `.exec` | `.exec` / `.exec {"model":"..."}` / `.exec modelname` | Execute LLM call. Model override is **permanent** |
+| `.functions` | `.functions func1, func2, ...` | Declare which functions the model can use. **No `.functions` = no functions** |
 | `.set` | `.set variable value` | Set variable in VM dict |
 | `.print` | `.print <text>` | Print to stdout (supports `<<var>>`) |
 | `.cmd` | `.cmd func(arg=val)` / `.cmd func(arg=val) as varname` | Call function. Without `as`: appends to message. With `as`: stores in variable only |

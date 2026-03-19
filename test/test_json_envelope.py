@@ -462,6 +462,8 @@ class TestChatManagerSuccess:
 
         mock_vm = MagicMock()
         mock_vm.prompt_uuid = "repl1234"
+        mock_vm.prompt_name = "test"
+        mock_vm.prompt_version = "1.0.0"
         mock_vm.cost_in = 0.01
         mock_vm.cost_out = 0.02
         mock_vm.toks_in = 200
@@ -472,6 +474,7 @@ class TestChatManagerSuccess:
         mock_vm.last_response = "Here is the answer."
         mock_vm.prompt = MagicMock()
         mock_vm.prompt.messages = []
+        mock_vm.prompt.to_json.return_value = []
 
         response = mgr.success(mock_vm, elapsed_time=1.5, params_dict={"key": "val"})
 

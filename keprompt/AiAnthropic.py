@@ -16,12 +16,23 @@ class AiAnthropic(AiProvider):
     litellm_provider = "anthropic"
 
     def prepare_request(self, messages: List[Dict]) -> Dict:
-        return {
+        filtered = FunctionSpace.functions.get_filtered_tools_array(self.prompt.vm.allowed_functions)
+        anthropic_tools = [
+            {
+                "name": tool['function']['name'],
+                "description": tool['function']['description'],
+                "input_schema": tool['function']['parameters'],
+            }
+            for tool in filtered
+        ]
+        request = {
             "model": ModelManager.get_model(self.prompt.model).get_api_model_name(),
             "messages": messages,
-            "tools": AnthropicToolsArray,
             "max_tokens": 4096
         }
+        if anthropic_tools:
+            request["tools"] = anthropic_tools
+        return request
 
     def get_api_url(self) -> str:
         return "https://api.anthropic.com/v1/messages"
@@ -89,16 +100,6 @@ class AiAnthropic(AiProvider):
     #     """Update models from Anthropic API - not yet implemented"""
     #     console.print("[yellow]Model updating not yet implemented for Anthropic provider[/yellow]")
     #     return False
-
-# Prepare tools for Anthropic and Google integrations
-AnthropicToolsArray = [
-    {
-        "name": tool['function']['name'],
-        "description": tool['function']['description'],
-        "input_schema": tool['function']['parameters'],
-    }
-    for tool in FunctionSpace.functions.tools_array
-]
 
 # Register handler only - models loaded from JSON files
 ModelManager.register_handler(provider_name="anthropic", handler_class=AiAnthropic)

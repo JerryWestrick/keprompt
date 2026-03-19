@@ -221,6 +221,13 @@ class AiProvider(abc.ABC):
             if not isinstance(part, AiCall): continue
             tool_index += 1
 
+            # Guard: reject function calls not in allowed list
+            allowed = self.prompt.vm.allowed_functions
+            if allowed is not None and part.name not in allowed:
+                error_result = f"Error: function '{part.name}' is not in the allowed functions list"
+                tool_results.append(AiResult(vm=self.prompt.vm, name=part.name, id=part.id or "", result=error_result))
+                continue
+
             # Build call arguments, injecting delegation numbering if present
             call_args = dict(part.arguments)
             if "agent_name" in call_args:
@@ -360,6 +367,9 @@ class AiProvider(abc.ABC):
         elapsed = response.elapsed.total_seconds()
         tokens_per_sec = tokens / elapsed if elapsed > 0 else 0
         timings = f"Elapsed: {elapsed:.2f} seconds {tokens_per_sec:.2f} tps"
+
+        # Accumulate total API time on the VM
+        self.prompt.vm.api_time = getattr(self.prompt.vm, 'api_time', 0.0) + elapsed
         
         # Build the simplified timing content with send information
         timing_content = f"{label} <-- {send_summary}"

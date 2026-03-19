@@ -235,11 +235,45 @@ Access VM state via the `VM.` namespace:
 .print Tokens used: <<VM.total_tokens>>
 ```
 
+### Function Access Control
+
+By default, **the model has NO access to any functions**. You must explicitly declare which functions a prompt can use with the `.functions` statement. This is a security feature — it prevents models from accessing capabilities they don't need (principle of least privilege).
+
+```
+.prompt "name":"FileReader", "version":"1.0"
+.functions readfile
+.user Read data.txt and summarize it.
+.exec
+```
+
+Without `.functions readfile`, the model would have no tools available and would just respond with text.
+
+#### Why This Matters
+
+When delegating to sub-agents or using untrusted models, `.functions` prevents them from:
+- Writing files they shouldn't (`writefile`)
+- Executing arbitrary commands (`execcmd`)
+- Accessing functions beyond their task scope
+
+#### Examples
+
+```
+# Research agent — no file access needed
+.functions delegate
+
+# Read-only agent — can read but not write
+.functions readfile, wwwget
+
+# Full access — only when you trust the model and need it
+.functions readfile, writefile, execcmd, wwwget
+```
+
 ### Function Integration
 
 #### Basic Function Call
 
 ```
+.functions readfile
 .user Please analyze this file:
 .cmd readfile(filename="data.txt")
 .exec

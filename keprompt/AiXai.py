@@ -15,7 +15,12 @@ class AiXai(AiProvider):
     litellm_provider = "xai"
     
     def prepare_request(self, messages: List[Dict]) -> Dict:
-        return {"model": ModelManager.get_model(self.prompt.model).get_api_model_name(),"messages": messages,"tools": FunctionSpace.functions.tools_array,"tool_choice": "auto"}
+        tools = FunctionSpace.functions.get_filtered_tools_array(self.prompt.vm.allowed_functions)
+        request = {"model": ModelManager.get_model(self.prompt.model).get_api_model_name(), "messages": messages}
+        if tools:
+            request["tools"] = tools
+            request["tool_choice"] = "auto"
+        return request
 
     def get_api_url(self) -> str:
         return "https://api.x.ai/v1/chat/completions"

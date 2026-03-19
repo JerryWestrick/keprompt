@@ -46,13 +46,15 @@ class ChatManager:
             parents=[parent_parser],
             help="Create a new chat from a prompt",
         )
-        create.add_argument("--prompt", required=True, help="Prompt name or filter")
+        create.add_argument("prompt", nargs="?", help="Prompt name")
+        create.add_argument("--prompt", dest="prompt_flag", help="Prompt name (alternative to positional)")
+        create.add_argument("--messages", "--msg", action="store_true", dest="show_messages", help="Show conversation messages")
         create.add_argument(
             "--set",
-            nargs=2,
+            nargs='+',
             action="append",
-            metavar=("VAR", "VALUE"),
-            help="Set variable (repeatable): --set model gpt-4 --set temperature 0.7",
+            metavar="VAR=VALUE",
+            help="Set variables: --set question='hello' model=gpt-4  OR  --set question hello",
         )
 
         get_cmd = subparsers.add_parser(
@@ -81,13 +83,14 @@ class ChatManager:
         mex = reply.add_mutually_exclusive_group()
         mex.add_argument("--answer", help="Message text (explicit)")
         mex.add_argument("--message", help="Message text (explicit)")
+        reply.add_argument("--messages", "--msg", action="store_true", dest="show_messages", help="Show new conversation messages")
         reply.add_argument("--full", action="store_true", help="Show full conversation history")
         reply.add_argument(
             "--set",
-            nargs=2,
+            nargs='+',
             action="append",
-            metavar=("VAR", "VALUE"),
-            help="Set variable for this reply (repeatable): --set model gpt-4",
+            metavar="VAR=VALUE",
+            help="Set variables: --set question='hello' model=gpt-4  OR  --set question hello",
         )
 
         delete = subparsers.add_parser(
@@ -126,6 +129,32 @@ class ChatManager:
     # --------------------------------------------------------------------- #
     #  Serialisation helpers
     # --------------------------------------------------------------------- #
+    @staticmethod
+    def _parse_set_params(raw_sets: list) -> list[tuple[str, str]]:
+        """Parse --set arguments into (key, value) pairs.
+
+        Supports:
+          --set question='hello' model=gpt-4     → key=value format
+          --set question hello                    → legacy 2-arg format
+          --set question='hello' --set model=gpt-4  → repeated --set
+        """
+        pairs = []
+        for group in raw_sets:
+            i = 0
+            while i < len(group):
+                arg = group[i]
+                if '=' in arg:
+                    key, value = arg.split('=', 1)
+                    pairs.append((key, value))
+                    i += 1
+                elif i + 1 < len(group) and '=' not in group[i + 1]:
+                    # Legacy: --set key value (two separate args, value has no =)
+                    pairs.append((arg, group[i + 1]))
+                    i += 2
+                else:
+                    raise ValueError(f"--set '{arg}' missing value. Use --set {arg}=value or --set {arg} value")
+        return pairs
+
     def _make_serializable(self, obj):
         """Make an object JSON serializable."""
         if isinstance(obj, dict):
@@ -172,6 +201,7 @@ class ChatManager:
             # prompt meta
             "prompt_name": getattr(vm, "prompt_name", None),
             "prompt_version": getattr(vm, "prompt_version", None),
+            "allowed_functions": getattr(vm, "allowed_functions", None),
         }
         if error:
             vm_state["status"] = "error"
@@ -257,6 +287,7 @@ class ChatManager:
         # prompt meta
         vm.prompt_name = vm_state.get("prompt_name", vm.prompt_name)
         vm.prompt_version = vm_state.get("prompt_version", vm.prompt_version)
+        vm.allowed_functions = vm_state.get("allowed_functions", None)
 
         # Restore LLM configuration if we have model info
         if vm.model_name:
@@ -586,11 +617,11 @@ class ChatManager:
         """
         from .keprompt_vm import PromptResolutionError
 
-        prompt_ref = getattr(self.args, "prompt", None)
-        set_params = getattr(self.args, "set", None) or []
-        
+        prompt_ref = getattr(self.args, "prompt", None) or getattr(self.args, "prompt_flag", None)
+        raw_sets = getattr(self.args, "set", None) or []
+
         # Convert --set parameters to dict
-        params_dict = {var: value for var, value in set_params}
+        params_dict = dict(self._parse_set_params(raw_sets))
 
         # Helper to fail consistently
         def fail(msg: str):
@@ -636,33 +667,48 @@ class ChatManager:
         # Extract last assistant textual response
         ai_response = self._extract_ai_response(vm)
 
-        # Return conversation data with object_type for OutputFormatter
-        return {
-            "success": True,
-            "object_type": "chat_conversation",
-            "chat_id": vm.prompt_uuid,
-            "ai_response": ai_response,
-            "data": {
-                "chat_id": vm.prompt_uuid,
-                "prompt_name": vm.prompt_name,
-                "prompt_version": vm.prompt_version,
-                # Expose resolved variable dictionary (JSON-serializable) so the CLI
-                # can optionally include it in the JSON envelope meta.
-                "variables": self._make_variables_serializable(vm.vdict),
-                "messages": vm.prompt.to_json(),
-                "metadata": {
-                    "total_cost": float(getattr(vm, "cost_in", 0.0) + getattr(vm, "cost_out", 0.0)),
-                    "tokens_in": getattr(vm, "toks_in", 0),
-                    "tokens_out": getattr(vm, "toks_out", 0),
-                    "elapsed_time": (end_time - start_time).total_seconds(),
-                    "model": getattr(vm, "model_name", ""),
-                    "provider": getattr(getattr(vm, "model", None), "provider", getattr(vm, "provider", "")),
-                    "api_calls": getattr(vm, "interaction_no", 0),
-                },
-                "params": params_dict,
-            },
-            "timestamp": datetime.now().isoformat(),
-        }
+        # Show message table if --messages/--msg flag is set
+        show_messages = getattr(self.args, "show_messages", False)
+        if getattr(self.args, "pretty", False) and show_messages:
+            title = f"Conversation {vm.prompt_uuid}[{vm.prompt_name}:{vm.prompt_version}]"
+            table = Table(title=title)
+            table.add_column("Role", style="cyan", no_wrap=True)
+            table.add_column("Message", style="green")
+
+            for msg in vm.prompt.messages:
+                role = msg.role
+                txt = ''
+                for part in msg.content:
+                    if hasattr(part, "text") and part.text:
+                        txt += f"{part.text}\n"
+                    elif isinstance(part, AiCall):
+                        args_str = ', '.join(f"{k}={v}" for k, v in part.arguments.items())
+                        txt += f"**Call** `{part.name}({args_str})` [id={part.id}]\n"
+                    elif isinstance(part, AiResult):
+                        result_preview = str(part.result)[:200] + '...' if len(str(part.result)) > 200 else str(part.result)
+                        txt += f"**Result** `{part.name}()`: {result_preview} [id={part.id}]\n"
+
+                if txt:
+                    txt = txt[:-1]
+                else:
+                    txt = "[No content]"
+
+                md = Markdown(txt)
+                table.add_row(self.colorize(role, role), md)
+
+            return table
+
+        # Default: show last_response as markdown panel
+        if getattr(self.args, "pretty", False):
+            ai_response = self._extract_ai_response(vm)
+            if ai_response:
+                from rich.panel import Panel
+                from rich.console import Console
+                md = Markdown(ai_response)
+                Console().print(Panel(md, title=f"chat {vm.prompt_uuid}:{vm.interaction_no}",
+                                      subtitle=f"{vm.model_name}"))
+
+        return self.success(vm=vm, elapsed_time=(end_time - start_time).total_seconds(), params_dict=params_dict)
 
     def execute_update(self):
         chat_id = getattr(self.args, "chat_id", None)
@@ -674,8 +720,8 @@ class ChatManager:
             return f"Chat {chat_id} not found or failed to load"
 
         # Apply any --set parameter overrides
-        set_params = getattr(self.args, "set", None) or []
-        for var, value in set_params:
+        raw_sets = getattr(self.args, "set", None) or []
+        for var, value in self._parse_set_params(raw_sets):
             vm.add_statement(keyword=".set", value=f"{var} {value}")
 
         vm.add_statement(keyword=".user", value=answer)
@@ -701,17 +747,17 @@ class ChatManager:
             }
         end_time = datetime.now()
         self.save_chat(vm)
-        if getattr(self.args, "pretty", False):
-            # Determine whether to show full conversation or only new messages
-            show_full = getattr(self.args, "full", False)
-            
+        show_messages = getattr(self.args, "show_messages", False)
+        show_full = getattr(self.args, "full", False)
+
+        if getattr(self.args, "pretty", False) and (show_messages or show_full):
             if show_full:
                 title = f"Conversation {vm.prompt_uuid}[{vm.prompt_name}:{vm.prompt_version}]"
                 messages_to_show = vm.prompt.messages
             else:
                 title = f"New Messages - {vm.prompt_uuid}[{vm.prompt_name}:{vm.prompt_version}]"
                 messages_to_show = vm.prompt.messages[messages_before:]
-            
+
             table = Table(title=title)
             table.add_column("Role", style="cyan", no_wrap=True)
             table.add_column("Message", style="green")
@@ -720,29 +766,34 @@ class ChatManager:
                 role = msg.role
                 txt = ''
                 for part in msg.content:
-                    # Handle text parts
                     if hasattr(part, "text") and part.text:
                         txt += f"{part.text}\n"
-                    # Handle tool calls (AiCall)
                     elif isinstance(part, AiCall):
                         args_str = ', '.join(f"{k}={v}" for k, v in part.arguments.items())
                         txt += f"**Call** `{part.name}({args_str})` [id={part.id}]\n"
-                    # Handle tool results (AiResult)
                     elif isinstance(part, AiResult):
                         result_preview = str(part.result)[:200] + '...' if len(str(part.result)) > 200 else str(part.result)
                         txt += f"**Result** `{part.name}()`: {result_preview} [id={part.id}]\n"
-                
-                # Always show the message, even if empty (for debugging)
-                # Remove the trailing newline if present
+
                 if txt:
                     txt = txt[:-1]
                 else:
                     txt = "[No content]"
-                    
+
                 md = Markdown(txt)
                 table.add_row(self.colorize(role,role), md)
 
             return table
+
+        # Default: show last_response as markdown panel
+        if getattr(self.args, "pretty", False):
+            ai_response = self._extract_ai_response(vm)
+            if ai_response:
+                from rich.panel import Panel
+                from rich.console import Console
+                md = Markdown(ai_response)
+                Console().print(Panel(md, title=f"chat {vm.prompt_uuid}:{vm.interaction_no}",
+                                      subtitle=f"{vm.model_name}"))
 
         return self.success(vm=vm, elapsed_time=(end_time - start_time).total_seconds())
 

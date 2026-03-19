@@ -42,7 +42,7 @@ The system follows a layered architecture: CLI → JSON API → Managers → VM/
 1. **CLI** (`keprompt.py`) parses `keprompt <object> <verb> [options]` commands using argparse with `rich_argparse`. Auto-detects output format: Rich tables for TTY, JSON when piped.
 2. **JSON API** (`api.py`) routes commands to manager classes (`ChatManager`, `ModelManager`, `PromptManager`, etc.) that return structured JSON.
 3. **Chat Manager** (`chat_manager.py`) handles chat lifecycle (create/reply/get/delete), serializes VM state to the database for multi-turn conversations.
-4. **VM** (`keprompt_vm.py`) executes `.prompt` files statement-by-statement. This is the core engine (~1000+ lines). It manages variables, messages, model selection, and dispatches to AI providers. Statements: `.prompt`, `.exec`, `.user`, `.system`, `.assistant`, `.tool_call`, `.tool_result`, `.cmd`, `.set`, `.print`, `.include`, `.image`, `.debug`, `.clear`, `.exit`.
+4. **VM** (`keprompt_vm.py`) executes `.prompt` files statement-by-statement. This is the core engine (~1000+ lines). It manages variables, messages, model selection, and dispatches to AI providers. Statements: `.prompt`, `.functions`, `.exec`, `.user`, `.system`, `.assistant`, `.tool_call`, `.tool_result`, `.cmd`, `.set`, `.print`, `.include`, `.image`, `.debug`, `.clear`, `.exit`.
 5. **AI Providers** (`AiProvider.py` base, `AiOpenAi.py`, `AiAnthropic.py`, etc.) each implement `prepare_request()`, `to_company_messages()`, `to_ai_message()`, `extract_token_usage()`, and `calculate_costs()`.
 6. **Database** (`database.py`) uses Peewee ORM with SQLite by default. Tables: `Chat` (8-char ID, messages, serialized VM state), `CostTracking` (per-call costs/tokens), `ServerRegistry` (HTTP server management).
 
@@ -56,7 +56,7 @@ The system follows a layered architecture: CLI → JSON API → Managers → VM/
 
 ## Prompt Language (DSL)
 
-`.prompt` files use a line-based syntax with `.` prefixed statements. Variable substitution uses `<<variable>>` syntax. The `.exec` statement triggers an LLM call. VM state is accessible via `<<VM.chat_id>>`, `<<VM.model_name>>`, `<<VM.total_cost>>`, etc.
+`.prompt` files use a line-based syntax with `.` prefixed statements. Variable substitution uses `<<variable>>` syntax. The `.exec` statement triggers an LLM call. The `.functions` statement declares which functions the model can use (no `.functions` = no functions, safe default). VM state is accessible via `<<VM.chat_id>>`, `<<VM.model_name>>`, `<<VM.total_cost>>`, etc.
 
 Example:
 ```

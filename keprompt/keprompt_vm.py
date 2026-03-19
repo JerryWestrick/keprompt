@@ -135,6 +135,8 @@ class VM:
         self.prompt_version: str = ""
         self.expected_params: dict = {}
         self.pending_costs: list = []
+        self.api_time: float = 0.0  # Accumulated API request time
+        self.allowed_functions: list[str] | None = None  # None = no .functions statement = no functions (safe default)
 
         # Automatically parse if filename provided
         if self.filename:
@@ -163,8 +165,21 @@ class VM:
 
         # Logical name → glob in prompts/
         name = prompt_ref
+        # Strip .prompt suffix if user included it
+        if name.endswith('.prompt'):
+            name = name[:-7]
         base = Path('prompts')
-        pattern = (base / f"{name}.prompt") if ('*' in name) else (base / f"{name}*.prompt")
+
+        # Try case-insensitive exact match first
+        for f in base.iterdir():
+            if f.is_file() and f.name.lower() == f"{name.lower()}.prompt":
+                return str(f)
+
+        # Fall back to wildcard match
+        if '*' in name:
+            pattern = base / f"{name}.prompt"
+        else:
+            pattern = base / f"{name}*.prompt"
         matches = sorted(Path('.').glob(str(pattern)))
         if not matches:
             raise PromptResolutionError(f"Prompt '{name}' not found (pattern: {pattern})")
@@ -538,7 +553,10 @@ class VM:
 
     def execute(self) -> None:
         """Execute the statements in the prompt file using the new standard logging system."""
-        
+
+        # Record wall clock start time
+        self.wall_start = time.time()
+
         # Set initial prompt ID for logging context
         initial_prompt_id = f"{self.prompt_uuid}-init"
         self.logger.set_prompt_id(initial_prompt_id)
@@ -1304,7 +1322,8 @@ class StmtExit(StmtPrompt):
         
         # Log total costs when exiting
         if vm.toks_in > 0 or vm.toks_out > 0:
-            vm.logger.log_total_costs(vm.toks_in, vm.toks_out, vm.cost_in, vm.cost_out, vm.provider, vm.model_name, vm.prompt_uuid, vm.interaction_no)
+            wall_time = time.time() - getattr(vm, 'wall_start', time.time())
+            vm.logger.log_total_costs(vm.toks_in, vm.toks_out, vm.cost_in, vm.cost_out, vm.provider, vm.model_name, vm.prompt_uuid, vm.interaction_no, wall_time=wall_time, api_time=vm.api_time)
 
 
 
@@ -1535,6 +1554,38 @@ class StmtPromptMeta(StmtPrompt):
         vm.logger.log_info(f"Prompt metadata: {vm.prompt_name} v{vm.prompt_version}")
 
 
+class StmtFunctions(StmtPrompt):
+    """
+    Declares which functions the model can use during .exec calls.
+
+    If no .functions statement is present, the model gets NO functions (safe default).
+
+    Syntax: .functions readfile, writefile, wwwget
+    """
+
+    def execute(self, vm: VM) -> None:
+        super().execute(vm)
+
+        value = self.value.strip()
+        if not value:
+            raise StmtSyntaxError(".functions syntax error: at least one function name required")
+
+        # Parse comma-separated list
+        names = [name.strip() for name in value.split(',')]
+        names = [n for n in names if n]  # Remove empty strings
+
+        # Validate each function name exists
+        known = {f['name'] for f in FunctionSpace.functions.function_array}
+        for name in names:
+            if name not in known:
+                raise StmtSyntaxError(
+                    f".functions error: unknown function '{name}'. "
+                    f"Available: {', '.join(sorted(known))}"
+                )
+
+        vm.allowed_functions = names
+
+
 class StmtSet(StmtPrompt):
     """
     Handles the execution of a set statement in the VM.
@@ -1589,6 +1640,7 @@ StatementTypes: dict[str, type(StmtPrompt)] = {
     '.debug': StmtDebug,
     '.exec': StmtExec,
     '.exit': StmtExit,
+    '.functions': StmtFunctions,
     '.image': StmtImage,
     '.include': StmtInclude,
     '.print': StmtPrint,
@@ -1626,6 +1678,7 @@ def print_statement_types():
         '.debug': 'Display VM state information for debugging purposes',
         '.exec': 'Execute the current prompt context with the configured LLM',
         '.exit': 'Terminate prompt execution',
+        '.functions': 'Declare which functions the model can use (comma-separated names)',
         '.image': 'Add an image file to the chat context',
         '.include': 'Include content from another file into the current context',
         '.print': 'Output text to STDOUT with variable substitution (production output)',
@@ -1647,6 +1700,7 @@ def print_statement_types():
         '.debug': 'user',
         '.exec': 'user',
         '.exit': 'user',
+        '.functions': 'user',
         '.image': 'user',
         '.include': 'user',
         '.print': 'user',

@@ -30,6 +30,7 @@ Statements are the executable instructions stored in `.prompt` files and maintai
 | `.tool_call` | AiMessage | assistant | AiCall |
 | `.tool_result` | AiMessage | tool | AiResult |
 | `.exec` | AiMessage | assistant | Mixed (text + calls) |
+| `.functions` | No message | - | Controls which functions `.exec` can use |
 | `.cmd` | Appends to current message | - | AiTextPart |
 
 ### Example Statement Execution

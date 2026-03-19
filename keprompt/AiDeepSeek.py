@@ -16,12 +16,15 @@ class AiDeepSeek(AiProvider):
     litellm_provider = "deepseek"
     
     def prepare_request(self, messages: List[Dict]) -> Dict:
-        return {
+        tools = FunctionSpace.functions.get_filtered_tools_array(self.prompt.vm.allowed_functions)
+        request = {
             "model": ModelManager.get_model(self.prompt.model).get_api_model_name(),
             "messages": messages,
-            "tools": FunctionSpace.functions.tools_array,
             "stream": False
         }
+        if tools:
+            request["tools"] = tools
+        return request
 
     def get_api_url(self) -> str:
         return "https://api.deepseek.com/v1/chat/completions"

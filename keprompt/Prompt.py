@@ -52,8 +52,6 @@ class PromptManager:
         """Execute the command based on the provided arguments"""
         # Normalize aliases
         cmd = self.args.prompt_command
-        if cmd == "list":
-            cmd = "get"
         
         # Support only the \"get\" verb for prompts (list / filter)
         if cmd == "get":
@@ -157,7 +155,7 @@ class PromptManager:
 
         prompt_get = prompt_subparsers.add_parser(
             "get",
-            aliases=["list"],
+            aliases=["list", "show"],
             parents=[parent_parser],
             help="List prompts",
         )

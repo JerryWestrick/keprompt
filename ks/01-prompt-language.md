@@ -53,6 +53,24 @@
 .exec                                  # Uses claude (not gpt-4!)
 ```
 
+### `.functions` - Declare Allowed Functions
+```
+.functions readfile, writefile, wwwget
+```
+
+Controls which functions the model can use during `.exec` calls. **If no `.functions` statement is present, the model gets NO functions** (safe default — principle of least privilege).
+
+- Comma-separated list of function names
+- Unknown function names raise a syntax error
+- Multiple `.functions` statements: last one wins
+
+**Examples:**
+```
+.functions delegate                        # Sub-agent can only delegate
+.functions readfile, writefile, wwwget     # File and web access
+.functions readfile                        # Read-only access
+```
+
 ### `.set` - Set Variable
 ```
 .set variable_name value
@@ -255,5 +273,5 @@ Auto-added if missing.
 - "Variable 'X' not defined" → Undefined variable in substitution
 
 ---
-*KePrompt v2.10.0 - Model loading moved to .exec*
+*KePrompt v2.12.0 - Added .functions for function access control*
 

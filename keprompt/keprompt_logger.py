@@ -199,10 +199,10 @@ class StandardLogger:
         """Log execution flow (Call-01 <--, Call-01 -->)."""
         self.log_debug(f"{direction} {message}")
     
-    def log_total_costs(self, total_tokens_in: int, total_tokens_out: int, total_cost_in: float, total_cost_out: float, provider: str = "", model: str = "", chat_id: str = "", interaction_no: int = 0):
+    def log_total_costs(self, total_tokens_in: int, total_tokens_out: int, total_cost_in: float, total_cost_out: float, provider: str = "", model: str = "", chat_id: str = "", interaction_no: int = 0, wall_time: float = 0.0, api_time: float = 0.0):
         """Log total costs when exiting keprompt."""
         total_cost = total_cost_in + total_cost_out
-        
+
         # Format chat identification
         chat_info = ""
         if chat_id:
@@ -212,21 +212,24 @@ class StandardLogger:
                 chat_info = f"Chat {chat_id}"
         else:
             chat_info = "Chat"
-        
+
         # Format provider and model info
         model_info = ""
         if provider and model:
             model_info = f" with {provider}:{model}"
         elif model:
             model_info = f" with {model}"
-        
-        self.log_llm(f"CHAT TOTAL: Tokens In: {total_tokens_in}, Out: {total_tokens_out}, Cost In: ${total_cost_in:.6f}, Out: ${total_cost_out:.6f}, Total: ${total_cost:.6f}{model_info}")
+
+        # Format timing info
+        time_info = ""
+        if wall_time > 0 or api_time > 0:
+            time_info = f" Wall: {wall_time:.2f}s API: {api_time:.2f}s"
+
+        self.log_llm(f"CHAT TOTAL: Tokens In: {total_tokens_in}, Out: {total_tokens_out}, Cost In: ${total_cost_in:.6f}, Out: ${total_cost_out:.6f}, Total: ${total_cost:.6f}{model_info}{time_info}")
 
         # Emit user-visible summary via the unified terminal output channel.
-        # In --json mode this will be captured into the JSON envelope `stdout`
-        # instead of being printed (and potentially polluting merged streams).
         terminal_output.print(
-            f"{chat_info}{model_info} Total Cost: ${total_cost:.6f} (In: ${total_cost_in:.6f}, Out: ${total_cost_out:.6f})",
+            f"{chat_info}{model_info} Total Cost: ${total_cost:.6f} (In: ${total_cost_in:.6f}, Out: ${total_cost_out:.6f}){time_info}",
             markup=False,
         )
     

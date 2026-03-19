@@ -282,8 +282,67 @@ def get_cmd_args() -> tuple[argparse.ArgumentParser, argparse.Namespace]:
     WorkspaceManager.register_cli(subparsers, parent)
 
 
+    # Allow verb-first syntax: "keprompt new chat ..." → "keprompt chat new ..."
+    _swap_verb_object_if_needed()
+
     args = parser.parse_args()
     return parser, args
+
+
+# Known objects and verbs for verb-first syntax support
+_KNOWN_OBJECTS = {
+    'chat', 'chats', 'conversation', 'conversations',
+    'model', 'models',
+    'prompt', 'prompts',
+    'database', 'databases',
+    'provider', 'providers',
+    'function', 'functions',
+    'server',
+    'init', 'workspace',
+}
+
+_KNOWN_VERBS = {
+    'new', 'create', 'start',
+    'get', 'list', 'show', 'view',
+    'reply', 'answer', 'send', 'update',
+    'delete', 'rm',
+    'stop', 'status',
+}
+
+
+# Normalize verb aliases to canonical forms
+_VERB_ALIASES = {
+    'list': 'get', 'show': 'get', 'view': 'get',
+    'new': 'create', 'start': 'create',
+    'answer': 'reply', 'send': 'reply', 'update': 'reply',
+    'rm': 'delete',
+}
+
+
+def _swap_verb_object_if_needed():
+    """If user wrote 'keprompt new chat ...', swap to 'keprompt chat new ...'."""
+    if len(sys.argv) < 3:
+        return
+    first, second = sys.argv[1], sys.argv[2]
+    if first in _KNOWN_VERBS and first not in _KNOWN_OBJECTS and second in _KNOWN_OBJECTS:
+        sys.argv[1], sys.argv[2] = second, first
+
+    # Normalize verb aliases: list→get, new→create, etc.
+    if len(sys.argv) >= 3 and sys.argv[2] in _VERB_ALIASES:
+        sys.argv[2] = _VERB_ALIASES[sys.argv[2]]
+
+    # Convert single-dash long args to double-dash so argparse abbreviation works:
+    #   -provider=OpenRouter → --provider=OpenRouter
+    #   -prov=OpenRouter     → --prov=OpenRouter
+    #   -p=OpenRouter        → --p=OpenRouter
+    # Leave true short flags alone: -d, -h (single char, no =)
+    for i in range(1, len(sys.argv)):
+        arg = sys.argv[i]
+        if arg.startswith('-') and not arg.startswith('--'):
+            # Has '=' or more than 1 char after dash → meant as long option
+            after_dash = arg[1:]
+            if '=' in after_dash or len(after_dash) > 1:
+                sys.argv[i] = '-' + arg
 
 from pathlib import Path
 

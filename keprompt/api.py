@@ -142,7 +142,7 @@ class ServerManager:
         start.add_argument("--reload", action="store_true", help="Enable auto-reload (development)")
         start.add_argument("--host", default="localhost", help="Host to bind (default: localhost)")
 
-        listing = subparsers.add_parser("get", aliases=["list"], parents=[parent_parser], help="List servers")
+        listing = subparsers.add_parser("get", aliases=["list", "show"], parents=[parent_parser], help="List servers")
         add_server_scope_args(listing)
         listing.add_argument("--active-only", action="store_true", help="Show only running servers")
 
@@ -165,7 +165,7 @@ class ServerManager:
         # Handle aliases (since alias normalization is disabled)
         if cmd == 'start':
             return self._start_server()
-        elif cmd in ('get', 'list'):  # 'list' is alias for 'get'
+        elif cmd == 'get':
             return self._list_servers()
         elif cmd == 'status':
             return self._status_servers()

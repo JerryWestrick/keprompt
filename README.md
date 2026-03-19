@@ -174,6 +174,7 @@ Then open your browser to `http://localhost:8080`
 |---------|---------|---------|
 | `.prompt` | **REQUIRED** - Define prompt metadata | `.prompt "name":"My Prompt", "version":"1.0.0"` |
 | `.llm` | Configure AI model | `.llm {"model": "gpt-4o"}` |
+| `.functions` | **Declare allowed functions** (no `.functions` = no functions) | `.functions readfile, writefile` |
 | `.system` | Set system message | `.system You are a helpful assistant` |
 | `.user` | Add user message | `.user What is the weather like?` |
 | `.tool_call` | **Represent an LLM tool call** (manual/replay/debug) | `.tool_call readfile(filename="data.txt") id=call_abc123` |
@@ -276,6 +277,20 @@ keprompt chats create --prompt greeting --set name "Alice" --set date "Monday"
 - `writefile(filename, content)` - Write to file (with backup)
 - `wwwget(url)` - Fetch web content
 - `execcmd(cmd)` - Execute shell command
+
+### Function Access Control
+
+By default, **the model has NO access to any functions**. You must explicitly declare which functions the model can use with `.functions`:
+
+```
+.prompt "name":"Example", "version":"1.0.0", "params":{"model":"gpt-4o"}
+.functions readfile, wwwget
+.system You are a research assistant.
+.user Analyze this file and fetch related info from the web.
+.exec
+```
+
+This is a security feature — it prevents models (especially delegated sub-agents) from accessing capabilities they don't need.
 
 ## Common Workflows
 

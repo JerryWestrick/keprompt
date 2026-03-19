@@ -17,11 +17,14 @@ class AiOpenRouter(AiProvider):
     litellm_provider = "openrouter"
     
     def prepare_request(self, messages: List[Dict]) -> Dict:
-        return {
+        tools = FunctionSpace.functions.get_filtered_tools_array(self.prompt.vm.allowed_functions)
+        request = {
             "model": ModelManager.get_model(self.prompt.model).get_api_model_name(),
             "messages": messages,
-            "tools": FunctionSpace.functions.tools_array
         }
+        if tools:
+            request["tools"] = tools
+        return request
 
     def get_api_url(self) -> str:
         return "https://openrouter.ai/api/v1/chat/completions"

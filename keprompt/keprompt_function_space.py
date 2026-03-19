@@ -168,6 +168,27 @@ class FunctionSpace:
         return wrapper
 
     # ------------------------------------------------------------------
+    # FILTERED TOOLS FOR .functions STATEMENT
+    # ------------------------------------------------------------------
+    def get_filtered_tools_array(self, allowed_names: list[str] | None) -> list[dict]:
+        """Return tools_array filtered to only allowed function names.
+        If allowed_names is None, returns empty list (safe default: no functions).
+        """
+        if allowed_names is None:
+            return []
+        allowed_set = set(allowed_names)
+        return [t for t in self.tools_array if t['function']['name'] in allowed_set]
+
+    def get_filtered_function_array(self, allowed_names: list[str] | None) -> list[dict]:
+        """Return function_array filtered to only allowed function names.
+        If allowed_names is None, returns empty list (safe default: no functions).
+        """
+        if allowed_names is None:
+            return []
+        allowed_set = set(allowed_names)
+        return [f for f in self.function_array if f['name'] in allowed_set]
+
+    # ------------------------------------------------------------------
     # PUBLIC EXECUTION API
     # ------------------------------------------------------------------
     def call(self, function_name: str, arguments: Dict[str, Any]) -> str:

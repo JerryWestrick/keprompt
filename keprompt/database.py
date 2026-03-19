@@ -226,7 +226,7 @@ class DatabaseManager:
             help="Database operations",
         )
         subparsers = parser.add_subparsers(dest="database_command", required=True)
-        subparsers.add_parser("get", parents=[parent_parser], help="Get database info")
+        subparsers.add_parser("get", aliases=["list", "show"], parents=[parent_parser], help="Get database info")
         subparsers.add_parser("create", parents=[parent_parser], help="Create (reset) database")
         delete = subparsers.add_parser("delete", parents=[parent_parser], help="Delete/prune database")
         prune = delete.add_mutually_exclusive_group()

@@ -344,12 +344,14 @@ class OutputFormatter:
     @classmethod
     def _format_chat_conversation(cls, data: Dict, title: Optional[str] = None) -> Table:
         """Format chat conversation with Markdown and custom styling"""
-        messages = data.get("messages", [])
+        # Messages may be at top level or nested inside "data"
+        inner = data.get("data", data)
+        messages = inner.get("messages", data.get("messages", []))
         if not messages:
             return None
-        chat_id = data.get("chat_id", "")
-        prompt_name = data.get("prompt_name", "")
-        prompt_version = data.get("prompt_version", "")
+        chat_id = data.get("chat_id", inner.get("chat_id", ""))
+        prompt_name = inner.get("prompt_name", data.get("prompt_name", ""))
+        prompt_version = inner.get("prompt_version", data.get("prompt_version", ""))
 
         default_title = f"Conversation {chat_id}[{prompt_name}:{prompt_version}]"
         table = Table(title=title or default_title)

@@ -16,10 +16,18 @@ class AiGoogle(AiProvider):
     litellm_provider = "gemini"
     
     def prepare_request(self, messages: List[Dict]) -> Dict:
-        request = {
-            "contents": messages,
-            "tools": [{"functionDeclarations": GoogleToolsArray}]
-        }
+        filtered = FunctionSpace.functions.get_filtered_tools_array(self.prompt.vm.allowed_functions)
+        google_tools = [
+            {
+                "name": tool['function']['name'],
+                "description": tool['function']['description'],
+                "parameters": {k: v for k, v in tool['function']['parameters'].items() if k != 'additionalProperties'}
+            }
+            for tool in filtered
+        ]
+        request = {"contents": messages}
+        if google_tools:
+            request["tools"] = [{"functionDeclarations": google_tools}]
         if self.system_message:
             request["system_instruction"] = {"parts": [{"text": self.system_message}]}
         return request
@@ -90,15 +98,5 @@ class AiGoogle(AiProvider):
     #     console.print("[yellow]Model updating not yet implemented for Google provider[/yellow]")
     #     return False
 
-
-# Prepare Google tools array
-GoogleToolsArray = [
-    {
-        "name": tool['function']['name'],
-        "description": tool['function']['description'],
-        "parameters": {k: v for k, v in tool['function']['parameters'].items() if k != 'additionalProperties'}
-    }
-    for tool in FunctionSpace.functions.tools_array
-]
 
 ModelManager.register_handler(provider_name="gemini", handler_class=AiGoogle)
