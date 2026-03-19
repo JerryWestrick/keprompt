@@ -212,13 +212,24 @@ class AiProvider(abc.ABC):
         tool_results = []
         function_call_info = []
 
+        # Get current agent number for recursive delegation numbering
+        agent_number = self.prompt.vm.vdict.get("agent_number", "")
+        # Persistent tool call counter across multiple call_functions() invocations
+        tool_index = self.prompt.vm.vdict.get("_tool_index", 0)
+
         for part in message.content:
             if not isinstance(part, AiCall): continue
+            tool_index += 1
+
+            # Build call arguments, injecting delegation numbering if present
+            call_args = dict(part.arguments)
+            if "agent_name" in call_args:
+                call_args["agent_number"] = f"{agent_number}.{tool_index}"
 
             try:
                 # Track function execution timing
                 func_start_time = time.time()
-                result = FunctionSpace.functions.functions[part.name](**part.arguments)
+                result = FunctionSpace.functions.functions[part.name](**call_args)
                 func_elapsed_time = time.time() - func_start_time
 
                 # Log function result using structured logging
@@ -269,6 +280,9 @@ class AiProvider(abc.ABC):
                 })
                 
                 tool_results.append(AiResult(vm=self.prompt.vm, name=part.name, id=part.id or "", result=error_result))
+
+        # Persist tool call counter for next call_functions() invocation
+        self.prompt.vm.vdict["_tool_index"] = tool_index
 
         # Store function call info in the prompt for use in timing display
         if function_call_info:

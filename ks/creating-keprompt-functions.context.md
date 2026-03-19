@@ -56,18 +56,24 @@ echo '{"param_name": "value"}' | ./prompts/functions/your_executable function_na
 ## Critical Requirements
 
 ### Working Directory
-**Your executable runs from the PROJECT ROOT**, not from `prompts/functions/`.
+**Function execution** runs from the **PROJECT ROOT**, not from `prompts/functions/`.
+
+However, **function discovery** (`--list-functions`) runs from `prompts/functions/`.
 
 ```python
-# User calls: readfile("data/file.txt")
-# Your executable runs with cwd = /path/to/project
-# NOT /path/to/project/prompts/functions
+# During --list-functions (discovery):
+#   cwd = /path/to/project/prompts/functions
+#   Your executable is called as: ./your_executable --list-functions
 
-# CORRECT:
+# During actual function execution:
+#   cwd = /path/to/project  (PROJECT ROOT)
+#   Your executable is called as: ./prompts/functions/your_executable
+
+# CORRECT for function execution:
 with open("data/file.txt") as f:  # Relative to project root
     ...
 
-# WRONG:
+# WRONG for function execution:
 with open("../../data/file.txt") as f:  # Don't assume functions/ directory
     ...
 ```
@@ -279,7 +285,7 @@ raise Exception(f"File not found: {filename}")  # GOOD
 raise Exception("Error")  # BAD
 ```
 
-**Timeout Awareness**: Functions have 30-second timeout
+**Timeout Awareness**: Function discovery (`--list-functions`) has a 10-second timeout; function execution has a 30-second timeout
 - Design for quick execution
 - For long operations, return job ID and use polling
 

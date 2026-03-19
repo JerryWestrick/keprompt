@@ -192,9 +192,10 @@ class FunctionSpace:
                 [str(executable_path), function_name],
                 cwd=PROJECT_DIR,
                 input=json.dumps(arguments),
-                capture_output=True,
+                stdout=subprocess.PIPE,
+                stderr=None,
                 text=True,
-                timeout=30,
+                timeout=120,
             )
             if result.returncode == 0:
                 return result.stdout.strip()

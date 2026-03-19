@@ -114,7 +114,10 @@ class OutputFormatter:
         elif object_type == "function_list":
             return cls._format_function_list(data, title)
         elif object_type == "chat_conversation":
-            return cls._format_chat_conversation(data, title)
+            result = cls._format_chat_conversation(data, title)
+            if result is not None:
+                return result
+            return ""
         
         # Generic auto-formatter for standard cases
         return cls._auto_format(data, title)
@@ -342,10 +345,12 @@ class OutputFormatter:
     def _format_chat_conversation(cls, data: Dict, title: Optional[str] = None) -> Table:
         """Format chat conversation with Markdown and custom styling"""
         messages = data.get("messages", [])
+        if not messages:
+            return None
         chat_id = data.get("chat_id", "")
         prompt_name = data.get("prompt_name", "")
         prompt_version = data.get("prompt_version", "")
-        
+
         default_title = f"Conversation {chat_id}[{prompt_name}:{prompt_version}]"
         table = Table(title=title or default_title)
         table.add_column("Role", style="cyan", no_wrap=True)

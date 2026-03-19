@@ -255,5 +255,5 @@ Auto-added if missing.
 - "Variable 'X' not defined" → Undefined variable in substitution
 
 ---
-*KePrompt v2.0 - Model loading moved to .exec*
+*KePrompt v2.10.0 - Model loading moved to .exec*
 

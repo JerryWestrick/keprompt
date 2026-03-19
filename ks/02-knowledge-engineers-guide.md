@@ -270,9 +270,11 @@ Please summarize it.
 
 #### Built-In Functions
 
-- `readfile(filename)` - Read file contents
+- `readfile(filename, offset=None, length=None)` - Read file contents (optional offset/length for partial reads)
 - `writefile(filename, content)` - Write to file
+- `write_base64_file(filename, base64_str)` - Decode base64 and write binary file
 - `execcmd(cmd)` - Execute shell command
+- `wwwget(url)` - Fetch URL contents
 
 #### Custom Functions
 
@@ -769,7 +771,7 @@ If successful, provide a summary.
 
 ---
 
-*KePrompt Knowledge Engineer's Guide v1.0*
-*For KePrompt v2.0+*
+*KePrompt Knowledge Engineer's Guide v1.1*
+*For KePrompt v2.10.0+*
 
 
