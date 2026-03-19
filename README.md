@@ -466,6 +466,7 @@ Use in prompts:
 cat > prompts/weather_check.prompt << 'EOF'
 .prompt "name":"Weather Check", "version":"1.0.0", "params":{"city":"default_city"}
 .llm {"model": "gpt-4o-mini"}
+.functions get_weather
 .user What's the weather like in <<city>>? Based on the weather, suggest appropriate clothing.
 .exec
 EOF
