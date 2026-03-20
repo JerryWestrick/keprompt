@@ -495,13 +495,11 @@ class VM:
                 # 1. Already ends with .exit - do nothing
                 pass
             elif last_stmt.keyword == '.exec':
-                # 2. Ends with .exec - add print and exit
-                self.statements.append(make_statement(self, len(self.statements), keyword='.print', value='<<last_response>>'))
+                # 2. Ends with .exec - add exit
                 self.statements.append(make_statement(self, len(self.statements), keyword='.exit', value=''))
             else:
-                # 3. Ends with anything else - add exec, print, and exit
+                # 3. Ends with anything else - add exec and exit
                 self.statements.append(make_statement(self, len(self.statements), keyword='.exec', value=''))
-                self.statements.append(make_statement(self, len(self.statements), keyword='.print', value='<<last_response>>'))
                 self.statements.append(make_statement(self, len(self.statements), keyword='.exit', value=''))
 
         return
@@ -690,13 +688,11 @@ class VM:
                 # 1. Already ends with .exit - do nothing
                 pass
             elif last_stmt.keyword == '.exec':
-                # 2. Ends with .exec - add print and exit
-                self.statements.append(make_statement(self, len(self.statements), keyword='.print', value='<<last_response>>'))
+                # 2. Ends with .exec - add exit
                 self.statements.append(make_statement(self, len(self.statements), keyword='.exit', value=''))
             else:
-                # 3. Ends with anything else - add exec, print, and exit
+                # 3. Ends with anything else - add exec and exit
                 self.statements.append(make_statement(self, len(self.statements), keyword='.exec', value=''))
-                self.statements.append(make_statement(self, len(self.statements), keyword='.print', value='<<last_response>>'))
                 self.statements.append(make_statement(self, len(self.statements), keyword='.exit', value=''))
 
 class StmtPrompt:
