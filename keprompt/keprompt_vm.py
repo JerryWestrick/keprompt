@@ -1570,16 +1570,13 @@ class StmtFunctions(StmtPrompt):
         names = [name.strip() for name in value.split(',')]
         names = [n for n in names if n]  # Remove empty strings
 
-        # Validate each function name exists
-        known = {f['name'] for f in FunctionSpace.functions.function_array}
-        for name in names:
-            if name not in known:
-                raise StmtSyntaxError(
-                    f".functions error: unknown function '{name}'. "
-                    f"Available: {', '.join(sorted(known))}"
-                )
+        # Resolve specs: bare names, module.*, module.func
+        try:
+            resolved = FunctionSpace.functions.resolve_function_names(names)
+        except ValueError as e:
+            raise StmtSyntaxError(f".functions error: {e}")
 
-        vm.allowed_functions = names
+        vm.allowed_functions = resolved
 
 
 class StmtSet(StmtPrompt):

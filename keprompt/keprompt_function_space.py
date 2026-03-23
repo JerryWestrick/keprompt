@@ -168,6 +168,65 @@ class FunctionSpace:
         return wrapper
 
     # ------------------------------------------------------------------
+    # RESOLVE FUNCTION SPECS (bare, module.*, module.func)
+    # ------------------------------------------------------------------
+    def resolve_function_names(self, specs: list[str]) -> list[str]:
+        """Resolve a list of function specs to concrete function names.
+
+        Each spec can be:
+          - 'func_name'        → bare function name (must exist)
+          - 'module.*'         → all functions from that module
+          - 'module.func_name' → specific function from a specific module
+
+        Returns list of resolved function names.
+        Raises ValueError for unknown functions or modules.
+        """
+        known = {f['name'] for f in self.function_array}
+
+        # Build module → function names mapping from executable stems
+        modules: dict[str, set[str]] = {}
+        for d in self.function_array:
+            mod = Path(d['_executable']).stem
+            modules.setdefault(mod, set()).add(d['name'])
+
+        resolved = []
+        seen: set[str] = set()
+
+        for spec in specs:
+            if '.' in spec:
+                module, func = spec.rsplit('.', 1)
+                if module not in modules:
+                    raise ValueError(
+                        f"unknown module '{module}'. "
+                        f"Available: {', '.join(sorted(modules.keys()))}"
+                    )
+                if func == '*':
+                    for name in sorted(modules[module]):
+                        if name not in seen:
+                            resolved.append(name)
+                            seen.add(name)
+                else:
+                    if func not in modules[module]:
+                        raise ValueError(
+                            f"unknown function '{func}' in module '{module}'. "
+                            f"Available in {module}: {', '.join(sorted(modules[module]))}"
+                        )
+                    if func not in seen:
+                        resolved.append(func)
+                        seen.add(func)
+            else:
+                if spec not in known:
+                    raise ValueError(
+                        f"unknown function '{spec}'. "
+                        f"Available: {', '.join(sorted(known))}"
+                    )
+                if spec not in seen:
+                    resolved.append(spec)
+                    seen.add(spec)
+
+        return resolved
+
+    # ------------------------------------------------------------------
     # FILTERED TOOLS FOR .functions STATEMENT
     # ------------------------------------------------------------------
     def get_filtered_tools_array(self, allowed_names: list[str] | None) -> list[dict]:
