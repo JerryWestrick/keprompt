@@ -49,16 +49,7 @@ def readfile(filename: str, offset: int | None = None, length: int | None = None
         raise Exception(f"Error accessing file '{filename}' (resolved to '{abs_path}'): {err}")
 
 def writefile(filename: str, content: str) -> str:
-    """Write content to a file with versioning."""
-    # Simple backup by adding .backup extension if file exists
-    if os.path.exists(filename):
-        backup_name = f"{filename}.backup"
-        counter = 1
-        while os.path.exists(backup_name):
-            backup_name = f"{filename}.backup.{counter}"
-            counter += 1
-        os.rename(filename, backup_name)
-    
+    """Write content to a file."""
     try:
         with open(filename, 'w', encoding='utf-8') as f:
             f.write(content)
@@ -68,15 +59,6 @@ def writefile(filename: str, content: str) -> str:
 
 def write_base64_file(filename: str, base64_str: str) -> str:
     """Decode base64 string and write to file."""
-    # Simple backup by adding .backup extension if file exists
-    if os.path.exists(filename):
-        backup_name = f"{filename}.backup"
-        counter = 1
-        while os.path.exists(backup_name):
-            backup_name = f"{filename}.backup.{counter}"
-            counter += 1
-        os.rename(filename, backup_name)
-    
     try:
         decoded_content = base64.b64decode(base64_str)
         with open(filename, 'wb') as f:
