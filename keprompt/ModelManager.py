@@ -418,43 +418,28 @@ class ModelManager:
             title = f"Available Models | {' '.join(title_parts)} |"
 
             table = Table(title=title)
-            table.add_column("Provider", style="cyan", no_wrap=True)
-            table.add_column("Company", style="cyan", no_wrap=True)
             table.add_column("Model", style="green")
-            table.add_column("Max Token", style="magenta", justify="right")
+            table.add_column("Max Input", style="magenta", justify="right")
+            table.add_column("Max Output", style="magenta", justify="right")
             table.add_column("$/mT In", style="green", justify="right")
             table.add_column("$/mT Out", style="green", justify="right")
             table.add_column("Input", style="blue", no_wrap=True)
-            table.add_column("Output", style="blue", no_wrap=True)
             table.add_column("Functions", style="yellow", no_wrap=True)
-            table.add_column("Cutoff", style="dim", no_wrap=True)
-            table.add_column("Description", style="white")
 
-            last_provider = ''
-            last_company = ''
-            # Sort by Provider, then Company, then model name
-            for model in sorted(models, key=lambda x: (x.provider, x.company, x.model)):
+            for model in sorted(models, key=lambda x: x.model):
 
-                # Show provider and company only when they change
-                display_provider = model.provider if model.provider != last_provider else ""
-                display_company = model.company if model.company != last_company or model.provider != last_provider else ""
+                max_in = model.max_input_tokens or model.max_tokens
+                max_out = model.max_output_tokens or model.max_tokens
 
                 table.add_row(
-                    display_provider,
-                    display_company,
                     model.model,
-                    str(model.max_tokens),
+                    f"{max_in:,}" if max_in else "",
+                    f"{max_out:,}" if max_out else "",
                     f"{model.input_cost * 1_000_000:06.4f}",
                     f"{model.output_cost * 1_000_000:06.4f}",
                     "Text+Vision" if model.supports.get("vision", False) else "Text",
-                    "Text",
-                    "Yes" if model.supports.get("function_calling", False) else "No",
-                    "2024-04",
-                    model.description
+                    "Yes" if model.supports.get("function_calling", False) else "No"
                 )
-
-                last_provider = model.provider
-                last_company = model.company
 
             return table
 
