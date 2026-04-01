@@ -537,17 +537,9 @@ class VM:
         # Keep model as the string name (don't overwrite if set by .set or .exec)
         if 'model' not in self.vdict or not isinstance(self.vdict['model'], str):
             self.vdict['model'] = self.model_name
-        # Expose metadata dict so prompts can access nested fields like <<model_info.provider>>
-        self.vdict['model_info'] = {
-            'name': self.model_name,
-            'provider': self.provider,
-            'company': getattr(self.model, 'company', ''),
-            'pricing': {
-                'input_cost': getattr(self.model, 'input_cost', 0.0),
-                'output_cost': getattr(self.model, 'output_cost', 0.0),
-            },
-            'context_length': getattr(self.model, 'context_length', None),
-        }
+        # Expose full model metadata so prompts can access all fields like <<model_info.max_input_tokens>>
+        from dataclasses import asdict
+        self.vdict['model_info'] = asdict(self.model) if self.model else {}
 
     def execute(self) -> None:
         """Execute the statements in the prompt file using the new standard logging system."""
@@ -1243,6 +1235,18 @@ class StmtExec(StmtPrompt):
             vm.cost_out += cost_out
             vm.total = vm.cost_in + vm.cost_out
             
+            # Calculate context usage percentages
+            max_in = (vm.model.max_input_tokens or vm.model.max_tokens) if vm.model else 0
+            max_out = (vm.model.max_output_tokens or vm.model.max_tokens) if vm.model else 0
+            vm.vdict['context_usage'] = {
+                'input_pct': round(tokens_in / max_in * 100, 1) if max_in else 0,
+                'output_pct': round(tokens_out / max_out * 100, 1) if max_out else 0,
+                'input_tokens': tokens_in,
+                'output_tokens': tokens_out,
+                'max_input': max_in,
+                'max_output': max_out,
+            }
+
             # Log tokens and costs
             vm.logger.log_llm_tokens_and_cost(call_id, tokens_in, tokens_out, cost_in, cost_out)
 
@@ -1319,7 +1323,7 @@ class StmtExit(StmtPrompt):
         # Log total costs when exiting
         if vm.toks_in > 0 or vm.toks_out > 0:
             wall_time = time.time() - getattr(vm, 'wall_start', time.time())
-            vm.logger.log_total_costs(vm.toks_in, vm.toks_out, vm.cost_in, vm.cost_out, vm.provider, vm.model_name, vm.prompt_uuid, vm.interaction_no, wall_time=wall_time, api_time=vm.api_time)
+            vm.logger.log_total_costs(vm.toks_in, vm.toks_out, vm.cost_in, vm.cost_out, vm.provider, vm.model_name, vm.prompt_uuid, vm.interaction_no, wall_time=wall_time, api_time=vm.api_time, context_usage=vm.vdict.get('context_usage'))
 
 
 
@@ -1347,9 +1351,21 @@ class StmtInclude(StmtPrompt):
     def execute(self, vm: VM) -> None:
         super().execute(vm)
         filename = vm.substitute(self.value)
-        lines = FunctionSpace.functions.call('readfile', {'filename': filename})
-        last_msg = vm.prompt.messages[-1]
-        last_msg.content.append(AiTextPart(vm=vm, text=lines))
+
+        # Support glob patterns in .include
+        if any(c in filename for c in ('*', '?', '[')):
+            files = sorted(glob.glob(filename, recursive=True))
+            if not files:
+                vm.logger.log_warning(f".include glob pattern matched no files: {filename}")
+                return
+            for f in files:
+                lines = FunctionSpace.functions.call('readfile', {'filename': f})
+                last_msg = vm.prompt.messages[-1]
+                last_msg.content.append(AiTextPart(vm=vm, text=lines))
+        else:
+            lines = FunctionSpace.functions.call('readfile', {'filename': filename})
+            last_msg = vm.prompt.messages[-1]
+            last_msg.content.append(AiTextPart(vm=vm, text=lines))
 
 
 class StmtImage(StmtPrompt):

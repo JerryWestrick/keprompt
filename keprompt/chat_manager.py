@@ -746,6 +746,13 @@ class ChatManager:
                 "timestamp": datetime.now().isoformat(),
             }
         end_time = datetime.now()
+
+        # Log total costs (reply path has no .exit statement to trigger this)
+        if vm.toks_in > 0 or vm.toks_out > 0:
+            import time
+            wall_time = time.time() - getattr(vm, 'wall_start', time.time())
+            vm.logger.log_total_costs(vm.toks_in, vm.toks_out, vm.cost_in, vm.cost_out, vm.provider, vm.model_name, vm.prompt_uuid, vm.interaction_no, wall_time=wall_time, api_time=vm.api_time, context_usage=vm.vdict.get('context_usage'))
+
         self.save_chat(vm)
         show_messages = getattr(self.args, "show_messages", False)
         show_full = getattr(self.args, "full", False)

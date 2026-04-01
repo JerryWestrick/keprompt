@@ -199,7 +199,7 @@ class StandardLogger:
         """Log execution flow (Call-01 <--, Call-01 -->)."""
         self.log_debug(f"{direction} {message}")
     
-    def log_total_costs(self, total_tokens_in: int, total_tokens_out: int, total_cost_in: float, total_cost_out: float, provider: str = "", model: str = "", chat_id: str = "", interaction_no: int = 0, wall_time: float = 0.0, api_time: float = 0.0):
+    def log_total_costs(self, total_tokens_in: int, total_tokens_out: int, total_cost_in: float, total_cost_out: float, provider: str = "", model: str = "", chat_id: str = "", interaction_no: int = 0, wall_time: float = 0.0, api_time: float = 0.0, context_usage: dict = None):
         """Log total costs when exiting keprompt."""
         total_cost = total_cost_in + total_cost_out
 
@@ -232,6 +232,19 @@ class StandardLogger:
             f"{chat_info}{model_info} Total Cost: ${total_cost:.6f} (In: ${total_cost_in:.6f}, Out: ${total_cost_out:.6f}){time_info}",
             markup=False,
         )
+
+        # Context usage line
+        if context_usage:
+            in_pct = context_usage.get('input_pct', 0)
+            out_pct = context_usage.get('output_pct', 0)
+            in_tok = context_usage.get('input_tokens', 0)
+            max_in = context_usage.get('max_input', 0)
+            out_tok = context_usage.get('output_tokens', 0)
+            max_out = context_usage.get('max_output', 0)
+            terminal_output.print(
+                f"Context: Input {in_tok:,}/{max_in:,} ({in_pct}%) Output {out_tok:,}/{max_out:,} ({out_pct}%)",
+                markup=False,
+            )
     
     def print_exception(self):
         """Print exception information."""
