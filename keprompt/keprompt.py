@@ -314,7 +314,7 @@ _KNOWN_VERBS = {
 _VERB_ALIASES = {
     'list': 'get', 'show': 'get', 'view': 'get',
     'new': 'create', 'start': 'create',
-    'answer': 'reply', 'send': 'reply', 'update': 'reply',
+    'answer': 'reply', 'send': 'reply',
     'rm': 'delete',
 }
 
