@@ -89,14 +89,56 @@ chmod +x prompts/functions/your_executable
 - `"additionalProperties": false` is required in parameters
 
 ### Error Handling
+
+keprompt catches all exceptions from function execution and sends the error text back to the LLM as a `tool_result` message. The LLM sees the error and can decide to retry, adjust, or report it. Errors never crash the conversation.
+
+**The correct pattern: stderr + non-zero exit code.**
+
 ```python
-# SUCCESS
+# SUCCESS: print result to stdout, exit 0
 print(result)
 sys.exit(0)
 
-# FAILURE
+# FAILURE: print error to stderr, exit 1
 print(f"Error: {error_message}", file=sys.stderr)
 sys.exit(1)
+```
+
+This is the pattern you should use for all error conditions: bad input, missing resources, API failures, timeouts, etc. The framework reads stderr when exit code is non-zero and wraps it into `"Error calling {stderr_text}"` before sending it to the LLM.
+
+**Do NOT return error strings on stdout with exit code 0.** If your function prints `"Error: file not found"` to stdout and exits 0, the framework treats it as a successful result. The LLM may still react to the text, but keprompt won't log it as an error or display it as a failure in the UI.
+
+**Error messages should be descriptive.** The LLM receives the exact text you write to stderr. Include enough context for it to understand what went wrong and whether retrying makes sense.
+
+```python
+# GOOD — LLM can understand and adapt
+print(f"Error: file '{filename}' not found in project directory", file=sys.stderr)
+sys.exit(1)
+
+# GOOD — LLM knows retrying won't help
+print(f"Error: API rate limited, retry after 30 seconds", file=sys.stderr)
+sys.exit(1)
+
+# BAD — LLM has no context to work with
+print("Error", file=sys.stderr)
+sys.exit(1)
+```
+
+**Handle all exceptions in main().** Uncaught exceptions produce Python tracebacks on stderr with a non-zero exit. The framework will still catch this, but the traceback is noisy and unhelpful to the LLM. Always wrap execution in try/except and produce clean error messages:
+
+```python
+try:
+    result = FUNCTIONS[function_name](**arguments)
+    print(result)
+except json.JSONDecodeError as e:
+    print(f"Error: invalid JSON input: {e}", file=sys.stderr)
+    sys.exit(1)
+except FileNotFoundError as e:
+    print(f"Error: {e}", file=sys.stderr)
+    sys.exit(1)
+except Exception as e:
+    print(f"Error: {e}", file=sys.stderr)
+    sys.exit(1)
 ```
 
 ## Complete Python Template
@@ -285,7 +327,7 @@ raise Exception(f"File not found: {filename}")  # GOOD
 raise Exception("Error")  # BAD
 ```
 
-**Timeout Awareness**: Function discovery (`--list-functions`) has a 10-second timeout; function execution has a 30-second timeout
+**Timeout Awareness**: Function discovery (`--list-functions`) has a 10-second timeout; function execution has a 120-second timeout
 - Design for quick execution
 - For long operations, return job ID and use polling
 
