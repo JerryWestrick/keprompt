@@ -69,32 +69,6 @@ class Chat(BaseModel):
         )
 
 
-class ServerRegistry(BaseModel):
-    """Global registry for running keprompt HTTP servers."""
-    
-    # Primary key
-    directory = CharField(primary_key=True, max_length=512)
-    
-    # Server information
-    port = IntegerField()
-    pid = IntegerField()
-    status = CharField(max_length=20)  # 'running' or 'died'
-    
-    # Timestamps
-    started_at = DateTimeField(default=datetime.now)
-    died_at = DateTimeField(null=True)
-    
-    # Configuration
-    web_gui_enabled = BooleanField(default=False)
-    
-    class Meta:
-        table_name = 'server_registry'
-        indexes = (
-            (('status',), False),
-            (('started_at',), False),
-        )
-
-
 class CostTracking(BaseModel):
     """Child table for individual API call costs."""
     
@@ -202,7 +176,7 @@ def initialize_database(url: Optional[str] = None) -> Database:
     
     # Create tables if they don't exist
     with db:
-        db.create_tables([Chat, ServerRegistry, CostTracking], safe=True)
+        db.create_tables([Chat, CostTracking], safe=True)
     
     return db
 

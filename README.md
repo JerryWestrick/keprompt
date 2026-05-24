@@ -11,7 +11,6 @@ KePrompt lets you work with multiple AI providers (OpenAI, Anthropic, Google, an
 - **Comprehensive cost tracking**: Automatic SQLite-based tracking of all API usage with detailed reporting
 - **Conversation management**: Save and resume multi-turn conversations
 - **Function calling**: Extend prompts with file operations, web requests, and custom functions
-- **Web GUI**: Modern browser-based interface for interactive prompt development
 - **Production ready**: Built-in logging, error handling, and debugging tools
 
 ## Prompt Engineering for Production
@@ -133,7 +132,6 @@ keprompt <object> <verb> [options]
 - **models** - Browse available AI models
 - **providers** - View AI providers
 - **functions** - List available functions
-- **server** - Start/stop web interface
 - **database** - Manage conversation database
 
 ### Common Commands
@@ -152,37 +150,9 @@ keprompt chats get
 
 # Browse available models
 keprompt models get --company OpenAI
-
-# Start web interface
-keprompt server start --web-gui
 ```
 
 See the [Knowledge Engineer's Guide](ks/02-knowledge-engineers-guide.md) for the full reference.
-
-## Web GUI Interface
-
-KePrompt includes a modern web-based interface for interactive development:
-
-```bash
-# Start server with web GUI
-keprompt server start --web-gui
-
-# Specify port (optional)
-keprompt server start --web-gui --port 8080
-
-# Development mode with auto-reload
-keprompt server start --web-gui --reload
-```
-
-Then open your browser to `http://localhost:8080`
-
-**Features:**
-- Interactive chat interface
-- Real-time cost tracking
-- Prompt editor with syntax highlighting
-- Model selection and comparison
-- Function testing and debugging
-- Conversation history browser
 
 ## Core Concepts
 
@@ -559,38 +529,6 @@ keprompt chats delete --days 30
 keprompt chats delete --count 100
 ```
 
-## Server Management
-
-### Start Server
-```bash
-# Start with web GUI
-keprompt server start --web-gui
-
-# Specify port
-keprompt server start --web-gui --port 8080
-
-# Development mode with auto-reload
-keprompt server start --web-gui --reload
-
-# Start in specific directory
-keprompt server start --web-gui --directory /path/to/project
-```
-
-### Manage Servers
-```bash
-# List running servers
-keprompt server list --active-only
-
-# Check status
-keprompt server status
-
-# Stop server
-keprompt server stop
-
-# Stop all servers
-keprompt server stop --all
-```
-
 ## Output Formats
 
 ### Human-Readable (Default in Terminal)
@@ -621,19 +559,12 @@ keprompt chat new --prompt Test --json | \
 ### 1. Start Simple
 Begin with basic prompts and gradually add complexity.
 
-### 2. Use the Web GUI for Development
-The web interface provides a better development experience with real-time feedback.
-
-```bash
-keprompt server start --web-gui --reload
-```
-
-### 3. Manage Costs
+### 2. Manage Costs
 - Use cheaper models for development (`gpt-4o-mini`, `claude-3-haiku`)
 - Monitor costs with `keprompt chats get`
 - Check model pricing with `keprompt models get`
 
-### 4. Organize Your Prompts
+### 3. Organize Your Prompts
 ```
 prompts/
 ├── research/
@@ -647,10 +578,10 @@ prompts/
     └── social.prompt
 ```
 
-### 5. Version Control
+### 4. Version Control
 Keep your prompts in git to track what works best.
 
-### 6. Test Across Models
+### 5. Test Across Models
 The same prompt may work differently with different models. Test and compare.
 
 ## Troubleshooting
@@ -678,14 +609,6 @@ keprompt prompts get
 ls prompts/
 ```
 
-**"Server already running"**
-```bash
-# Check status
-keprompt server status
-# Stop existing server
-keprompt server stop
-```
-
 ### Getting Help
 
 ```bash
@@ -694,7 +617,6 @@ keprompt --help
 
 # Get help for specific object
 keprompt chats --help
-keprompt server --help
 ```
 
 ## Documentation
@@ -707,7 +629,6 @@ keprompt server --help
 ## What's Next?
 
 - **Explore the examples** in the `prompts/` directory
-- **Try the web GUI** for interactive development
 - **Create custom functions** for your specific needs
 - **Integrate with your workflow** using the JSON API
 

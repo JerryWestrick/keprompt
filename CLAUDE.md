@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-KePrompt is a CLI tool and framework for prompt engineering across multiple AI providers (OpenAI, Anthropic, Google, DeepSeek, Mistral, XAI, OpenRouter). It features a custom `.prompt` DSL, a virtual machine executor, chat persistence via SQLite, cost tracking, and a web GUI. Version 2.4.0.
+KePrompt is a CLI tool and framework for prompt engineering across multiple AI providers (OpenAI, Anthropic, Google, DeepSeek, Mistral, XAI, OpenRouter). It features a custom `.prompt` DSL, a virtual machine executor, chat persistence via SQLite, and cost tracking. Version 2.4.0.
 
 ## Build & Development Commands
 
@@ -44,14 +44,13 @@ The system follows a layered architecture: CLI → JSON API → Managers → VM/
 3. **Chat Manager** (`chat_manager.py`) handles chat lifecycle (create/reply/get/delete), serializes VM state to the database for multi-turn conversations.
 4. **VM** (`keprompt_vm.py`) executes `.prompt` files statement-by-statement. This is the core engine (~1000+ lines). It manages variables, messages, model selection, and dispatches to AI providers. Statements: `.prompt`, `.functions`, `.exec`, `.user`, `.system`, `.assistant`, `.tool_call`, `.tool_result`, `.cmd`, `.set`, `.print`, `.include`, `.image`, `.debug`, `.clear`, `.exit`.
 5. **AI Providers** (`AiProvider.py` base, `AiOpenAi.py`, `AiAnthropic.py`, etc.) each implement `prepare_request()`, `to_company_messages()`, `to_ai_message()`, `extract_token_usage()`, and `calculate_costs()`.
-6. **Database** (`database.py`) uses Peewee ORM with SQLite by default. Tables: `Chat` (8-char ID, messages, serialized VM state), `CostTracking` (per-call costs/tokens), `ServerRegistry` (HTTP server management).
+6. **Database** (`database.py`) uses Peewee ORM with SQLite by default. Tables: `Chat` (8-char ID, messages, serialized VM state), `CostTracking` (per-call costs/tokens).
 
 ### Key Subsystems
 
 - **Model Manager** (`ModelManager.py`): Model registry with pricing, provider routing, capability detection. Loads from `prompts/functions/model_prices_and_context_window.json`, updated via `keprompt models update`.
 - **Config** (`config.py`): Loads from `~/.keprompt/config.toml`, `keprompt.toml`, or `.keprompt.toml`. Also loads `.env` (default `~/.env`) for API keys.
 - **Function System** (`keprompt_function_space.py`): Built-in functions (`readfile`, `writefile`, `wwwget`, `execcmd`) plus dynamic loading from `prompts/functions/`. Used for LLM tool calling.
-- **HTTP Server** (`http_server.py`): FastAPI-based REST API with web GUI, managed via `ServerRegistry`.
 - **Output Formatter** (`output_formatter.py`): Formats responses as Rich tables or JSON based on TTY detection.
 
 ## Prompt Language (DSL)

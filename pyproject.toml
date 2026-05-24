@@ -20,8 +20,6 @@ dependencies = [
     "textual>=0.41.0",
     "toml>=0.10.2",
     "peewee>=3.17.0",
-    "fastapi>=0.104.0",
-    "uvicorn>=0.24.0",
     "markdown-it-py>=3.0.0",
 ]
 
@@ -44,7 +42,7 @@ Repository = "https://github.com/JerryWestrick/keprompt"
 Issues = "https://github.com/JerryWestrick/keprompt/issues"
 
 [tool.setuptools.package-data]
-keprompt = ["web_gui/*", "defaults/*.prompt", "defaults/functions/*"]
+keprompt = ["defaults/*.prompt", "defaults/functions/*"]
 
 [tool.setuptools.dynamic]
 version = {attr = "keprompt.version.__version__"}

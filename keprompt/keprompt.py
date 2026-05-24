@@ -216,9 +216,8 @@ def normalize_command_aliases(args: argparse.Namespace, parser: argparse.Argumen
     Normalize all command aliases to their canonical forms using parser introspection.
     
     IMPORTANT: We extract ALL aliases but this creates conflicts when different
-    managers use the same command name differently (e.g., 'start' is canonical
-    in ServerManager but an alias in ChatManager).
-    
+    managers use the same command name differently.
+
     For the first release, we're disabling alias normalization to avoid bugs.
     Managers will need to handle aliases themselves in their execute() methods.
     """
@@ -269,7 +268,7 @@ def get_cmd_args() -> tuple[argparse.ArgumentParser, argparse.Namespace]:
     from .ModelManager import ModelManager
     from .chat_manager import ChatManager
     from .database import DatabaseManager
-    from .api import ProviderManager, FunctionManager, ServerManager
+    from .api import ProviderManager, FunctionManager
     from .workspace_manager import WorkspaceManager
 
     PromptManager.register_cli(subparsers, parent)
@@ -278,7 +277,6 @@ def get_cmd_args() -> tuple[argparse.ArgumentParser, argparse.Namespace]:
     DatabaseManager.register_cli(subparsers, parent)
     ProviderManager.register_cli(subparsers, parent)
     FunctionManager.register_cli(subparsers, parent)
-    ServerManager.register_cli(subparsers, parent)
     WorkspaceManager.register_cli(subparsers, parent)
 
 
@@ -297,23 +295,21 @@ _KNOWN_OBJECTS = {
     'database', 'databases',
     'provider', 'providers',
     'function', 'functions',
-    'server',
     'init', 'workspace',
 }
 
 _KNOWN_VERBS = {
-    'new', 'create', 'start',
+    'new', 'create',
     'get', 'list', 'show', 'view',
     'reply', 'answer', 'send', 'update',
     'delete', 'rm',
-    'stop', 'status',
 }
 
 
 # Normalize verb aliases to canonical forms
 _VERB_ALIASES = {
     'list': 'get', 'show': 'get', 'view': 'get',
-    'new': 'create', 'start': 'create',
+    'new': 'create',
     'answer': 'reply', 'send': 'reply',
     'rm': 'delete',
 }
