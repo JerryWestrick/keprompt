@@ -37,18 +37,6 @@ logging.addLevelName(FUNC_LEVEL, 'FUNC')
 logging.addLevelName(MSG_LEVEL, 'MSG')
 
 
-class PromptContextFilter(logging.Filter):
-    """Filter to add prompt_id context to log records."""
-    
-    def __init__(self, prompt_id: str = ""):
-        super().__init__()
-        self.prompt_id = prompt_id
-    
-    def filter(self, record):
-        record.prompt_id = self.prompt_id
-        return True
-
-
 class StandardLogger:
     """
     Simplified logging system for keprompt.

@@ -1,8 +1,8 @@
 import argparse
 import json
 import traceback
-from datetime import datetime
-from typing import Type, List
+from datetime import date, datetime
+from typing import Optional, Type, List
 
 from rich.table import Table
 
@@ -42,6 +42,25 @@ class AiModel:
     mode: str = "chat"     # model mode (chat, completion, etc.)
     source: str = ""       # documentation link
     description: str = ""  # model description
+    deprecation_date: str = ""  # ISO date the provider stops serving it, "" if none published
+
+    def deprecated_on(self) -> Optional[date]:
+        """The date this model stops working, or None if the registry gives no date."""
+        if not self.deprecation_date:
+            return None
+        try:
+            return date.fromisoformat(str(self.deprecation_date)[:10])
+        except ValueError:
+            return None
+
+    def is_deprecated(self, as_of: date = None) -> bool:
+        """True once the deprecation date has passed.
+
+        A future date means the model is still callable but going away, which is
+        worth showing rather than hiding.
+        """
+        d = self.deprecated_on()
+        return bool(d and d <= (as_of or date.today()))
 
     def __str__(self) -> str:
         """Return a useful string representation for debugging and logging."""
@@ -82,7 +101,7 @@ class AiModel:
             valid_fields = {
                 'provider', 'company', 'model', 'input_cost', 'output_cost', 
                 'max_tokens', 'cache_cost', 'max_input_tokens', 'max_output_tokens',
-                'supports', 'mode', 'source', 'description'
+                'supports', 'mode', 'source', 'description', 'deprecation_date'
             }
             filtered_data = {k: v for k, v in data.items() if k in valid_fields}
             return cls(**filtered_data)
@@ -138,7 +157,8 @@ class AiModel:
             supports=supports,
             mode=data.get("mode", "chat"),
             source=data.get("source", ""),
-            description=""  # Can be generated later
+            description="",  # Can be generated later
+            deprecation_date=data.get("deprecation_date", "") or ""
         )
 
     def to_dict(self) -> dict:
@@ -176,6 +196,11 @@ class ModelManager:
         model_get.add_argument("--name", help="Filter by model name")
         model_get.add_argument("--provider", help="Filter by provider")
         model_get.add_argument("--company", help="Filter by company")
+        model_get.add_argument(
+            "--deprecated",
+            action="store_true",
+            help="Include models whose deprecation date has passed (hidden by default)",
+        )
 
         model_update = model_subparsers.add_parser(
             "update",
@@ -322,12 +347,16 @@ class ModelManager:
             name_filter = getattr(self.args, "name", None)
             provider_filter = getattr(self.args, "provider", None)
             company_filter = getattr(self.args, "company", None)
+            show_deprecated = getattr(self.args, "deprecated", False)
 
             # Filter models based on patterns
             for name, model in self.models.items():
                 if name_filter and name_filter.lower() not in name.lower(): continue
                 if provider_filter and provider_filter.lower() != model.provider.lower(): continue
                 if company_filter and company_filter.lower() != model.company.lower(): continue
+                # Models whose deprecation date has passed cannot be called; models with a
+                # future date still can, and are shown so the date is visible while choosing.
+                if model.is_deprecated() and not show_deprecated: continue
 
                 models.append(model)
 
@@ -425,6 +454,7 @@ class ModelManager:
             table.add_column("$/mT Out", style="green", justify="right")
             table.add_column("Input", style="blue", no_wrap=True)
             table.add_column("Functions", style="yellow", no_wrap=True)
+            table.add_column("Deprecated", style="red", no_wrap=True)
 
             for model in sorted(models, key=lambda x: x.model):
 
@@ -438,7 +468,10 @@ class ModelManager:
                     f"{model.input_cost * 1_000_000:06.4f}",
                     f"{model.output_cost * 1_000_000:06.4f}",
                     "Text+Vision" if model.supports.get("vision", False) else "Text",
-                    "Yes" if model.supports.get("function_calling", False) else "No"
+                    "Yes" if model.supports.get("function_calling", False) else "No",
+                    model.deprecation_date or "",
+                    # Past its date: dead, and dimmed so it recedes behind the usable ones.
+                    style="dim" if model.is_deprecated() else None,
                 )
 
             return table

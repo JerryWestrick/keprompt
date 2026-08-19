@@ -1,17 +1,14 @@
 """
 Model updater for keprompt - handles updating model definitions from LiteLLM or resetting to defaults
 """
-import os
 import json
 import shutil
-import tempfile
 from pathlib import Path
 from typing import Dict, Any, List
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 import requests
 
-from .ModelManager import ModelManager, AiModel
 
 console = Console(stderr=True)
 
@@ -45,25 +42,6 @@ def reset_to_defaults() -> None:
     console.print("[yellow]Warning: reset_to_defaults is deprecated.[/yellow]")
     console.print("[yellow]Individual provider JSON files are no longer used.[/yellow]")
     console.print("[cyan]Use 'keprompt models update' to download the centralized model database.[/cyan]")
-
-def update_all_from_litellm() -> None:
-    """
-    DEPRECATED: Individual provider updates are no longer supported.
-    Use update_models() to download the centralized model database instead.
-    """
-    console.print("[yellow]Warning: Individual provider updates are deprecated.[/yellow]")
-    console.print("[cyan]Use 'keprompt models update' to download the centralized model database.[/cyan]")
-    download_litellm_model_database()
-
-def update_provider_from_litellm(provider_name: str) -> None:
-    """
-    DEPRECATED: Individual provider updates are no longer supported.
-    Use update_models() to download the centralized model database instead.
-    """
-    console.print(f"[yellow]Warning: Updating individual provider '{provider_name}' is deprecated.[/yellow]")
-    console.print("[yellow]Individual provider JSON files are no longer used.[/yellow]")
-    console.print("[cyan]Downloading centralized model database instead...[/cyan]")
-    download_litellm_model_database()
 
 def download_litellm_model_database() -> None:
     """
@@ -124,63 +102,3 @@ def download_litellm_model_database() -> None:
 # Legacy functions kept for backward compatibility but deprecated
 # These are no longer used since we now use the centralized model database
 
-def get_supported_providers() -> List[str]:
-    """
-    DEPRECATED: Individual provider JSON files are no longer used.
-    Returns empty list for backward compatibility.
-    """
-    return []
-
-def update_provider_from_data(provider_name: str, litellm_data: Dict[str, Any]) -> bool:
-    """
-    DEPRECATED: Individual provider updates are no longer supported.
-    Returns False for backward compatibility.
-    """
-    console.print(f"[yellow]Warning: update_provider_from_data is deprecated.[/yellow]")
-    return False
-
-def filter_models_for_provider(provider_name: str, litellm_data: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    DEPRECATED: Individual provider filtering is no longer needed.
-    Returns empty dict for backward compatibility.
-    """
-    return {}
-
-def update_openrouter_from_api(api_key: str = None) -> None:
-    """Update OpenRouter models using the provider's native API"""
-    if not api_key:
-        console.print("[red]Error: API key required for OpenRouter-API update[/red]")
-        console.print("[yellow]Usage: update_models('OpenRouter-API', api_key='your-key')[/yellow]")
-        return
-    
-    # Create a mock prompt object to instantiate the provider
-    from .AiOpenRouter import AiOpenRouter
-    
-    class MockPrompt:
-        def __init__(self, api_key: str):
-            self.api_key = api_key
-            self.model = "mock"
-            self.vm = None
-    
-    try:
-        mock_prompt = MockPrompt(api_key)
-        provider = AiOpenRouter(mock_prompt)
-        
-        # Call the provider's update_models method
-        success = provider.update_models()
-        
-        if success:
-            console.print("[green]✓ Successfully updated OpenRouter models from API[/green]")
-        else:
-            console.print("[red]Failed to update OpenRouter models[/red]")
-            
-    except Exception as e:
-        console.print(f"[red]Error updating OpenRouter from API: {e}[/red]")
-
-def write_provider_json(provider_name: str, models: Dict[str, Any]) -> None:
-    """
-    DEPRECATED: Individual provider JSON files are no longer used.
-    This function does nothing and exists only for backward compatibility.
-    """
-    console.print(f"[yellow]Warning: write_provider_json is deprecated and does nothing.[/yellow]")
-    console.print("[yellow]Individual provider JSON files are no longer used.[/yellow]")

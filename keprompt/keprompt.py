@@ -1,5 +1,4 @@
 import argparse
-import getpass
 import logging
 import os
 import sys
@@ -7,7 +6,6 @@ import sys
 from rich.console import Console
 
 from keprompt.api import handle_json_command
-from .config import get_config
 from .CustomEncoder import CustomEncoder
 from rich.logging import RichHandler
 from rich.prompt import Prompt as RichPrompt
@@ -15,7 +13,6 @@ from rich.table import Table
 from rich_argparse import RichHelpFormatter
 
 from .ModelManager import ModelManager
-from .keprompt_utils import print_simple_table, format_model_count_data
 from .version import __version__
 
 from .terminal_output import terminal_output
@@ -31,185 +28,6 @@ FORMAT = "%(message)s"
 logging.basicConfig(level=logging.WARNING,  format=FORMAT,datefmt="[%X]",handlers=[RichHandler(console=console, rich_tracebacks=True)])
 log = logging.getLogger(__file__)
 __all__ = ["main"]
-
-def matches_pattern(text: str, pattern: str) -> bool:
-    """Case-insensitive pattern matching"""
-    if not pattern:
-        return True
-    return pattern.lower() in text.lower()
-
-def print_companies():
-    """Print all available companies (model creators)"""
-    columns = [
-        {'name': 'Company', 'style': 'cyan', 'no_wrap': True},
-        {'name': 'Model Count', 'style': 'green', 'justify': 'right'}
-    ]
-
-    rows = format_model_count_data(ModelManager.models, 'company')
-    print_simple_table("Available Companies (Model Creators)", columns, rows)
-
-def print_providers():
-    """Print all available providers (API services)"""
-    columns = [
-        {'name': 'Provider', 'style': 'cyan', 'no_wrap': True},
-        {'name': 'Model Count', 'style': 'green', 'justify': 'right'}
-    ]
-    
-    rows = format_model_count_data(ModelManager.models, 'provider')
-    print_simple_table("Available Providers (API Services)", columns, rows)
-
-def print_models(model_pattern: str = "", company_pattern: str = "", provider_pattern: str = ""):
-    # Filter models based on patterns
-    filtered_models = {
-        name: model for name, model in ModelManager.models.items()
-        if matches_pattern(name, model_pattern) and
-           matches_pattern(model.company, company_pattern) and  
-           matches_pattern(model.provider, provider_pattern)
-    }
-    
-    if not filtered_models:
-        console.print("[bold red]No models match the specified filters.[/bold red]")
-        return
-    
-    # Build title with active filters
-    title_parts = ["Available Models"]
-    if model_pattern:
-        title_parts.append(f"Model: *{model_pattern}*")
-    if company_pattern:
-        title_parts.append(f"Company: *{company_pattern}*")
-    if provider_pattern:
-        title_parts.append(f"Provider: *{provider_pattern}*")
-    
-    title = " | ".join(title_parts)
-    
-    table = Table(title=title)
-    table.add_column("Provider", style="cyan", no_wrap=True)
-    table.add_column("Company", style="cyan", no_wrap=True)
-    table.add_column("Model", style="green")
-    table.add_column("Max Token", style="magenta", justify="right")
-    table.add_column("$/mT In", style="green", justify="right")
-    table.add_column("$/mT Out", style="green", justify="right")
-    table.add_column("Input", style="blue", no_wrap=True)
-    table.add_column("Output", style="blue", no_wrap=True)
-    table.add_column("Functions", style="yellow", no_wrap=True)
-    table.add_column("Cutoff", style="dim", no_wrap=True)
-    table.add_column("Description", style="white")
-
-    # Sort by Provider, then Company, then model name
-    sortable_keys = [f"{filtered_models[model_name].provider}:{filtered_models[model_name].company}:{model_name}" for model_name in filtered_models.keys()]
-    sortable_keys.sort()
-
-    last_provider = ''
-    last_company = ''
-    for k in sortable_keys:
-        provider, company, model_name = k.split(':', maxsplit=2)
-        model = filtered_models[model_name]
-        
-        # Show provider and company only when they change
-        display_provider = provider if provider != last_provider else ""
-        display_company = company if company != last_company or provider != last_provider else ""
-        
-        table.add_row(
-            display_provider,
-            display_company,
-            model_name,
-            str(model.max_tokens),
-            f"{model.input_cost*1_000_000:06.4f}",
-            f"{model.output_cost*1_000_000:06.4f}",
-            "Text+Vision" if model.supports.get("vision", False) else "Text",
-            "Text",
-            "Yes" if model.supports.get("function_calling", False) else "No",
-            "2024-04",
-            model.description
-        )
-        
-        last_provider = provider
-        last_company = company
-
-    console.print(table)
-
-def print_prompt_names(prompt_files: list[str]) -> None:
-
-    table = Table(title="Prompt Files")
-    table.add_column("Prompt", style="cyan", no_wrap=True)
-    table.add_column("Description", style="magenta")
-
-    for prompt_file in prompt_files:
-        try:
-            with open(prompt_file, 'r') as file:
-                first_line = file.readline().strip()  # Read entire first line without stripping
-        except Exception as e:
-            first_line = f"Error reading file: {str(e)}"
-
-        table.add_row(os.path.basename(prompt_file), first_line)
-
-    console.print(table)
-
-def create_dropdown(options: list[str], prompt_text: str = "Select an option") -> str:
-    # Display numbered options
-    for i, option in enumerate(options, 1):
-        console.print(f"{i}. {option}", style="cyan")
-
-    # Get user input with validation
-    while True:
-        choice = RichPrompt.ask(
-            prompt_text,
-            choices=[str(i) for i in range(1, len(options) + 1)],
-            show_choices=False
-        )
-
-        return options[int(choice) - 1]
-
-def get_new_api_key() -> None:
-
-    companies = sorted(ModelManager.handlers.keys())
-    company = create_dropdown(companies, "AI Company?")
-    # api_key = console.input(f"[bold green]Please enter your [/][bold cyan]{company} API key: [/]")
-    api_key = getpass.getpass(f"Please enter your {company} API key: ")
-    config = get_config()
-    config.set_api_key(company, api_key)
-
-def extract_alias_mappings(parser: argparse.ArgumentParser) -> dict[str, str]:
-    """
-    Extract alias→canonical name mappings from parser structure.
-    This introspects argparse to discover all aliases automatically,
-    providing a single source of truth.
-    
-    Returns:
-        Dictionary mapping alias names to their canonical names
-        Example: {'list': 'get', 'show': 'get', 'start': 'create'}
-    """
-    mappings = {}
-    
-    def walk_actions(action_group):
-        """Recursively walk through parser actions to find subparsers"""
-        for action in action_group._actions:
-            if isinstance(action, argparse._SubParsersAction):
-                # Track the first (canonical) name for each parser object
-                # _name_parser_map preserves insertion order (Python 3.7+)
-                parser_to_canonical = {}
-                
-                for name, subparser in action._name_parser_map.items():
-                    parser_id = id(subparser)
-                    
-                    if parser_id not in parser_to_canonical:
-                        # First occurrence - this is the canonical name
-                        parser_to_canonical[parser_id] = name
-                    else:
-                        # Subsequent occurrence - this is an alias
-                        canonical = parser_to_canonical[parser_id]
-                        mappings[name] = canonical
-                
-                # Recurse into each unique subparser
-                seen_subparsers = set()
-                for subparser in action._name_parser_map.values():
-                    if id(subparser) not in seen_subparsers:
-                        seen_subparsers.add(id(subparser))
-                        walk_actions(subparser)
-    
-    walk_actions(parser)
-    return mappings
-
 
 def normalize_command_aliases(args: argparse.Namespace, parser: argparse.ArgumentParser) -> argparse.Namespace:
     """
@@ -355,19 +173,6 @@ def glob_prompt(prompt_name: str) -> list[Path]:
     return sorted(Path('.').glob(str(prompt_p)))
 
 
-
-def create_global_variables():
-    """Create global variables dictionary with explicit hard-coded defaults"""
-    return {
-        # Variable substitution delimiters
-        'Prefix': '<<',
-        'Postfix': '>>',
-        
-        # Future expansion possibilities
-        'Debug': False,
-        'Verbose': False,
-        # Add other system defaults here
-    }
 
 def main():
     # create prompts directory if it doesn't exist'

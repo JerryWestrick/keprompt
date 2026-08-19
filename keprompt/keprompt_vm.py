@@ -31,33 +31,6 @@ logging.basicConfig(level="NOTSET", format=FORMAT, datefmt="[%X]",
 log = logging.getLogger(__file__)
 
 # Global routines
-def print_prompt_code(prompt_files: list[str]) -> None:
-    table = Table(title="Execution Messages")
-    table.add_column("Prompt", style="cyan bold", no_wrap=True)
-    table.add_column("Lno", style="blue bold", no_wrap=True)
-    table.add_column("Cmd", style="green bold", no_wrap=True)
-    table.add_column("Params", style="dark_green bold")
-
-    for prompt_file in prompt_files:
-        # co-*nsole.print(f"{prompt_file}")
-        try:
-            # Let VM manage defaults internally
-            vm: VM = VM(filename=prompt_file)
-            vm.parse_prompt()
-        except Exception as e:
-            console.print(f"[bold red]Error parsing file {prompt_file} : {str(e)}[/bold red]")
-            console.print_exception()
-            sys.exit(1)
-        # Strip .prompt extension from display name
-        title = os.path.splitext(os.path.basename(prompt_file))[0]
-        if vm.statements:
-            for stmt in vm.statements:
-                table.add_row(title, f"{stmt.msg_no:03}", stmt.keyword, stmt.value)
-                title = ''
-            table.add_row('───────────────', '───', '─────────', '──────────────────────────────')
-    console.print(table)
-
-
 class StmtSyntaxError(Exception):
     pass
 
@@ -1706,64 +1679,3 @@ def make_statement(vm: VM, msg_no: int, keyword: str, value: str) -> StmtPrompt:
     my_class = StatementTypes[keyword]
     return my_class(vm, msg_no, keyword, value)
 
-def print_statement_types():
-    from rich.table import Table
-    from rich.console import Console
-    console = Console()
-    table = Table(title="Supported Statement Types", show_header=True, header_style="bold cyan", width=terminal_width,)
-
-    table.add_column("Keyword", style="green")
-    table.add_column("From", style="cyan", width=8)
-    table.add_column("Description", style="yellow")
-
-    # Custom descriptions for better documentation
-    descriptions = {
-        '.#': 'Comment statement - ignored during execution',
-        '.assistant': 'Add an assistant message to the chat context',
-        '.clear': 'Delete specified files or file patterns from the system',
-        '.cmd': 'Execute a defined function with specified arguments; optionally store result in variable with "as var_name"',
-        '.debug': 'Display VM state information for debugging purposes',
-        '.exec': 'Execute the current prompt context with the configured LLM',
-        '.exit': 'Terminate prompt execution',
-        '.functions': 'Declare which functions the model can use (comma-separated names)',
-        '.image': 'Add an image file to the chat context',
-        '.include': 'Include content from another file into the current context',
-        '.print': 'Output text to STDOUT with variable substitution (production output)',
-        '.prompt': 'Define prompt metadata (name, version, params)',
-        '.set': 'Set variables including Prefix/Postfix for configurable substitution delimiters',
-        '.system': 'Add a system message to the chat context',
-        '.text': 'Add text content to the current message context',
-        '.tool_call': 'Create assistant message with tool/function call request (for conversation replay)',
-        '.tool_result': 'Create tool message with function execution result (for conversation replay)',
-        '.user': 'Add a user message to the chat context',
-    }
-
-    # Define which statements come from user vs LLM
-    statement_origins = {
-        '.#': 'user',
-        '.assistant': 'llm',
-        '.clear': 'user',
-        '.cmd': 'user',
-        '.debug': 'user',
-        '.exec': 'user',
-        '.exit': 'user',
-        '.functions': 'user',
-        '.image': 'user',
-        '.include': 'user',
-        '.print': 'user',
-        '.prompt': 'user',
-        '.set': 'user',
-        '.system': 'user',
-        '.text': 'user',
-        '.tool_call': 'llm',
-        '.tool_result': 'system',
-        '.user': 'user',
-    }
-
-    for k, v in StatementTypes.items():
-        description = descriptions.get(k, v.__doc__ or 'No description available')
-        origin = statement_origins.get(k, 'user')
-        table.add_row(k, origin, description)
-        
-
-    console.print(table)
