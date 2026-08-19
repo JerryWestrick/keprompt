@@ -1,0 +1,1 @@
+"""SQLite migration runner and historical compatibility scripts."""

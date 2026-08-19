@@ -4,10 +4,8 @@ Database models and connection management for KePrompt.
 Uses Peewee ORM with support for SQLite, PostgreSQL, and MySQL via SQLAlchemy-style URLs.
 """
 import argparse
-import importlib.util
 import json
 import os
-import re
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -24,15 +22,11 @@ from .version import __version__
 # Global database instance
 database_proxy = DatabaseProxy()
 
-# Schema version this code expects. Bumped whenever the tables change; each bump
-# gets a keprompt/migrations/migrate-ver-<from>-to-<to>.py script.
-SCHEMA_VERSION = '2.16'
+# The database version follows the running KePrompt semantic version.
+SCHEMA_VERSION = __version__
 
 # Databases written before the info table existed are 2.15 by definition.
-PRE_INFO_VERSION = '2.15'
-
-MIGRATIONS_DIR = Path(__file__).parent / 'migrations'
-_MIGRATION_NAME = re.compile(r'^migrate-ver-(.+)-to-(.+)\.py$')
+PRE_INFO_VERSION = '2.15.0'
 
 
 class BaseModel(Model):
@@ -210,68 +204,6 @@ def set_schema_version(version: str = SCHEMA_VERSION) -> None:
     Info.create(version=version)
 
 
-def _discover_migrations() -> Dict[str, tuple]:
-    """Map from-version -> (to-version, script path) over keprompt/migrations/.
-
-    Scripts are named `migrate-ver-<from>-to-<to>.py`. They are standalone: this
-    module knows how to find and chain them, not what any of them does.
-    """
-    found: Dict[str, tuple] = {}
-    if not MIGRATIONS_DIR.is_dir():
-        return found
-    for path in sorted(MIGRATIONS_DIR.glob('migrate-ver-*.py')):
-        m = _MIGRATION_NAME.match(path.name)
-        if m:
-            found[m.group(1)] = (m.group(2), path)
-    return found
-
-
-def _load_migration(path: Path):
-    """Load a migration script by path (its filename is not a valid module name)."""
-    spec = importlib.util.spec_from_file_location(path.stem.replace('-', '_').replace('.', '_'), path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-def run_migrations(db: Database, current: str, quiet: bool = False) -> str:
-    """Run the chain of migration scripts needed to reach SCHEMA_VERSION.
-
-    Each script owns its own DDL and stamps the new version itself, so this
-    function never has to know what changed.
-    """
-    if current == SCHEMA_VERSION:
-        return current
-
-    if not isinstance(db, SqliteDatabase):
-        raise RuntimeError(
-            f"database schema is at {current}, code expects {SCHEMA_VERSION}, "
-            f"and automatic migration is only implemented for SQLite")
-
-    chain = _discover_migrations()
-    db_path = db.database
-    log = (lambda *a, **k: None) if quiet else print
-    seen = set()
-
-    while current != SCHEMA_VERSION:
-        if current in seen:
-            raise RuntimeError(f"migration loop detected at schema version {current}")
-        seen.add(current)
-
-        step = chain.get(current)
-        if step is None:
-            raise RuntimeError(
-                f"no migration found from schema version {current} to {SCHEMA_VERSION} "
-                f"(looked in {MIGRATIONS_DIR})")
-
-        to_version, path = step
-        log(f"keprompt: migrating {db_path}: {current} -> {to_version}")
-        _load_migration(path).migrate(db_path, log=log)
-        current = to_version
-
-    return current
-
-
 def initialize_database(url: Optional[str] = None) -> Database:
     """Initialize database connection, create tables, and migrate an older schema."""
     if url is None:
@@ -294,9 +226,14 @@ def initialize_database(url: Optional[str] = None) -> Database:
             return db
         current = get_schema_version()
 
-    # Migration scripts open their own connection, so peewee's is closed by now.
+    # The migration runner opens its own SQLite connection.
     if current != SCHEMA_VERSION:
-        run_migrations(db, current)
+        if not isinstance(db, SqliteDatabase):
+            raise RuntimeError(
+                f"database is at {current}, KePrompt is {SCHEMA_VERSION}; "
+                "automatic migration is only implemented for SQLite")
+        from .migrations.migrate_sqlite import migrate
+        migrate(db.database, target_version=SCHEMA_VERSION)
 
     return db
 
