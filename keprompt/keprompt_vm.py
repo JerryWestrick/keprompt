@@ -136,6 +136,8 @@ class VM:
         self.expected_params: dict = {}
         self.pending_costs: list = []
         self.api_time: float = 0.0  # Accumulated API request time
+        self.tool_time: float = 0.0  # Accumulated function execution time
+        self.round_trip_count: int = 0  # Billed API round trips (interaction_no counts .exec statements)
         self.allowed_functions: list[str] | None = None  # None = no .functions statement = no functions (safe default)
 
         # Automatically parse if filename provided
@@ -1207,7 +1209,15 @@ class StmtExec(StmtPrompt):
         # Set the prompt ID in the logger for all subsequent log entries
         vm.logger.set_prompt_id(call_id)
         
-        responses = vm.prompt.ask(label=header, call_id=call_id)
+        try:
+            responses = vm.prompt.ask(label=header, call_id=call_id)
+        except Exception as e:
+            # Round trips that completed before the failure were still billed. Record them
+            # instead of losing them with the exception; save_chat() flushes pending_costs
+            # on the error path too.
+            self._record_round_trips(vm, call_id, list(getattr(vm.prompt, 'round_trips', [])),
+                                     success=False, error_message=str(e))
+            raise
         elapsed_time = time.time() - start_time
 
         # Extract last response text for variable substitution
@@ -1221,33 +1231,29 @@ class StmtExec(StmtPrompt):
         # Store last response using centralized method with automatic logging
         vm.set_variable('last_response', last_response_text)
 
-        # Log token usage and costs if available
-        if hasattr(vm.prompt, 'last_tokens_in') and hasattr(vm.prompt, 'last_tokens_out'):
-            tokens_in = vm.prompt.last_tokens_in
-            tokens_out = vm.prompt.last_tokens_out
-            cost_in = tokens_in * vm.model.input_cost if vm.model else 0
-            cost_out = tokens_out * vm.model.output_cost if vm.model else 0
-            
-            # Update VM totals
-            vm.toks_in += tokens_in
-            vm.toks_out += tokens_out
-            vm.cost_in += cost_in
-            vm.cost_out += cost_out
-            vm.total = vm.cost_in + vm.cost_out
-            
-            # Calculate context usage percentages
+        # Per-round-trip usage recorded by the provider during ask(). One entry per billed
+        # API request -- a tool loop produces several. The statement total is their sum;
+        # counting only the last one was DEFECT-001.
+        round_trips = list(getattr(vm.prompt, 'round_trips', []))
+
+        if round_trips:
+            tokens_in, tokens_out, cost_in, cost_out = self._record_round_trips(vm, call_id, round_trips)
+
+            # Context occupancy is a property of the LAST round trip, not of the statement
+            # total: it answers "how full is the context right now", not "what did this cost".
+            last_rt = round_trips[-1]
             max_in = (vm.model.max_input_tokens or vm.model.max_tokens) if vm.model else 0
             max_out = (vm.model.max_output_tokens or vm.model.max_tokens) if vm.model else 0
             vm.vdict['context_usage'] = {
-                'input_pct': round(tokens_in / max_in * 100, 1) if max_in else 0,
-                'output_pct': round(tokens_out / max_out * 100, 1) if max_out else 0,
-                'input_tokens': tokens_in,
-                'output_tokens': tokens_out,
+                'input_pct': round(last_rt['tokens_in'] / max_in * 100, 1) if max_in else 0,
+                'output_pct': round(last_rt['tokens_out'] / max_out * 100, 1) if max_out else 0,
+                'input_tokens': last_rt['tokens_in'],
+                'output_tokens': last_rt['tokens_out'],
                 'max_input': max_in,
                 'max_output': max_out,
             }
 
-            # Log tokens and costs
+            # Log tokens and costs (statement totals)
             vm.logger.log_llm_tokens_and_cost(call_id, tokens_in, tokens_out, cost_in, cost_out)
 
         # Log the exec completion to statements.log (only this one, not the initial empty one)
@@ -1265,40 +1271,72 @@ class StmtExec(StmtPrompt):
         # Log the response using structured logging
         vm.logger.log_llm_call(f"Response from {vm.model.provider} API completed", call_id)
 
-        # Track cost data to new database system (always-on cost tracking)
-        # Get token information from the first hasattr block above
-        if hasattr(vm.prompt, 'last_tokens_in') and hasattr(vm.prompt, 'last_tokens_out'):
-            # Get model configuration parameters
-            temperature = vm.llm.get('temperature') if vm.llm else None
-            max_tokens = vm.llm.get('max_tokens') if vm.llm else None
-            context_length = vm.llm.get('context_length') if vm.llm else None
-            
+        # Note: chat logging is now handled incrementally through log_message_exchange
+        # No need to log the entire chat again here
+
+    def _record_round_trips(self, vm: VM, call_id: str, round_trips: list,
+                            success: bool = True, error_message: str = None) -> tuple:
+        """Fold a statement's billed round trips into the VM totals and the cost ledger.
+
+        One `cost_tracking` row per round trip, each describing exactly one API request:
+        its own tokens, its own cost, its own elapsed time. Returns the statement totals
+        (tokens_in, tokens_out, cost_in, cost_out).
+        """
+        if not round_trips:
+            return 0, 0, 0.0, 0.0
+
+        tokens_in = sum(rt['tokens_in'] for rt in round_trips)
+        tokens_out = sum(rt['tokens_out'] for rt in round_trips)
+        cost_in = sum(rt['cost_in'] for rt in round_trips)
+        cost_out = sum(rt['cost_out'] for rt in round_trips)
+
+        # Update VM totals
+        vm.toks_in += tokens_in
+        vm.toks_out += tokens_out
+        vm.cost_in += cost_in
+        vm.cost_out += cost_out
+        vm.total = vm.cost_in + vm.cost_out
+        vm.tool_time += sum(rt['tool_time'] for rt in round_trips)
+        vm.round_trip_count += len(round_trips)
+        # vm.api_time is accumulated per request in AiProvider.make_api_request
+
+        # Get model configuration parameters
+        temperature = vm.llm.get('temperature') if vm.llm else None
+        max_tokens = vm.llm.get('max_tokens') if vm.llm else None
+        context_length = vm.llm.get('context_length') if vm.llm else None
+        parameters_json = json.dumps(vm.vdict, default=str) if vm.vdict else None
+
+        for seq, rt in enumerate(round_trips, start=1):
             cost_data = {
-                'call_id': call_id,
-                'tokens_in': tokens_in,
-                'tokens_out': tokens_out,
-                'cost_in': float(cost_in),
-                'cost_out': float(cost_out),
-                'estimated_costs': float(cost_in + cost_out),
-                'elapsed_time': float(elapsed_time),
-                'model': vm.model_name,
-                'provider': vm.provider,
-                'success': True,  # If we got here, execution succeeded
-                'error_message': None,
+                'call_id': f"{call_id}-{rt['label']}",
+                'tokens_in': rt['tokens_in'],
+                'tokens_out': rt['tokens_out'],
+                'cost_in': float(rt['cost_in']),
+                'cost_out': float(rt['cost_out']),
+                'estimated_costs': float(rt['cost_in'] + rt['cost_out']),
+                'elapsed_time': float(rt['api_time']),
+                'tool_time': float(rt['tool_time']),
+                'model': rt.get('model') or vm.model_name,
+                'provider': rt.get('provider') or vm.provider,
+                # These round trips completed and were billed; success reflects whether the
+                # statement they belong to went on to fail.
+                'success': success,
+                'error_message': error_message,
                 'prompt_semantic_name': vm.prompt_name,
                 'prompt_version_tracking': vm.prompt_version,
                 'expected_params': json.dumps(vm.expected_params) if vm.expected_params else None,
                 'execution_mode': vm.log_mode.name.lower() if hasattr(vm.log_mode, 'name') else 'production',
-                'parameters': json.dumps(vm.vdict, default=str) if vm.vdict else None,
+                # vdict is statement-scoped, not round-trip-scoped, and carries the whole
+                # last_response. Record it once per .exec rather than once per request.
+                'parameters': parameters_json if seq == 1 else None,
                 'environment': os.getenv('ENVIRONMENT', 'development'),
                 'temperature': temperature,
                 'max_tokens': max_tokens,
                 'context_length': context_length
             }
-            vm.pending_costs.append((self.msg_no, cost_data))
+            vm.pending_costs.append((self.msg_no, seq, cost_data))
 
-        # Note: chat logging is now handled incrementally through log_message_exchange
-        # No need to log the entire chat again here
+        return tokens_in, tokens_out, cost_in, cost_out
 
 
 class StmtExit(StmtPrompt):

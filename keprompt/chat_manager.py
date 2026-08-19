@@ -198,6 +198,9 @@ class ChatManager:
             "toks_out": getattr(vm, "toks_out", 0),
             "cost_in": float(getattr(vm, "cost_in", 0.0)),
             "cost_out": float(getattr(vm, "cost_out", 0.0)),
+            "round_trip_count": getattr(vm, "round_trip_count", 0),
+            "api_time": float(getattr(vm, "api_time", 0.0)),
+            "tool_time": float(getattr(vm, "tool_time", 0.0)),
             # prompt meta
             "prompt_name": getattr(vm, "prompt_name", None),
             "prompt_version": getattr(vm, "prompt_version", None),
@@ -222,9 +225,12 @@ class ChatManager:
             "hostname": self._hostname,
             "git_commit": self._git_commit,
             "total_api_calls": vm.interaction_no,
+            "total_round_trips": getattr(vm, "round_trip_count", 0),
             "total_tokens_in": vm.toks_in,
             "total_tokens_out": vm.toks_out,
             "total_cost": float(vm.cost_in + vm.cost_out),
+            "total_api_time": float(getattr(vm, "api_time", 0.0)),
+            "total_tool_time": float(getattr(vm, "tool_time", 0.0)),
         }
 
         # Prepare statements
@@ -241,10 +247,10 @@ class ChatManager:
             **metadata,
         )
 
-        # Save any pending cost records
-        for msg_no, cost_data in vm.pending_costs:
+        # Save any pending cost records (one per billed API round trip)
+        for msg_no, round_trip, cost_data in vm.pending_costs:
             self.db_manager.save_cost_tracking(
-                chat_id=vm.prompt_uuid, msg_no=msg_no, **cost_data
+                chat_id=vm.prompt_uuid, msg_no=msg_no, round_trip=round_trip, **cost_data
             )
         vm.pending_costs = []  # Clear after saving
 
@@ -284,6 +290,9 @@ class ChatManager:
         vm.toks_out = vm_state.get("toks_out", 0)
         vm.cost_in = vm_state.get("cost_in", 0.0)
         vm.cost_out = vm_state.get("cost_out", 0.0)
+        vm.round_trip_count = vm_state.get("round_trip_count", 0)
+        vm.api_time = vm_state.get("api_time", 0.0)
+        vm.tool_time = vm_state.get("tool_time", 0.0)
         # prompt meta
         vm.prompt_name = vm_state.get("prompt_name", vm.prompt_name)
         vm.prompt_version = vm_state.get("prompt_version", vm.prompt_version)
@@ -435,7 +444,7 @@ class ChatManager:
                 cost_records = list(
                     CostTracking.select()
                     .where(CostTracking.chat_id == conv.chat_id)
-                    .order_by(CostTracking.msg_no.desc())
+                    .order_by(CostTracking.msg_no.desc(), CostTracking.round_trip.desc())
                 )
                 if cost_records:
                     # Get model and provider from most recent
@@ -581,9 +590,12 @@ class ChatManager:
             "tokens_in": getattr(vm, "toks_in", 0),
             "tokens_out": getattr(vm, "toks_out", 0),
             "elapsed_time": elapsed_time,
+            "api_time": float(getattr(vm, "api_time", 0.0)),
+            "tool_time": float(getattr(vm, "tool_time", 0.0)),
             "model": getattr(vm, "model_name", ""),
             "provider": getattr(getattr(vm, "model", None), "provider", getattr(vm, "provider", "")),
             "api_calls": getattr(vm, "interaction_no", 0),
+            "round_trips": getattr(vm, "round_trip_count", 0),
         }
 
         return {

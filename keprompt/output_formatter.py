@@ -267,19 +267,23 @@ class OutputFormatter:
             total_cost_out = sum(float(c.get('cost_out', 0)) for c in costs)
             total_tokens_in = sum(c.get('tokens_in', 0) for c in costs)
             total_tokens_out = sum(c.get('tokens_out', 0) for c in costs)
-            total_time = sum(float(c.get('elapsed_time', 0)) for c in costs)
-            
+            # costs holds one row per billed API round trip
+            total_api_time = sum(float(c.get('elapsed_time', 0)) for c in costs)
+            total_tool_time = sum(float(c.get('tool_time', 0) or 0) for c in costs)
+            exec_stmts = len({c.get('msg_no') for c in costs})
+
             table.add_row("Chat ID", chat_id)
             table.add_row("Prompt", f"{vm_state.get('prompt_name', 'N/A')} v{vm_state.get('prompt_version', 'N/A')}")
             table.add_row("Model", vm_state.get('model_name', 'N/A'))
             table.add_row("Provider", vm_state.get('provider', 'N/A'))
-            table.add_row("API Calls", str(len(costs)))
+            table.add_row("API Calls", f"{len(costs)} round trips over {exec_stmts} .exec")
             table.add_row("Total Tokens In", f"{total_tokens_in:,}")
             table.add_row("Total Tokens Out", f"{total_tokens_out:,}")
             table.add_row("Cost In", f"${total_cost_in:.6f}")
             table.add_row("Cost Out", f"${total_cost_out:.6f}")
             table.add_row("Total Cost", f"${total_cost_in + total_cost_out:.6f}")
-            table.add_row("Total Time", f"{total_time:.2f}s")
+            table.add_row("API Time", f"{total_api_time:.2f}s")
+            table.add_row("Tool Time", f"{total_tool_time:.2f}s")
             table.add_row("Messages", str(len(data.get('messages', []))))
             
             return table

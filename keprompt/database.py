@@ -56,10 +56,13 @@ class Chat(BaseModel):
     git_commit = CharField(max_length=40, null=True)
     
     # Summary stats (derived from cost_tracking)
-    total_api_calls = IntegerField(default=0)
+    total_api_calls = IntegerField(default=0)       # .exec statements executed
+    total_round_trips = IntegerField(default=0)     # billed API requests (>= total_api_calls)
     total_tokens_in = IntegerField(default=0)
     total_tokens_out = IntegerField(default=0)
     total_cost = DecimalField(max_digits=10, decimal_places=6, default=0.0)
+    total_api_time = DecimalField(max_digits=10, decimal_places=3, default=0.0)   # summed response.elapsed
+    total_tool_time = DecimalField(max_digits=10, decimal_places=3, default=0.0)  # summed function execution
     
     class Meta:
         table_name = 'chats'
@@ -72,23 +75,26 @@ class Chat(BaseModel):
 class CostTracking(BaseModel):
     """Child table for individual API call costs."""
     
-    # Composite primary key
+    # Composite primary key. One row per billed API round trip: msg_no identifies the
+    # .exec statement, round_trip the request within that statement's tool loop.
     chat_id = CharField(max_length=8)
     msg_no = IntegerField()
-    
+    round_trip = IntegerField(default=1)
+
     # Note: No foreign key constraint - cost tracking works independently of chats
-    
+
     # API call identification
     call_id = CharField(max_length=50)
     timestamp = DateTimeField(default=datetime.now)
-    
-    # Cost and token data
+
+    # Cost and token data - all scoped to this one request
     tokens_in = IntegerField()
     tokens_out = IntegerField()
     cost_in = DecimalField(max_digits=10, decimal_places=6)
     cost_out = DecimalField(max_digits=10, decimal_places=6)
     estimated_costs = DecimalField(max_digits=10, decimal_places=6)
-    elapsed_time = DecimalField(max_digits=8, decimal_places=3)
+    elapsed_time = DecimalField(max_digits=8, decimal_places=3)   # this request's response.elapsed
+    tool_time = DecimalField(max_digits=8, decimal_places=3, default=0.0)  # functions this response asked for
     
     # Model information
     model = CharField(max_length=100)
@@ -113,7 +119,7 @@ class CostTracking(BaseModel):
     
     class Meta:
         table_name = 'cost_tracking'
-        primary_key = CompositeKey('chat_id', 'msg_no')
+        primary_key = CompositeKey('chat_id', 'msg_no', 'round_trip')
         indexes = (
             (('timestamp',), False),
             (('model',), False),
@@ -160,6 +166,67 @@ def create_database_from_url(url: str) -> Database:
         raise ValueError(f"Unsupported database URL scheme: {parsed.scheme}")
 
 
+def _sqlite_columns(db: Database, table: str) -> List[str]:
+    """Column names of an existing SQLite table."""
+    return [row[1] for row in db.execute_sql(f"PRAGMA table_info({table})").fetchall()]
+
+
+def _migrate_schema(db: Database) -> None:
+    """Bring an existing database up to the current schema.
+
+    Adds the per-conversation timing and round-trip columns to `chats`, and re-cuts
+    `cost_tracking` from one row per `.exec` statement to one row per billed API
+    round trip. Existing cost rows are preserved and become round_trip = 1.
+
+    Idempotent, and a no-op on a freshly created database.
+    """
+    if not isinstance(db, SqliteDatabase):
+        # Other backends have never shipped with the old shape; nothing to migrate.
+        return
+
+    tables = set(db.get_tables())
+
+    # --- chats: additive columns, no rebuild needed ---------------------------
+    if 'chats' in tables:
+        existing = set(_sqlite_columns(db, 'chats'))
+        for name, ddl in (
+            ('total_round_trips', 'INTEGER NOT NULL DEFAULT 0'),
+            ('total_api_time', 'DECIMAL(10, 3) NOT NULL DEFAULT 0'),
+            ('total_tool_time', 'DECIMAL(10, 3) NOT NULL DEFAULT 0'),
+        ):
+            if name not in existing:
+                db.execute_sql(f"ALTER TABLE chats ADD COLUMN {name} {ddl}")
+
+    # --- cost_tracking: changing the primary key requires a table rebuild -----
+    if 'cost_tracking' not in tables:
+        return
+    if 'round_trip' in set(_sqlite_columns(db, 'cost_tracking')):
+        return  # already re-cut
+
+    legacy_cols = _sqlite_columns(db, 'cost_tracking')
+    carried = [c for c in legacy_cols
+               if c in CostTracking._meta.fields and c not in ('round_trip', 'tool_time')]
+    col_list = ', '.join(f'"{c}"' for c in carried)
+
+    with db.atomic():
+        db.execute_sql("ALTER TABLE cost_tracking RENAME TO cost_tracking_legacy")
+
+        # In SQLite indexes follow the renamed table, and their names would collide
+        # with the ones create_tables() is about to make. Drop them first.
+        for (idx_name,) in db.execute_sql(
+            "SELECT name FROM sqlite_master WHERE type = 'index' "
+            "AND tbl_name = 'cost_tracking_legacy' AND sql IS NOT NULL"
+        ).fetchall():
+            db.execute_sql(f'DROP INDEX IF EXISTS "{idx_name}"')
+
+        db.create_tables([CostTracking], safe=True)
+        db.execute_sql(
+            f'INSERT INTO cost_tracking ({col_list}, round_trip, tool_time) '
+            f'SELECT {col_list}, 1, 0 FROM cost_tracking_legacy'
+        )
+        db.execute_sql("DROP TABLE cost_tracking_legacy")
+
+
 def initialize_database(url: Optional[str] = None) -> Database:
     """Initialize database connection and create tables, migrating legacy schema if needed."""
     if url is None:
@@ -174,10 +241,11 @@ def initialize_database(url: Optional[str] = None) -> Database:
     
     # Legacy migration removed; assuming fresh chat schema
     
-    # Create tables if they don't exist
+    # Create tables if they don't exist, then bring any existing ones up to date
     with db:
         db.create_tables([Chat, CostTracking], safe=True)
-    
+        _migrate_schema(db)
+
     return db
 
 
@@ -242,12 +310,13 @@ class DatabaseManager:
             
             return chat
     
-    def save_cost_tracking(self, chat_id: str, msg_no: int, **cost_data) -> CostTracking:
-        """Save cost tracking data."""
+    def save_cost_tracking(self, chat_id: str, msg_no: int, round_trip: int = 1, **cost_data) -> CostTracking:
+        """Save cost tracking data for a single billed API round trip."""
         with self.db.atomic():
             cost_record, created = CostTracking.get_or_create(
                 chat_id=chat_id,
                 msg_no=msg_no,
+                round_trip=round_trip,
                 defaults=cost_data
             )
             
@@ -272,14 +341,17 @@ class DatabaseManager:
         if not chat:
             return None
         
-        cost_records = CostTracking.select().where(CostTracking.chat_id == chat_id).order_by(CostTracking.msg_no)
-        
+        cost_records = (CostTracking.select()
+                        .where(CostTracking.chat_id == chat_id)
+                        .order_by(CostTracking.msg_no, CostTracking.round_trip))
+
         # Serialize cost records to dicts
         costs_list = []
         for cost in cost_records:
             costs_list.append({
                 'chat_id': cost.chat_id,
                 'msg_no': cost.msg_no,
+                'round_trip': cost.round_trip,
                 'call_id': cost.call_id,
                 'timestamp': cost.timestamp.isoformat() if cost.timestamp else None,
                 'tokens_in': cost.tokens_in,
@@ -288,6 +360,7 @@ class DatabaseManager:
                 'cost_out': float(cost.cost_out),
                 'estimated_costs': float(cost.estimated_costs),
                 'elapsed_time': float(cost.elapsed_time),
+                'tool_time': float(cost.tool_time or 0),
                 'model': cost.model,
                 'provider': cost.provider,
                 'success': cost.success,

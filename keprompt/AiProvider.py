@@ -291,6 +291,11 @@ class AiProvider(abc.ABC):
         # Persist tool call counter for next call_functions() invocation
         self.prompt.vm.vdict["_tool_index"] = tool_index
 
+        # Attribute function execution time to the round trip that requested it, so the
+        # per-round-trip record separates "waiting on the model" from "running our code".
+        if function_call_info and self.prompt.round_trips:
+            self.prompt.round_trips[-1]['tool_time'] += sum(f['elapsed'] for f in function_call_info)
+
         # Store function call info in the prompt for use in timing display
         if function_call_info:
             self.prompt._last_function_calls = function_call_info
@@ -413,6 +418,21 @@ class AiProvider(abc.ABC):
         # Update token counts
         self.prompt.toks_in += tokens_in
         self.prompt.toks_out += tokens_out
+
+        # Record this round trip. This is the billed unit: one HTTP request, its own
+        # tokens, its own cost, its own elapsed time. tool_time is filled in by
+        # call_functions() for whatever functions this response asked for.
+        self.prompt.round_trips.append({
+            'label': label,
+            'tokens_in': tokens_in,
+            'tokens_out': tokens_out,
+            'cost_in': cost_in,
+            'cost_out': cost_out,
+            'api_time': elapsed,
+            'tool_time': 0.0,
+            'model': self.prompt.model_lookup_key or self.prompt.model,
+            'provider': self.prompt.provider,
+        })
 
         return retval
 

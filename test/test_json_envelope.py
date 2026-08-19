@@ -407,6 +407,9 @@ class TestChatManagerCreate:
         mock_vm.model_name = "gpt-4o"
         mock_vm.model = MagicMock(provider="openai")
         mock_vm.interaction_no = 1
+        mock_vm.round_trip_count = 3
+        mock_vm.api_time = 1.25
+        mock_vm.tool_time = 0.5
         mock_vm.last_response = "Hello! How can I help?"
         mock_vm.vdict = {"name": "World"}
         mock_vm.prompt = MagicMock()
@@ -471,6 +474,9 @@ class TestChatManagerSuccess:
         mock_vm.model_name = "claude-sonnet-4-20250514"
         mock_vm.model = MagicMock(provider="anthropic")
         mock_vm.interaction_no = 2
+        mock_vm.round_trip_count = 5
+        mock_vm.api_time = 3.0
+        mock_vm.tool_time = 1.5
         mock_vm.last_response = "Here is the answer."
         mock_vm.prompt = MagicMock()
         mock_vm.prompt.messages = []

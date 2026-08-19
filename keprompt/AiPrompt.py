@@ -200,6 +200,9 @@ class AiPrompt:
         self.system_message: Optional[str] = None
         self.toks_in: int = 0
         self.toks_out: int = 0
+        # Per-round-trip usage for the .exec currently executing. One entry per billed
+        # API request; reset at the start of every ask(). Drained by StmtExec.
+        self.round_trips: List[dict] = []
         self.provider: str = ""
         self.model: str = ""  # ALWAYS contains provider/model-name format
         self.model_lookup_key: str = ""  # Model identifier for ModelManager lookups
@@ -248,6 +251,9 @@ class AiPrompt:
 
         # Store call_id for AiCompany to access
         self._current_call_id = call_id
+
+        # Start a fresh per-round-trip ledger for this statement
+        self.round_trips = []
 
         # if 'LLM' in self.vm.debug:
         #     console.print("[bold yellow]Sending to API...[/bold yellow]")
