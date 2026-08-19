@@ -4,8 +4,10 @@ Database models and connection management for KePrompt.
 Uses Peewee ORM with support for SQLite, PostgreSQL, and MySQL via SQLAlchemy-style URLs.
 """
 import argparse
+import importlib.util
 import json
 import os
+import re
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -22,12 +24,36 @@ from .version import __version__
 # Global database instance
 database_proxy = DatabaseProxy()
 
+# Schema version this code expects. Bumped whenever the tables change; each bump
+# gets a keprompt/migrations/migrate-ver-<from>-to-<to>.py script.
+SCHEMA_VERSION = '2.16'
+
+# Databases written before the info table existed are 2.15 by definition.
+PRE_INFO_VERSION = '2.15'
+
+MIGRATIONS_DIR = Path(__file__).parent / 'migrations'
+_MIGRATION_NAME = re.compile(r'^migrate-ver-(.+)-to-(.+)\.py$')
+
 
 class BaseModel(Model):
     """Base model with common functionality."""
     
     class Meta:
         database = database_proxy
+
+
+class Info(BaseModel):
+    """Database-level metadata. One row, holding the schema version.
+
+    This is what tells keprompt whether the file in front of it was written by an
+    older schema and needs a migration script run against it.
+    """
+
+    version = CharField(max_length=20)
+    updated = DateTimeField(default=datetime.now)
+
+    class Meta:
+        table_name = 'info'
 
 
 class Chat(BaseModel):
@@ -166,85 +192,111 @@ def create_database_from_url(url: str) -> Database:
         raise ValueError(f"Unsupported database URL scheme: {parsed.scheme}")
 
 
-def _sqlite_columns(db: Database, table: str) -> List[str]:
-    """Column names of an existing SQLite table."""
-    return [row[1] for row in db.execute_sql(f"PRAGMA table_info({table})").fetchall()]
+def get_schema_version() -> str:
+    """Schema version recorded in the database.
 
-
-def _migrate_schema(db: Database) -> None:
-    """Bring an existing database up to the current schema.
-
-    Adds the per-conversation timing and round-trip columns to `chats`, and re-cuts
-    `cost_tracking` from one row per `.exec` statement to one row per billed API
-    round trip. Existing cost rows are preserved and become round_trip = 1.
-
-    Idempotent, and a no-op on a freshly created database.
+    Databases written before the `info` table existed report PRE_INFO_VERSION.
     """
+    try:
+        row = Info.select().order_by(Info.id.desc()).first()
+    except Exception:
+        return PRE_INFO_VERSION
+    return row.version if row else PRE_INFO_VERSION
+
+
+def set_schema_version(version: str = SCHEMA_VERSION) -> None:
+    """Record the schema version. One row; the latest wins."""
+    Info.delete().execute()
+    Info.create(version=version)
+
+
+def _discover_migrations() -> Dict[str, tuple]:
+    """Map from-version -> (to-version, script path) over keprompt/migrations/.
+
+    Scripts are named `migrate-ver-<from>-to-<to>.py`. They are standalone: this
+    module knows how to find and chain them, not what any of them does.
+    """
+    found: Dict[str, tuple] = {}
+    if not MIGRATIONS_DIR.is_dir():
+        return found
+    for path in sorted(MIGRATIONS_DIR.glob('migrate-ver-*.py')):
+        m = _MIGRATION_NAME.match(path.name)
+        if m:
+            found[m.group(1)] = (m.group(2), path)
+    return found
+
+
+def _load_migration(path: Path):
+    """Load a migration script by path (its filename is not a valid module name)."""
+    spec = importlib.util.spec_from_file_location(path.stem.replace('-', '_').replace('.', '_'), path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def run_migrations(db: Database, current: str, quiet: bool = False) -> str:
+    """Run the chain of migration scripts needed to reach SCHEMA_VERSION.
+
+    Each script owns its own DDL and stamps the new version itself, so this
+    function never has to know what changed.
+    """
+    if current == SCHEMA_VERSION:
+        return current
+
     if not isinstance(db, SqliteDatabase):
-        # Other backends have never shipped with the old shape; nothing to migrate.
-        return
+        raise RuntimeError(
+            f"database schema is at {current}, code expects {SCHEMA_VERSION}, "
+            f"and automatic migration is only implemented for SQLite")
 
-    tables = set(db.get_tables())
+    chain = _discover_migrations()
+    db_path = db.database
+    log = (lambda *a, **k: None) if quiet else print
+    seen = set()
 
-    # --- chats: additive columns, no rebuild needed ---------------------------
-    if 'chats' in tables:
-        existing = set(_sqlite_columns(db, 'chats'))
-        for name, ddl in (
-            ('total_round_trips', 'INTEGER NOT NULL DEFAULT 0'),
-            ('total_api_time', 'DECIMAL(10, 3) NOT NULL DEFAULT 0'),
-            ('total_tool_time', 'DECIMAL(10, 3) NOT NULL DEFAULT 0'),
-        ):
-            if name not in existing:
-                db.execute_sql(f"ALTER TABLE chats ADD COLUMN {name} {ddl}")
+    while current != SCHEMA_VERSION:
+        if current in seen:
+            raise RuntimeError(f"migration loop detected at schema version {current}")
+        seen.add(current)
 
-    # --- cost_tracking: changing the primary key requires a table rebuild -----
-    if 'cost_tracking' not in tables:
-        return
-    if 'round_trip' in set(_sqlite_columns(db, 'cost_tracking')):
-        return  # already re-cut
+        step = chain.get(current)
+        if step is None:
+            raise RuntimeError(
+                f"no migration found from schema version {current} to {SCHEMA_VERSION} "
+                f"(looked in {MIGRATIONS_DIR})")
 
-    legacy_cols = _sqlite_columns(db, 'cost_tracking')
-    carried = [c for c in legacy_cols
-               if c in CostTracking._meta.fields and c not in ('round_trip', 'tool_time')]
-    col_list = ', '.join(f'"{c}"' for c in carried)
+        to_version, path = step
+        log(f"keprompt: migrating {db_path}: {current} -> {to_version}")
+        _load_migration(path).migrate(db_path, log=log)
+        current = to_version
 
-    with db.atomic():
-        db.execute_sql("ALTER TABLE cost_tracking RENAME TO cost_tracking_legacy")
-
-        # In SQLite indexes follow the renamed table, and their names would collide
-        # with the ones create_tables() is about to make. Drop them first.
-        for (idx_name,) in db.execute_sql(
-            "SELECT name FROM sqlite_master WHERE type = 'index' "
-            "AND tbl_name = 'cost_tracking_legacy' AND sql IS NOT NULL"
-        ).fetchall():
-            db.execute_sql(f'DROP INDEX IF EXISTS "{idx_name}"')
-
-        db.create_tables([CostTracking], safe=True)
-        db.execute_sql(
-            f'INSERT INTO cost_tracking ({col_list}, round_trip, tool_time) '
-            f'SELECT {col_list}, 1, 0 FROM cost_tracking_legacy'
-        )
-        db.execute_sql("DROP TABLE cost_tracking_legacy")
+    return current
 
 
 def initialize_database(url: Optional[str] = None) -> Database:
-    """Initialize database connection and create tables, migrating legacy schema if needed."""
+    """Initialize database connection, create tables, and migrate an older schema."""
     if url is None:
         config = get_config()
         url = config.get_database_url()
-    
+
     # Create database connection
     db = create_database_from_url(url)
-    
+
     # Initialize the proxy
     database_proxy.initialize(db)
-    
-    # Legacy migration removed; assuming fresh chat schema
-    
-    # Create tables if they don't exist, then bring any existing ones up to date
+
     with db:
-        db.create_tables([Chat, CostTracking], safe=True)
-        _migrate_schema(db)
+        # A database with no chats table has never been written to, so whatever
+        # create_tables() builds is current by construction.
+        fresh = 'chats' not in set(db.get_tables())
+        db.create_tables([Chat, CostTracking, Info], safe=True)
+        if fresh:
+            set_schema_version()
+            return db
+        current = get_schema_version()
+
+    # Migration scripts open their own connection, so peewee's is closed by now.
+    if current != SCHEMA_VERSION:
+        run_migrations(db, current)
 
     return db
 
