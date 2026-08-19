@@ -11,6 +11,8 @@ What this does:
   chats           + total_round_trips, total_api_time, total_tool_time
   cost_tracking   + round_trip, tool_time
                   primary key (chat_id, msg_no) -> (chat_id, msg_no, round_trip)
+  server_registry dropped -- residue of the web GUI and HTTP server, whose code
+                  was removed in 2.15.0 while the table stayed behind
   info            created if absent; version set to 2.16
 
 Existing cost rows are preserved verbatim and become round_trip = 1. Their figures
@@ -113,8 +115,9 @@ def migrate(db_path: str, backup: bool = True, log=print) -> bool:
         needs_cost_rebuild = 'cost_tracking' in tables and 'round_trip' not in _columns(conn, 'cost_tracking')
         needs_chat_cols = 'chats' in tables and any(
             name not in _columns(conn, 'chats') for name, _ in CHATS_COLUMNS)
+        needs_server_drop = 'server_registry' in tables
 
-        if not (needs_cost_rebuild or needs_chat_cols):
+        if not (needs_cost_rebuild or needs_chat_cols or needs_server_drop):
             _stamp(conn, log)
             conn.commit()
             return False
@@ -159,6 +162,12 @@ def migrate(db_path: str, backup: bool = True, log=print) -> bool:
                 f'SELECT {cols}, 1, 0 FROM cost_tracking_legacy')
             conn.execute("DROP TABLE cost_tracking_legacy")
             log(f"  cost_tracking: rebuilt, {rows} row(s) carried over as round_trip = 1")
+
+        # --- server_registry: left behind when the server subsystem was removed ---
+        if needs_server_drop:
+            rows = conn.execute("SELECT count(*) FROM server_registry").fetchone()[0]
+            conn.execute("DROP TABLE server_registry")
+            log(f"  server_registry: dropped ({rows} row(s); web GUI removed in 2.15.0)")
 
         _stamp(conn, log)
         conn.commit()
