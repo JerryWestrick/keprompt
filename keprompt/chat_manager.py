@@ -56,6 +56,12 @@ class ChatManager:
             metavar="VAR=VALUE",
             help="Set variables: --set question='hello' model=gpt-4  OR  --set question hello",
         )
+        create.add_argument(
+            "--set-from-json",
+            dest="set_from_json",
+            metavar="FILE",
+            help="Set variables from a JSON object file",
+        )
 
         get_cmd = subparsers.add_parser(
             "get",
@@ -91,6 +97,12 @@ class ChatManager:
             action="append",
             metavar="VAR=VALUE",
             help="Set variables: --set question='hello' model=gpt-4  OR  --set question hello",
+        )
+        reply.add_argument(
+            "--set-from-json",
+            dest="set_from_json",
+            metavar="FILE",
+            help="Set variables from a JSON object file",
         )
 
         delete = subparsers.add_parser(
@@ -154,6 +166,26 @@ class ChatManager:
                 else:
                     raise ValueError(f"--set '{arg}' missing value. Use --set {arg}=value or --set {arg} value")
         return pairs
+
+    @staticmethod
+    def _load_set_from_json(path: str) -> dict:
+        """Load a JSON object of VM variables from a file.
+
+        Values keep JSON types. The file must contain an object, not an array
+        or scalar.
+        """
+        try:
+            with open(path, encoding="utf-8") as f:
+                data = json.load(f)
+        except OSError as e:
+            raise ValueError(f"--set-from-json cannot read {path}: {e.strerror or e}") from e
+        except json.JSONDecodeError as e:
+            raise ValueError(f"--set-from-json invalid JSON in {path}: {e}") from e
+        if not isinstance(data, dict):
+            raise ValueError(
+                f"--set-from-json must be a JSON object, got {type(data).__name__}"
+            )
+        return data
 
     def _make_serializable(self, obj):
         """Make an object JSON serializable."""
@@ -630,10 +662,6 @@ class ChatManager:
         from .keprompt_vm import PromptResolutionError
 
         prompt_ref = getattr(self.args, "prompt", None) or getattr(self.args, "prompt_flag", None)
-        raw_sets = getattr(self.args, "set", None) or []
-
-        # Convert --set parameters to dict
-        params_dict = dict(self._parse_set_params(raw_sets))
 
         # Helper to fail consistently
         def fail(msg: str):
@@ -645,6 +673,15 @@ class ChatManager:
 
         if not prompt_ref:
             return fail("--prompt is required")
+
+        # JSON file first; --set overrides on matching keys
+        try:
+            json_path = getattr(self.args, "set_from_json", None)
+            json_params = self._load_set_from_json(json_path) if json_path else {}
+            set_pairs = self._parse_set_params(getattr(self.args, "set", None) or [])
+        except ValueError as e:
+            return fail(str(e))
+        params_dict = {**json_params, **dict(set_pairs)}
 
         # Instantiate VM with internal prompt resolution and default globals
         try:
@@ -726,14 +763,26 @@ class ChatManager:
         chat_id = getattr(self.args, "chat_id", None)
         answer = getattr(self.args, "answer", None)
 
+        try:
+            json_path = getattr(self.args, "set_from_json", None)
+            json_params = self._load_set_from_json(json_path) if json_path else {}
+            set_pairs = self._parse_set_params(getattr(self.args, "set", None) or [])
+        except ValueError as e:
+            return {
+                "success": False,
+                "error": str(e),
+                "timestamp": datetime.now().isoformat(),
+            }
+
         # Load VM from existing chat
         vm = self.load_vm(chat_id)
         if not vm:
             return f"Chat {chat_id} not found or failed to load"
 
-        # Apply any --set parameter overrides
-        raw_sets = getattr(self.args, "set", None) or []
-        for var, value in self._parse_set_params(raw_sets):
+        # JSON file first (native types); --set after so it overrides via .set
+        for var, value in json_params.items():
+            vm.set_variable(var, value)
+        for var, value in set_pairs:
             vm.add_statement(keyword=".set", value=f"{var} {value}")
 
         vm.add_statement(keyword=".user", value=answer)

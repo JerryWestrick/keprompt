@@ -117,6 +117,12 @@ Run it with 2 parameters:
 keprompt chats create --prompt analyze --set filename "README.md" --set model "openrouter/openai/gpt-oss-20b"
 ```
 
+Or pass variables as a JSON object file (avoids shell quoting):
+```bash
+echo '{"filename":"README.md","model":"openrouter/openai/gpt-oss-20b"}' > vars.json
+keprompt chats create --prompt analyze --set-from-json vars.json
+```
+
 ## Modern CLI Interface
 
 KePrompt uses an intuitive object-verb command structure:

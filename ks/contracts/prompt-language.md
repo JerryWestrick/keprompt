@@ -31,7 +31,7 @@
 - `.exec` sends all accumulated messages, not only the latest one.
 - Consecutive same-role messages may merge.
 - `last_response` is updated by model and function execution.
-- Variables persist for the VM/chat. CLI `--set` overrides prompt defaults.
+- Variables persist for the VM/chat. CLI `--set-from-json FILE` and `--set` override prompt defaults (`--set` wins on matching keys).
 - Without `.functions`, the model receives no tools. `.cmd` is direct program execution and is not model tool access.
 - If `.exit` is absent, the VM adds completion statements: after `.exec`, print and exit; otherwise execute, print, and exit.
 

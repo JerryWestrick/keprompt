@@ -122,7 +122,7 @@ def test_database_initialization_runs_migration(tmp_path):
     db.close()
 
     conn = sqlite3.connect(path)
-    assert conn.execute("SELECT version FROM info").fetchone()[0] == "2.16.1"
+    assert conn.execute("SELECT version FROM info").fetchone()[0] == "2.16.2"
     assert "round_trip" in {
         row[1] for row in conn.execute("PRAGMA table_info(cost_tracking)")
     }
@@ -142,4 +142,9 @@ def test_noop_release_transition_stamps_new_version(tmp_path):
     assert migrate_sqlite.migrate(path, "2.16.1", backup=False)
     conn = sqlite3.connect(path)
     assert conn.execute("SELECT version FROM info").fetchone()[0] == "2.16.1"
+    conn.close()
+
+    assert migrate_sqlite.migrate(path, "2.16.2", backup=False)
+    conn = sqlite3.connect(path)
+    assert conn.execute("SELECT version FROM info").fetchone()[0] == "2.16.2"
     conn.close()

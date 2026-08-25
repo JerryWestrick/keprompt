@@ -1,6 +1,6 @@
 # Production Database Contract
 
-Default database: `prompts/chats.db` (current KePrompt/database version 2.16.1). It is operational production evidence. Analyze a copy or use read-only SQLite access. Older databases migrate when opened by current KePrompt; inspect `info.version` before assuming columns exist.
+Default database: `prompts/chats.db` (current KePrompt/database version 2.16.2). It is operational production evidence. Analyze a copy or use read-only SQLite access. Older databases migrate when opened by current KePrompt; inspect `info.version` before assuming columns exist.
 
 ## `chats`
 

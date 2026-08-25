@@ -26,7 +26,7 @@ The shell command is the application boundary, not merely an interactive conveni
 1. Install KePrompt and run `keprompt init` from the application root.
 2. Create `prompts/<application>.prompt` for model behavior.
 3. Create executable providers in `prompts/functions/` for application capabilities.
-4. Invoke `keprompt chat create --json`; pass inputs with `--set`.
+4. Invoke `keprompt chat create --json`; pass inputs with `--set-from-json FILE` (a JSON object). `--set` remains for a single override.
 5. Check exit status and parse stdout JSON. Treat stderr as diagnostics.
 6. Return `ai_response` to the caller and retain `chat_id` when continuation is needed.
 7. Continue with `keprompt chat reply --json <chat_id> <message>`.

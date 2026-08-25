@@ -7,6 +7,7 @@
 .#   keprompt chat new --prompt hello --model deepseek/deepseek-chat
 .#   keprompt chat new --prompt hello --set question 'what is 2+2?'
 .#   keprompt chat new --prompt hello --model openai/gpt-4o --set question 'tell me a joke'
+.#   keprompt chat new --prompt hello --set-from-json vars.json
 
 .system You are a helpful assistant. Keep your answers brief.
 

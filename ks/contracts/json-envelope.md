@@ -14,7 +14,7 @@ With `--json`, KePrompt writes one JSON envelope to stdout.
     "args": {},
     "variables": null,
     "timestamp": "...Z",
-    "version": "2.16.1"
+    "version": "2.16.2"
   },
   "ai_response": "...",
   "chat_id": "abcdefgh"
