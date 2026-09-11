@@ -46,6 +46,18 @@ class VMExecutionError(Exception):
         self.original_error = original_error
 
 
+_LEGACY_TOP_LEVEL_LLM_OPTIONS = ('temperature', 'max_tokens', 'top_p', 'top_k')
+
+
+def _reject_legacy_top_level_llm_options(source: dict) -> None:
+    found = [key for key in _LEGACY_TOP_LEVEL_LLM_OPTIONS if key in source]
+    if found:
+        names = ', '.join(found)
+        raise StmtSyntaxError(
+            f".exec error: {names} must be moved into llm_options for this version to work"
+        )
+
+
 class VM:
     """Class to hold Prompt Virtual Machine execution state"""
 
@@ -124,6 +136,7 @@ class VM:
             'Postfix': '>>',
             'Debug': False,
             'Verbose': False,
+            'llm_options': {},
         }
 
     def _resolve_prompt_ref(self, prompt_ref: str) -> str:
@@ -1122,6 +1135,8 @@ class StmtExec(StmtPrompt):
         
         header = f"[bold white]{VERTICAL}[/][white]{self.msg_no:02}[/] [cyan]{self.keyword:<8}[/]"
 
+        _reject_legacy_top_level_llm_options(vm.vdict)
+
         # Determine model parameters
         if self.value.strip():
             # .exec has explicit params - parse and use
@@ -1134,6 +1149,7 @@ class StmtExec(StmtPrompt):
             except json.JSONDecodeError as e:
                 vm.logger.log_error(f".exec params parse error: {e}")
                 raise StmtSyntaxError(f".exec syntax: invalid JSON '{self.value}': {e}")
+            _reject_legacy_top_level_llm_options(params)
         else:
             # No explicit params - get model from vdict
             if 'model' not in vm.vdict:
@@ -1143,11 +1159,7 @@ class StmtExec(StmtPrompt):
                     f"  .set model <model_name>"
                 )
             params = {'model': vm.vdict['model']}
-            # Include other LLM params from vdict if present
-            for key in ['temperature', 'max_tokens', 'top_p', 'top_k']:
-                if key in vm.vdict:
-                    params[key] = vm.vdict[key]
-        
+
         # Load the model (single point of instantiation)
         try:
             vm.load_llm(params)
@@ -1274,8 +1286,6 @@ class StmtExec(StmtPrompt):
         # vm.api_time is accumulated per request in AiProvider.make_api_request
 
         # Get model configuration parameters
-        temperature = vm.llm.get('temperature') if vm.llm else None
-        max_tokens = vm.llm.get('max_tokens') if vm.llm else None
         context_length = vm.llm.get('context_length') if vm.llm else None
         parameters_json = json.dumps(vm.vdict, default=str) if vm.vdict else None
 
@@ -1303,8 +1313,6 @@ class StmtExec(StmtPrompt):
                 # last_response. Record it once per .exec rather than once per request.
                 'parameters': parameters_json if seq == 1 else None,
                 'environment': os.getenv('ENVIRONMENT', 'development'),
-                'temperature': temperature,
-                'max_tokens': max_tokens,
                 'context_length': context_length
             }
             vm.pending_costs.append((self.msg_no, seq, cost_data))
@@ -1570,7 +1578,9 @@ class StmtPromptMeta(StmtPrompt):
         # Set variables from params for substitution (only if not already set by command line)
         if "params" in prompt_data:
             for key, value in prompt_data["params"].items():
-                if key not in vm.vdict:  # Only set if not already defined (e.g., by --param)
+                if key not in vm.vdict:
+                    vm.set_variable(key, value)
+                elif key == "llm_options" and vm.vdict[key] == {}:
                     vm.set_variable(key, value)
         
         # Log the prompt metadata

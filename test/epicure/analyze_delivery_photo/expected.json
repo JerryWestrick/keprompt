@@ -1,0 +1,10 @@
+{
+  "remision_number": "1199",
+  "client": "MANZOKU",
+  "payment_status": "pagado",
+  "payment_source": "handwritten",
+  "signature_present": true,
+  "original_total": 2230.0,
+  "adjusted_total": 2100,
+  "items_rejected": []
+}

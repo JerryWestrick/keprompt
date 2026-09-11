@@ -166,6 +166,7 @@ class AiProvider(abc.ABC):
             self.prompt.vm.logger.log_message_exchange("send", company_messages, call_id)
             
             request = self.prepare_request(company_messages)
+            request.update(self.prompt.vm.vdict['llm_options'])
 
             # Make API call with formatted label
             call_label = f"Call-{call_count:02d}"

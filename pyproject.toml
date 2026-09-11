@@ -46,3 +46,8 @@ keprompt = ["defaults/*.prompt", "defaults/functions/*", "migrations/*.py"]
 
 [tool.setuptools.dynamic]
 version = {attr = "keprompt.version.__version__"}
+
+[tool.pytest.ini_options]
+markers = [
+    "live: live provider API (skipped unless KEPROMPT_LIVE=1)",
+]

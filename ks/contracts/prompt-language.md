@@ -1,6 +1,6 @@
 # Prompt Language Contract
 
-`.prompt` files are line-based programs. A statement starts with `.`; following non-statement lines continue its value. Variables use `<<name>>`; dictionaries use `<<name.key>>`.
+`.prompt` files are line-based programs. A statement starts with `.`; following non-statement lines continue its value. Variables use `<<name>>` by default; dictionaries use `<<name.key>>`.
 
 ## Statements
 
@@ -32,8 +32,10 @@
 - Consecutive same-role messages may merge.
 - `last_response` is updated by model and function execution.
 - Variables persist for the VM/chat. CLI `--set-from-json FILE` and `--set` override prompt defaults (`--set` wins on matching keys).
+- Substitution delimiters are the VM variables `Prefix` (default `<<`) and `Postfix` (default `>>`). `.set Prefix` / `.set Postfix`, or the same names via CLI `--set` / `--set-from-json`, change the markers for later substitution.
 - Without `.functions`, the model receives no tools. `.cmd` is direct program execution and is not model tool access.
 - If `.exit` is absent, the VM adds completion statements: after `.exec`, print and exit; otherwise execute, print, and exit.
+- `llm_options` is always present as a dict. It is the only place for model request options, including `temperature`, `max_tokens`, `top_p`, and `top_k`. Set it on `.prompt` `params`. Every `.exec` merges it onto the request. Those four names as top-level variables stop execution: move them into `llm_options`.
 
 ## Read-only VM values
 
