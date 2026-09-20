@@ -28,6 +28,8 @@ Important fields:
 
 Join to `chats` on `chat_id`. `parameters` is normally populated only on the first round trip of an `.exec`.
 
+The table also carries `temperature` and `max_tokens` columns that nothing has written since 3.0.0, when those options moved into `llm_options`. Rows recorded by 3.0.0 or later are always NULL. Earlier rows are NULL too unless the prompt happened to set those options — in the reference 832-row workspace they are NULL throughout. Do not read them as the settings a request ran under; the request options of record are in `parameters`.
+
 ## Interpretation
 
 - `statements_json` records what the VM executed.
