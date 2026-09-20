@@ -94,9 +94,8 @@ Let's create something more useful - a file analyzer:
 
 ```bash
 cat > prompts/analyze.prompt << 'EOF'
-.prompt "name":"File Analyzer", "version":"1.0.0", "params":{"model":"gpt-4o", "filename":"file_to_analyze"}
+.prompt "name":"File Analyzer", "version":"1.0.0", "params":{"model":"openai/gpt-4o", "filename":"file_to_analyze"}
 .# Analyze any text file
-.llm {"model": "<<model>>"}
 .system You are an expert text analyst. Provide clear, actionable insights.
 .user Please analyze this file:
 
@@ -158,7 +157,7 @@ keprompt chats get
 keprompt models get --company OpenAI
 ```
 
-See the [Knowledge Engineer's Guide](ks/02-knowledge-engineers-guide.md) for the full reference.
+See the [Knowledge Store](ks/README.md) for the full reference.
 
 ## Core Concepts
 
@@ -171,7 +170,7 @@ See the [Knowledge Engineer's Guide](ks/02-knowledge-engineers-guide.md) for the
 | Command | Purpose | Example |
 |---------|---------|---------|
 | `.prompt` | **REQUIRED** - Define prompt metadata | `.prompt "name":"My Prompt", "version":"1.0.0"` |
-| `.llm` | Configure AI model | `.llm {"model": "gpt-4o"}` |
+| `.set` | Set a variable, including the model | `.set model openai/gpt-4o` |
 | `.functions` | **Declare allowed functions** (no `.functions` = no functions) | `.functions readfile, writefile` |
 | `.system` | Set system message | `.system You are a helpful assistant` |
 | `.user` | Add user message | `.user What is the weather like?` |
@@ -221,7 +220,7 @@ Hello from data.txt
 
 #### End-to-end example (manual reconstruction)
 ```text
-.prompt "name":"Toolcall Example", "version":"1.0.0", "params":{"model":"gpt-4o-mini"}
+.prompt "name":"Toolcall Example", "version":"1.0.0", "params":{"model":"openai/gpt-4o-mini"}
 .user Please read data.txt and summarize it.
 
 # These two statements represent what the *LLM API* would have produced,
@@ -238,7 +237,7 @@ Hello from data.txt
 **Every prompt file must start with a `.prompt` statement** that defines metadata:
 
 ```bash
-.prompt "name":"My Prompt Name", "version":"1.0.0", "params":{"model":"gpt-4o-mini"}
+.prompt "name":"My Prompt Name", "version":"1.0.0", "params":{"model":"openai/gpt-4o-mini"}
 ```
 
 **Required fields:**
@@ -254,10 +253,10 @@ Hello from data.txt
 .prompt "name":"Hello World", "version":"1.0.0"
 
 # With parameters
-.prompt "name":"Code Reviewer", "version":"2.1.0", "params":{"model":"gpt-4o", "language":"python"}
+.prompt "name":"Code Reviewer", "version":"2.1.0", "params":{"model":"openai/gpt-4o", "language":"python"}
 
 # Research assistant
-.prompt "name":"Research Assistant", "version":"1.5.0", "params":{"model":"claude-3-5-sonnet-20241022", "depth":"comprehensive"}
+.prompt "name":"Research Assistant", "version":"1.5.0", "params":{"model":"anthropic/claude-sonnet-4-20250514", "depth":"comprehensive"}
 ```
 
 ### Variables
@@ -281,7 +280,7 @@ keprompt chats create --prompt greeting --set name "Alice" --set date "Monday"
 By default, **the model has NO access to any functions**. You must explicitly declare which functions the model can use with `.functions`:
 
 ```
-.prompt "name":"Example", "version":"1.0.0", "params":{"model":"gpt-4o"}
+.prompt "name":"Example", "version":"1.0.0", "params":{"model":"openai/gpt-4o"}
 .functions readfile, wwwget
 .system You are a research assistant.
 .user Analyze this file and fetch related info from the web.
@@ -295,8 +294,8 @@ This is a security feature — it prevents models (especially delegated sub-agen
 ### Research Assistant
 ```bash
 cat > prompts/research.prompt << 'EOF'
-.prompt "name":"Research Assistant", "version":"1.0.0", "params":{"model":"claude-3-5-sonnet-20241022", "topic":"research_topic"}
-.llm {"model": "claude-3-5-sonnet-20241022"}
+.prompt "name":"Research Assistant", "version":"1.0.0", "params":{"model":"anthropic/claude-sonnet-4-20250514", "topic":"research_topic"}
+.set model anthropic/claude-sonnet-4-20250514
 .system You are a research assistant. Provide thorough, well-sourced information.
 .user Research this topic: <<topic>>
 .cmd wwwget(url="https://en.wikipedia.org/wiki/<<topic>>")
@@ -310,8 +309,8 @@ keprompt chats create --prompt research --set topic "Artificial_Intelligence"
 ### Code Review
 ```bash
 cat > prompts/review.prompt << 'EOF'
-.prompt "name":"Code Reviewer", "version":"1.0.0", "params":{"model":"gpt-4o", "codefile":"path/to/file"}
-.llm {"model": "gpt-4o"}
+.prompt "name":"Code Reviewer", "version":"1.0.0", "params":{"model":"openai/gpt-4o", "codefile":"path/to/file"}
+.set model openai/gpt-4o
 .system You are a senior software engineer. Provide constructive code reviews.
 .user Please review this code file:
 
@@ -441,7 +440,7 @@ Use in prompts:
 ```bash
 cat > prompts/weather_check.prompt << 'EOF'
 .prompt "name":"Weather Check", "version":"1.0.0", "params":{"city":"default_city"}
-.llm {"model": "gpt-4o-mini"}
+.set model openai/gpt-4o-mini
 .functions get_weather
 .user What's the weather like in <<city>>? Based on the weather, suggest appropriate clothing.
 .exec
@@ -566,7 +565,7 @@ keprompt chat new --prompt Test --json | \
 Begin with basic prompts and gradually add complexity.
 
 ### 2. Manage Costs
-- Use cheaper models for development (`gpt-4o-mini`, `claude-3-haiku`)
+- Use cheaper models for development (`openai/gpt-4o-mini`, `anthropic/claude-haiku-4-5`)
 - Monitor costs with `keprompt chats get`
 - Check model pricing with `keprompt models get`
 
@@ -627,10 +626,14 @@ keprompt chats --help
 
 ## Documentation
 
-- [Prompt Language](ks/01-prompt-language.md) - Writing .prompt files
-- [Knowledge Engineer's Guide](ks/02-knowledge-engineers-guide.md) - Comprehensive guide
-- [Statements & Messages](ks/03-statements-and-messages.md) - Architecture reference
-- [Creating Functions](ks/creating-keprompt-functions.context.md) - Custom function development
+The [Knowledge Store](ks/README.md) is the entry point — start there and pick a role.
+
+- [Prompt Language](ks/contracts/prompt-language.md) - Writing .prompt files
+- [External Functions](ks/contracts/external-functions.md) - Custom function development
+- [JSON Output](ks/contracts/json-envelope.md) - The `--json` envelope
+- [Application Shell](ks/contracts/application-shell.md) - Driving KePrompt from an application
+- [Production Database](ks/contracts/production-database.md) - What `chats.db` records
+- [Architecture](ks/internals/architecture.md) - Implementation map
 
 ## What's Next?
 

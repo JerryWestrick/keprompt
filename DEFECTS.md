@@ -8,7 +8,7 @@ not a plan.
 
 ## DEFECT-001 — token/cost accounting drops all but the last round trip of a tool loop
 
-- **Status:** fixed 2026-08-18 (see *Fix* below); not yet released
+- **Status:** fixed 2026-08-18 (see *Fix* below); released in 2.16.0 (`main` @ 8cae599)
 - **Discovered:** 2026-08-08, while deriving a workload profile from `Epicure-prod` for the
   `~/system/inference-hardware` sizing work
 - **Found in:** keprompt 2.15.0 (`main` @ f1c8912)
@@ -125,3 +125,60 @@ migrated rows land at `round_trip = 1`, migration is idempotent.
   `messages_json`.
 - **`parameters` blob.** Still embeds `last_response` and `model_info` in every `.exec`'s first
   cost row.
+
+---
+
+## DEFECT-002 — the system prompt never reached three providers, and was demoted on a fourth
+
+- **Status:** fixed 2026-09-19; released in 3.1.0
+- **Discovered:** 2026-09-19, while checking whether `llm_options` could express Anthropic's
+  `cache_control`
+- **Found in:** keprompt 3.0.1 (`main` @ c3fcfc3)
+- **Severity:** high — every `.system` statement was silently discarded on anthropic, mistral
+  and xai. No error, no warning; the model simply never saw it.
+
+### Summary
+
+`.system` builds a universal message with role `system`. Providers disagree on how that is
+carried, and four of the eight adapters got it wrong:
+
+| Provider | Behavior before the fix |
+|---|---|
+| anthropic | `to_company_messages()` stored the text on `self.system_message`; `prepare_request()` never read it back. **Dropped.** |
+| mistral | Same pattern. **Dropped.** |
+| xai | Same pattern. **Dropped.** |
+| deepseek | Rewritten into `{"role": "user", "content": "system: ..."}` — delivered, but as a user turn rather than a system instruction. |
+| gemini | Correct (`system_instruction`), but `prepare_request()` raised `AttributeError` when a prompt had **no** `.system`, because `system_message` was never initialized. |
+| openai, openrouter, cerebras | Correct. |
+
+The base class initialized `self.system_prompt` (write-only, never read anywhere) while every
+adapter used `self.system_message` — so the attribute the adapters relied on had no default.
+
+A second, quieter bug sat in all the stashing adapters: they read `msg.content[0].text`, so when
+consecutive `.system` statements merged into one message with several text parts, every part
+after the first was dropped.
+
+### Fix
+
+| Change | Where |
+|---|---|
+| Initialize `self.system_message = None`; drop the dead `system_prompt` | `AiProvider.__init__` |
+| Add `system_text()` to flatten all text parts of a system message | `AiProvider` |
+| Send the system prompt as the top-level `system` parameter | `AiAnthropic.prepare_request` |
+| Emit a real `{"role": "system"}` message | `AiMistral`, `AiXai`, `AiDeepSeek` |
+| Use `system_text()` instead of `content[0].text` | `AiGoogle`, `AiAnthropic` |
+
+Anthropic takes the system prompt only as the top-level parameter: a `system` role in `messages`
+is model-gated, must follow a user message, and is rejected as `messages[0]`. Mistral, xAI and
+DeepSeek were each confirmed against their API documentation to accept `role: "system"`, so the
+DeepSeek user-message rewrite was unnecessary rather than a workaround for a real limitation.
+
+Covered by `test/test_system_message.py`, which asserts the destination per provider, that a
+prompt with no `.system` still builds, and that multi-part system messages survive. Those tests
+produce 12 failures against the pre-fix adapters.
+
+### Still open
+
+- **Historical chats.** Any chat run on anthropic, mistral or xai before this fix was executed
+  without its system prompt. `messages_json` records the system message that the VM built, so
+  saved chats look correct — the omission is not visible in the stored evidence.

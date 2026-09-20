@@ -147,6 +147,10 @@ def migrate_3_0_0_to_3_0_1(conn: sqlite3.Connection, log=print) -> None:
     """No database changes in KePrompt 3.0.1."""
 
 
+def migrate_3_0_1_to_3_1_0(conn: sqlite3.Connection, log=print) -> None:
+    """No database changes in KePrompt 3.1.0."""
+
+
 Migration = tuple[str, Callable[[sqlite3.Connection, Callable], None]]
 MIGRATIONS: dict[str, Migration] = {
     "2.15.0": ("2.16.0", migrate_2_15_0_to_2_16_0),
@@ -154,6 +158,7 @@ MIGRATIONS: dict[str, Migration] = {
     "2.16.1": ("2.16.2", migrate_2_16_1_to_2_16_2),
     "2.16.2": ("3.0.0", migrate_2_16_2_to_3_0_0),
     "3.0.0": ("3.0.1", migrate_3_0_0_to_3_0_1),
+    "3.0.1": ("3.1.0", migrate_3_0_1_to_3_1_0),
 }
 
 

@@ -27,7 +27,7 @@ keprompt/migrations/migrate-ver-2.15-to-2.16.py
 5. Each migration function upgrades one version boundary. Releases without database changes use explicit no-op transitions so `info.version` still tracks the KePrompt version.
 6. Migration succeeds only when `info.version` equals the version expected by KePrompt.
 
-Use the semantic version value, such as `2.16.0`, rather than the display prefix from `keprompt --version`.
+Use the semantic version value, such as `3.1.0`, rather than the display prefix from `keprompt --version`.
 
 The runner resolves the complete path before modifying the database, backs up once, executes and stamps each step transactionally, and refuses unsupported paths or downgrades.
 

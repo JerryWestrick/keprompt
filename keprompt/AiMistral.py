@@ -50,7 +50,7 @@ class AiMistral(AiProvider):
 
         for msg in messages:
             if msg.role == "system":
-                self.system_message = msg.content[0].text if msg.content else None
+                mistral_messages.append({"role": "system", "content": self.system_text(msg)})
                 continue
 
             content = []

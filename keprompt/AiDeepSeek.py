@@ -72,7 +72,7 @@ class AiDeepSeek(AiProvider):
                 else: raise Exception(f"Unknown part type: {part.type}")
 
             if msg.role == "system":
-                deepseek_messages.append({"role": "user", "content": f"system: {content[0]['text']}"})
+                deepseek_messages.append({"role": "system", "content": self.system_text(msg)})
                 continue
 
             if msg.role == "user" and content:

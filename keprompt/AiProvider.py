@@ -25,7 +25,20 @@ class AiProvider(abc.ABC):
 
     def __init__(self, prompt: 'AiPrompt'):
         self.prompt = prompt
-        self.system_prompt = None
+        # Providers that carry the system prompt outside the message list -- Anthropic's
+        # top-level `system`, Gemini's `system_instruction` -- stash it here in
+        # to_company_messages() and read it back in prepare_request(). call_llm() always
+        # calls those two in that order. None means the prompt had no .system statement.
+        self.system_message: str | None = None
+
+    @staticmethod
+    def system_text(msg: 'AiMessage') -> str:
+        """Flatten a system message's text parts into a single string.
+
+        A .system statement can accumulate several text parts, since add_message()
+        merges consecutive same-role messages. Reading only content[0] dropped the rest.
+        """
+        return "\n".join(part.text for part in msg.content if part.type == "text")
 
 
 

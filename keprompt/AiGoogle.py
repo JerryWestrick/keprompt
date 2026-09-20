@@ -58,7 +58,7 @@ class AiGoogle(AiProvider):
 
         for msg in messages:
             if msg.role == "system":
-                self.system_message = msg.content[0].text if msg.content else None
+                self.system_message = self.system_text(msg) or None
                 continue
 
             content = []

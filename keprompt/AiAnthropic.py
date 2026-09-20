@@ -30,6 +30,11 @@ class AiAnthropic(AiProvider):
             "messages": messages,
             "max_tokens": 4096
         }
+        # Anthropic takes the system prompt as a top-level parameter. It does not accept
+        # a "system" role in messages (and never as messages[0]), so to_company_messages()
+        # sets it aside for us.
+        if self.system_message:
+            request["system"] = self.system_message
         if anthropic_tools:
             request["tools"] = anthropic_tools
         return request
@@ -59,10 +64,11 @@ class AiAnthropic(AiProvider):
     def to_company_messages(self, messages: List) -> List[Dict]:
 
         company_messages = []
+        system_texts = []
         for msg in messages:
             content = []
             if msg.role == "system":
-                self.system_message = msg.content[0].text if msg.content else None
+                system_texts.append(self.system_text(msg))
             else:
                 for part in msg.content:
                     if   part.type == "text":       content.append({'type': 'text', 'text': part.text})
@@ -74,6 +80,7 @@ class AiAnthropic(AiProvider):
                 role = "assistant" if msg.role == "assistant" else "user"
                 company_messages.append({"role": role, "content": content})
 
+        self.system_message = "\n".join(t for t in system_texts if t) or None
         return company_messages
 
     def extract_token_usage(self, response: Dict) -> tuple[int, int]:
