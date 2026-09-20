@@ -151,6 +151,46 @@ fights the abstraction; as its own statement it does not.
 branches on it. Tagging Jev `mode: "systemone"` lets `.question` refuse a chat model and `.exec`
 refuse a System One model, using a field that already round-trips.
 
+## Measured, 2026-09-20
+
+25 real single-turn questions from Epicure production, labelled `object`/`action`, run against
+`api.typesafe.ai` with `jev-latest`. Test set and raw results are in `~/Epicure-prod/`
+(`jev-testset.json`, `jev-trial-results.json`) — kept out of this repo because they carry client names.
+
+| variant | object | action | both | tok/call | conf correct | conf wrong |
+|---|---|---|---|---|---|---|
+| generic criteria, no context | 92% | 72% | 72% | 516 | 0.88 | 0.62 |
+| **tuned criteria, no context** | **96%** | 88% | **88%** | **585** | 0.88 | 0.65 |
+| generic criteria, + business context | 92% | 88% | 84% | 754 | 0.90 | 0.86 |
+| tuned criteria, + business context | 84% | **92%** | 84% | 851 | 0.92 | 0.62 |
+
+Findings:
+
+- **Most first-round errors were the question's fault, not the model's.** Offering a `none` action
+  let it answer "no operation requested" for the terse `#NN CLIENT <items>` order format, which has
+  no verb. Spelling out that convention, and that line items belong to Order, took both-correct from
+  72% to 88%.
+- **Business context helps `action` and hurts `object`.** Consistent across both runs that used it.
+  Action needs domain convention, which context supplies; object needs discrimination between
+  entities the context mentions equally, so context adds salient distractors — a message naming a
+  client was pulled to `Client`, and one containing "this week" to `Week`. It also costs ~45% more
+  input tokens, and Jev prices on input. Put convention in the criteria that needs it rather than in
+  a preamble.
+- **Confidence is predictive and worth gating on.** In the best variant, correct answers averaged
+  0.88 and wrong ones 0.65. Gating at 0.8 gave 97% accuracy on the 68% of answers kept.
+- Latency ~0.5 s per call. Input is dominated by the criteria block, so cost is near-flat per call
+  regardless of message length. Output tokens are free.
+
+Caveats: n=25, one run per variant, so a 4-point gap is a single case. The criteria were tuned
+against the same 25 cases they were scored on, so 88% is optimistic — held-out cases are needed, and
+2100 more are available. Two cases every variant got "wrong" are almost certainly mislabelled by me
+rather than by Jev (whether starting a new week is `create` or `update`).
+
+**Not yet measured, and it decides everything: what gpt-oss-120b scores on the same 25.** There is no
+baseline, so 88% is a number without a comparison. Note also that the corpus cannot demonstrate the
+original problem — context bloat from ~30 routines — because those routines don't exist yet. Testing
+that needs a constructed function set (today's ~20 vs a projected ~34) with the questions held fixed.
+
 ## Open
 
 - Where `.question` gets its model name from — `.prompt` params, a statement argument, or a default.
