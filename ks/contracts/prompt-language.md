@@ -1,6 +1,6 @@
 # Prompt Language Contract
 
-`.prompt` files are line-based programs. A statement starts with `.`; following non-statement lines continue its value. Variables use `<<name>>` by default; dictionaries use `<<name.key>>`.
+`.prompt` files are line-based programs. A statement starts with `.`; following non-statement lines continue its value, or a multi-line quote takes it verbatim. Variables use `<<name>>` by default; dictionaries use `<<name.key>>`.
 
 ## Statements
 
@@ -24,6 +24,36 @@
 | `.clear [...]` | Delete matching files; destructive |
 | `.exit` | Stop execution |
 | `.# text` | Comment |
+
+## Multi-line quotes
+
+Any statement may take its value from a multi-line quote. `<<<ID` as the last thing on the
+statement line opens one; a line containing exactly `>>>ID` closes it. `ID` is yours to choose, so
+content that would otherwise collide with the terminator is handled by picking a different one.
+
+```
+.system <<<SYS
+You are a helpful assistant.
+
+    Indentation and blank lines are preserved.
+.exit here is content, not a statement.
+>>>SYS
+```
+
+Inside the quote the line is content, not syntax: no whitespace stripping, no blank-line skipping,
+and no `.keyword` dispatch. The quoted text replaces the marker in the statement's value, so
+`.set name <<<ID` keeps the name ahead of the quoted value and `.user Hello <<<ID` keeps the
+leading text.
+
+- The delimiters are fixed literals resolved at parse time. They are deliberately **not** bound to
+  `Prefix` / `Postfix`, which are runtime variables — changing those moves `<<name>>` and leaves
+  `<<<ID>>>` where it is.
+- Because it is resolved at parse time, quoted text is never re-parsed. Substituted content
+  containing `>>>ID` cannot close a quote.
+- Variables inside the quote are substituted normally when the statement executes.
+- An unclosed quote is a parse error naming the opening line.
+- `<<<'ID'` with a quoted identifier is reserved for a future non-interpolating form and is
+  currently rejected.
 
 ## Execution rules
 

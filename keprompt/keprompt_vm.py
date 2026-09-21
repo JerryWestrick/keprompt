@@ -2,6 +2,7 @@ import glob
 import json
 import logging
 import os
+import re
 import sys
 import time
 import uuid
@@ -29,6 +30,21 @@ logging.basicConfig(level="NOTSET", format=FORMAT, datefmt="[%X]",
                     handlers=[RichHandler(console=console, rich_tracebacks=True, )])
 
 log = logging.getLogger(__file__)
+
+# Multi-line quote (heredoc). `<<<ID` at end of a statement line opens a block that is consumed
+# verbatim until a line that is exactly `>>>ID`. Fixed literals, resolved entirely at parse time --
+# deliberately NOT bound to the Prefix/Postfix substitution variables, which are runtime state.
+# `<<<'ID'` (quoted identifier) is reserved for a future non-interpolating form and rejected today.
+# The identifier is any run of non-space characters -- hyphens, underscores, digits, punctuation --
+# delimited by whitespace or end of line.
+HEREDOC_OPEN = re.compile(
+    r"<<<(?:(?P<quote>['\"])(?P<qid>\S+?)(?P=quote)|(?P<id>\S+))\s*$")
+
+
+def heredoc_terminator(identifier: str) -> str:
+    """The line that closes a multi-line quote opened with `<<<identifier`."""
+    return f">>>{identifier}"
+
 
 # Global routines
 class StmtSyntaxError(Exception):
@@ -404,6 +420,16 @@ class VM:
         """Add a new statement to the prompt."""
         self.statements.append(make_statement(self, len(self.statements), keyword=keyword, value=value))
 
+    def emit_statement(self, keyword: str, value: str, lno: int) -> None:
+        """Add a statement, folding a continuation line into the previous message statement."""
+        if lno and keyword == '.text' and self.statements:
+            last = self.statements[-1]
+            if last.keyword in ['.assistant', '.system', '.text', '.user']:
+                last.value = f"{last.value}\n{value}".strip()
+                return
+
+        self.add_statement(keyword=keyword, value=value)
+
     def parse_prompt(self) -> None:
         """Parse the prompt file and create a list of statements.
             parse according to rules in docs/PromptLanguage.md
@@ -436,8 +462,24 @@ class VM:
                         f"Example: .prompt \"name\":\"My Prompt\", \"version\":\"1.0.0\"\n\n")
                 break
 
+        heredoc_id: str | None = None      # identifier of the open multi-line quote, None if closed
+        heredoc_head: tuple[str, str] = ()  # (keyword, value preceding the <<<ID marker)
+        heredoc_body: list[str] = []
+        heredoc_lno: int = 0
+
         for lno, line in enumerate(lines):
             try:
+                # Inside a multi-line quote the line is content, not syntax: consumed verbatim with
+                # no strip, no blank-line skip and no dot-keyword dispatch, until the terminator.
+                if heredoc_id is not None:
+                    if line.rstrip() == heredoc_terminator(heredoc_id):
+                        keyword, value = heredoc_head
+                        self.emit_statement(keyword, value + "\n".join(heredoc_body), heredoc_lno)
+                        heredoc_id, heredoc_head, heredoc_body = None, (), []
+                    else:
+                        heredoc_body.append(line.rstrip('\r\n'))
+                    continue
+
                 line = line.strip()  # remove trailing blanks
                 if not line: continue  # skip blank lines
 
@@ -455,19 +497,33 @@ class VM:
                     if keyword not in keywords:  # last case have .keyword but it is not a valid keyword
                         keyword, value = '.text', line
 
-                # okay concatenate .text
-                if lno and keyword == '.text':
-                    last = self.statements[-1]
-                    if last.keyword in ['.assistant', '.system', '.text', '.user']:
-                        last.value = f"{last.value}\n{value}".strip()
-                        continue
+                # Multi-line quote opener: <<<ID as the last thing on the line.
+                opener = HEREDOC_OPEN.search(value)
+                if opener:
+                    if opener.group('quote'):
+                        raise StmtSyntaxError(
+                            f"{VERTICAL} [red]Error: {self.filename}:{lno + 1} non-interpolating "
+                            f"multi-line quote <<<'{opener.group('qid')}' is reserved and not yet "
+                            f"supported. Use <<<{opener.group('qid')} instead.[/]\n\n")
+                    heredoc_id = opener.group('id')
+                    heredoc_head = (keyword, value[:opener.start()])
+                    heredoc_body = []
+                    heredoc_lno = lno
+                    continue
 
-                self.add_statement(keyword=keyword, value=value)
-                # self.statements.append(make_statement(self, len(self.statements), keyword=keyword, value=value))
+                self.emit_statement(keyword, value, lno)
 
+            except StmtSyntaxError:
+                raise
             except Exception as e:
                 raise StmtSyntaxError(
                     f"{VERTICAL} [red]Error parsing file {self.filename}:{lno} error: {str(e)}.[/]\n\n")
+
+        if heredoc_id is not None:
+            raise StmtSyntaxError(
+                f"{VERTICAL} [red]Error: {self.filename}:{heredoc_lno + 1} multi-line quote "
+                f"<<<{heredoc_id} is never closed; expected a line containing exactly "
+                f"{heredoc_terminator(heredoc_id)}.[/]\n\n")
 
         # Validate that we have a .prompt statement and it was processed
         if not self.statements or self.statements[0].keyword != '.prompt':

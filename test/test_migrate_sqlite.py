@@ -160,3 +160,8 @@ def test_noop_release_transition_stamps_new_version(tmp_path):
     conn = sqlite3.connect(path)
     assert conn.execute("SELECT version FROM info").fetchone()[0] == "3.1.0"
     conn.close()
+
+    assert migrate_sqlite.migrate(path, "4.0.0", backup=False)
+    conn = sqlite3.connect(path)
+    assert conn.execute("SELECT version FROM info").fetchone()[0] == "4.0.0"
+    conn.close()
