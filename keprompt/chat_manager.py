@@ -22,7 +22,7 @@ from .AiPrompt import AiTextPart
 from .database import get_db_manager, Chat, CostTracking
 from .ModelManager import ModelManager
 from .config import get_config
-from .AiPrompt import AiCall, AiResult, AiMessage
+from .AiPrompt import AiCall, AiResult, AiMessage, AiLdmPart
 from .keprompt_logger import LogMode, StandardLogger
 from .keprompt_vm import VM, VMExecutionError
 
@@ -73,9 +73,11 @@ class ChatManager:
         get_cmd.add_argument("--limit", type=int, help="Max number of chats to list")
         get_cmd.add_argument(
             "--format",
-            choices=["full", "statements", "statement", "stmts", "stmt", "messages", "message", "msgs", "msg", "summary", "sum", "raw", "json"],
+            choices=["full", "statements", "statement", "stmts", "stmt", "messages", "message",
+                     "msgs", "msg", "summary", "sum", "raw", "json"],
             default="full",
-            help="Display format: statements/stmt (source code), messages/msg (conversation), summary/sum (metadata), raw/json (JSON)"
+            help="Display format: statements/stmt (source code), messages/msg (conversation), "
+                 "summary/sum (metadata), raw/json (JSON)"
         )
 
         reply = subparsers.add_parser(
@@ -390,6 +392,8 @@ class ChatManager:
                             id=part_data.get("id", ""),
                         )
                     )
+                elif part_type == "ldm":
+                    content_parts.append(AiLdmPart.from_json(vm, part_data))
                 elif part_type == "tool_result":
                     content_parts.append(
                         AiResult(
@@ -406,8 +410,11 @@ class ChatManager:
                          model_name=model_name, provider=provider)
             )
 
-        # Restore variables
+        # Restore variables. A chat saved before `$.llm_model` holds its model as `model`; that is a
+        # use of the deprecated name like any other, redirected with a warning.
         vm.vdict.update(variables_data)
+        if "model" in vm.vdict:
+            vm.assign("model", vm.vdict.pop("model"))
 
         # Restore original filename from chat metadata
         if chat.prompt_filename:
@@ -781,7 +788,7 @@ class ChatManager:
 
         # JSON file first (native types); --set after so it overrides via .set
         for var, value in json_params.items():
-            vm.set_variable(var, value)
+            vm.assign(var, value)
         for var, value in set_pairs:
             vm.add_statement(keyword=".set", value=f"{var} {value}")
 

@@ -13,3 +13,4 @@ from .AiMistral import AiMistral
 from .AiOpenAi import AiOpenAi
 from .AiOpenRouter import AiOpenRouter
 from .AiXai import AiXai
+from .AiTypeSafe import AiTypeSafe

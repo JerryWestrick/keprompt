@@ -1,83 +1,73 @@
+"""Module-qualified function specs in `.functions`: bare names, `module.*`, `module.func`, errors.
+
+Fixtures are `test/prompts/fn-*.prompt`, run against `test/prompts/functions/demo_tools.py` -- a
+real provider, because providers are discovered by executing them.
+
+Note what the CLI can and cannot see. Every error is visible in the envelope and asserted exactly.
+Success is only observable as "the run did not fail": nothing in the CLI surface reports which
+functions a `.functions` statement resolved to, short of a real model call with tools.
 """
-Tests for module-qualified function specs in .functions directive.
 
-Covers: bare names, module.*, module.func, and error cases.
-"""
+import json
 
-import pytest
-from pathlib import Path
-from keprompt.keprompt_function_space import FunctionSpace
+from conftest import fails, ok, run_cli
 
 
-@pytest.fixture
-def fs():
-    """Create a FunctionSpace with fake function_array for testing."""
-    space = object.__new__(FunctionSpace)
-    space.function_array = [
-        {"name": "get_clients", "_executable": "prompts/functions/epicure_tools"},
-        {"name": "get_orders", "_executable": "prompts/functions/epicure_tools"},
-        {"name": "new_order", "_executable": "prompts/functions/epicure_tools"},
-        {"name": "cancel_order", "_executable": "prompts/functions/epicure_tools"},
-        {"name": "readfile", "_executable": "prompts/functions/keprompt_builtins"},
-        {"name": "writefile", "_executable": "prompts/functions/keprompt_builtins"},
-        {"name": "execcmd", "_executable": "prompts/functions/keprompt_builtins"},
-    ]
-    return space
+def test_provider_is_discovered():
+    envelope, _ = run_cli("functions", "list", offline=True)
+    listed = json.dumps(envelope)
+    assert "alpha" in listed and "beta" in listed
 
 
-# --- bare names (backward compat) ---
+# --- bare names --------------------------------------------------------------------------------
 
-def test_bare_names(fs):
-    result = fs.resolve_function_names(["get_clients", "readfile"])
-    assert result == ["get_clients", "readfile"]
-
-
-def test_bare_name_unknown(fs):
-    with pytest.raises(ValueError, match="unknown function 'nope'"):
-        fs.resolve_function_names(["nope"])
+def test_bare_names():
+    assert "ok" in ok("fn-bare-names")
 
 
-# --- module.* wildcard ---
-
-def test_wildcard(fs):
-    result = fs.resolve_function_names(["epicure_tools.*"])
-    assert set(result) == {"get_clients", "get_orders", "new_order", "cancel_order"}
+def test_bare_name_unknown():
+    assert "nope" in json.dumps(fails("fn-bare-unknown"))
 
 
-def test_wildcard_unknown_module(fs):
-    with pytest.raises(ValueError, match="unknown module 'nope'"):
-        fs.resolve_function_names(["nope.*"])
+def test_builtin_bare_name():
+    assert "ok" in ok("fn-builtin")
 
 
-# --- module.func qualified ---
+# --- module.* wildcard --------------------------------------------------------------------
 
-def test_qualified_name(fs):
-    result = fs.resolve_function_names(["keprompt_builtins.readfile"])
-    assert result == ["readfile"]
-
-
-def test_qualified_name_wrong_module(fs):
-    with pytest.raises(ValueError, match="unknown function 'readfile' in module 'epicure_tools'"):
-        fs.resolve_function_names(["epicure_tools.readfile"])
+def test_wildcard():
+    assert "ok" in ok("fn-wildcard")
 
 
-# --- mixed specs ---
-
-def test_mixed_specs(fs):
-    result = fs.resolve_function_names(["epicure_tools.*", "keprompt_builtins.readfile"])
-    assert "get_clients" in result
-    assert "readfile" in result
-    assert "writefile" not in result  # only readfile from builtins
+def test_wildcard_unknown_module():
+    text = json.dumps(fails("fn-wildcard-unknown-module"))
+    assert "unknown module" in text and "nosuch" in text
 
 
-def test_wildcard_plus_bare(fs):
-    result = fs.resolve_function_names(["epicure_tools.*", "readfile"])
-    assert "get_clients" in result
-    assert "readfile" in result
+def test_unknown_module_error_lists_what_is_available():
+    assert "demo_tools" in json.dumps(fails("fn-wildcard-unknown-module"))
 
 
-# --- deduplication ---
+# --- module.func -------------------------------------------------------------------------
 
-def test_no_duplicates(fs):
-    result = fs.resolve_function_names(["get_clients", "epicure_tools.*"])
-    assert result.count("get_clients") == 1
+def test_module_qualified_function():
+    assert "ok" in ok("fn-module-qualified")
+
+
+def test_module_qualified_unknown_function():
+    assert "nope" in json.dumps(fails("fn-module-unknown-func"))
+
+
+def test_mixed_specs():
+    assert "ok" in ok("fn-mixed")
+
+
+# --- no .functions at all ------------------------------------------------------------------
+
+def test_prompt_without_functions_runs():
+    """No `.functions` means the model gets no tools -- the safe default, not an error."""
+    assert "ok" in ok("fn-none")
+
+
+def test_empty_functions_is_an_error():
+    assert "required" in json.dumps(fails("fn-empty"))

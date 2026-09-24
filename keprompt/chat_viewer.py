@@ -395,6 +395,12 @@ class ChatViewer(Screen):
                                 args_str = ', '.join(f"{k}={v}" for k, v in args.items()) if isinstance(args, dict) else str(args)
                                 text_parts.append(f"Call {name}({args_str}) [id={call_id}]")
                             
+                            # An LDM call: the question set and its answers
+                            elif item_type == 'ldm':
+                                answers = item.get('answers') or {}
+                                shown = ', '.join(f"{k}={v.get('value')}" for k, v in answers.items()) or 'no answers'
+                                text_parts.append(f"LDM {item.get('set', '')}: {shown}")
+
                             # Handle tool results (function returns)
                             elif item_type in ('tool_result', 'result'):
                                 name = item.get('name', 'unknown')

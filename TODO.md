@@ -71,11 +71,11 @@ known-limitation line about cache token classes. Update them with whatever gets 
 
 ---
 
-## `.question` — System One calls from a prompt
+## `.question` — LDM calls from a prompt
 
 Designed 2026-09-20, not built. Full design in [`design/question.md`](design/question.md).
 
-Adds a non-message statement that sends state plus named typed questions to a System One model
+Adds a non-message statement that sends state plus named typed questions to an LDM model
 (TypeSafe's Jev) and lands the answers in a variable, so a prompt can classify intent cheaply and
 then load only what the classification selected — `.include <<intent.action.value>>-<<intent.object.value>>.md`.
 Motivated by Epicure: thirty similar routines in one context degrade gpt-oss-120b's selection.

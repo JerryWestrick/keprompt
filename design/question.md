@@ -1,4 +1,4 @@
-# Design: `.question` — System One calls from a prompt
+# Design: `.question` — LDM calls from a prompt
 
 Status: designed, not built. Dated 2026-09-20, revised 2026-09-21.
 
@@ -21,14 +21,14 @@ The fix is to classify first, cheaply, and load only what the classification sel
 
 ## What TypeSafe / Jev is
 
-A "System One" model: it makes fast structured decisions instead of generating text. One request
+An LDM, a decision model: it makes fast structured decisions instead of generating text. One request
 carries a `state` plus a set of named `questions`; every question is evaluated in parallel and in
 isolation against that same state. It never emits text — all three primitives select.
 
 | Primitive | Asks | Returns |
 |---|---|---|
 | `choice` | pick one of these options | the option + probabilities |
-| `score` | rate against a rubric | a score + legend + probabilities |
+| `score` | rate against an ordered rubric | a 0.0–1.0 position + legend + probabilities |
 | `noul` | is this statement true | 0.0–1.0 |
 
 A `choice` answer also carries a calibrated `confidence` and `probabilities`. **A `noul` answer does
@@ -57,33 +57,74 @@ pick (their regex-then-`pick()` cookbook), or decompose the value into enumerabl
 reassemble in code (their date cookbook asks seven `choice` questions and rebuilds the date in
 Python). Anything whose domain is neither finite nor decomposable stays out of reach.
 
-## The statement
+## Two statements: define and invoke
 
-Non-message statement, in the same family as `.functions` and `.set` — it does not add anything to
-the conversation. Questions come from the indented body, using the same continuation rule as
-`.system` and `.user`: adding `.question` to the fold list is the whole parser change for the body.
+Both are non-message statements, in the same family as `.functions` and `.set` — neither adds
+anything to the conversation.
 
-**The original head syntax is dead.** It was:
+```
+.question Intent <<<END
+    object: choice
+        instructions: Which entity is the user acting on?
+        Order: an order / pedido / remision, or the items on one
+        Client: a customer of the business
+        Product: an item that is sold
+    action: choice
+        instructions: What operation is the user requesting?
+        create: make a new one
+        read: look up, list or report on existing ones
+>>>END
+
+.evaluate ?.Intent <<<STATE
+#15 TERCER
+Buenas tardes chef si por favor violas 1 domo
+>>>STATE
+
+.include <<?.Intent.action.value>>-<<?.Intent.object.value>>.md
+```
+
+`.question` declares a named set — its questions, their criteria, and which LDM model answers
+it. `.evaluate` runs that set against a state. The split is what *define once, call many* requires,
+and it is also what makes the guard possible: a guard fires when no statement is executing, so its
+definition has to already be in force.
+
+**The model belongs to `.question`, not `.evaluate`.** It is part of defining the set, not of
+supplying state.
+
+**There is no destination argument**, and this is what killed the original head syntax. That was:
 
 ```
 .question <<user-text>> as intent
 ```
 
-`as` cannot delineate the end of the state. Ordinary text contains the word, so the delimiter is
-ambiguous; and the state is a substituted variable that can expand to pages, so any delimiter
-searched for *inside* the expansion is also forgeable by the content — which in the guard case is
-attacker-controlled. The fix is structural: the state is delineated at parse time, before
-substitution, exactly as `.set` splits its name off before substituting its value.
+`as` cannot delineate the end of the state — ordinary text contains the word, and the state is a
+substituted variable that can expand to pages, so any delimiter searched for *inside* the expansion
+is forgeable by the content, which in the guard case is attacker-controlled. Addressing the set by
+path dissolves the problem rather than relocating it: answers already have a home at
+`?.Intent.action.value`, so nothing needs naming. The head is exactly two parts, set and state, and
+since a path contains no spaces, splitting on the first space is unambiguous — the same rule `.set`
+uses.
 
-**That is what the multi-line quote is for**, shipped in v4.0.0 and documented in
-`ks/contracts/prompt-language.md`. `<<<ID` opens, a line of exactly `>>>ID` closes, content is
-consumed verbatim, delimiters are fixed literals resolved at parse time and deliberately not bound
-to the configurable substitution markers. Because it resolves at parse time, quoted text is never
-re-parsed and substituted content containing `>>>ID` cannot close anything.
+### Why the body is a multi-line quote
 
-Still open: how the head is spelled, and where the destination name sits now that the state is no
-longer on the head line. Also open, and it blocks the head spelling — see **Multi-line quote: the
-body's home** below.
+Criteria are two levels deep: a question has instructions, and each option has a description. The
+continuation rule strips lines individually, so it cannot carry that second level. A multi-line
+quote suspends stripping, so indentation survives and can mean depth.
+
+This is not decoration. Criteria are what both trials turned on — classification went 72% → 88% by
+spelling out that line items belong to Order, and injection detection went from 149 false positives
+to zero by describing the domain. They are also the bulk of the payload at ~585 tokens, so the
+syntax has to be comfortable at paragraph length, not a word per option.
+
+Both statements set `heredoc_as_value = False`: they parse their own line, so the quoted body stays
+on `.heredoc` and pages of text never land in the part they have to read. `.evaluate` takes its
+state inline for short values and in a quote for long ones, with no change of statement.
+
+`.ask` was considered as a name for the invoking statement and dropped. Question/answer is
+TypeSafe's own vocabulary, but `.ask` and `.exec` would read alike while doing fundamentally
+different things — one generates text, one selects from a fixed set — and `mode: "ldm"` exists
+precisely so the VM can refuse the wrong pairing. Aliasing `.ask` onto `.exec` was considered too
+(assembler mnemonics do this: `jz`/`je` are one opcode) and also dropped.
 
 ## Namespace
 
@@ -119,8 +160,7 @@ _prompt.VM.llm_options
 _prompt.question.<Set>          the Jev calling mechanism
 ```
 
-`VM` and `question` are parallel: one is the calling mechanism for chat models, the other for System
-One models. Neither is a collection, which is why `question` is singular — `_prompt.question.Intent`
+`VM` and `question` are parallel: one is the calling mechanism for chat models, the other for LDMs. Neither is a collection, which is why `question` is singular — `_prompt.question.Intent`
 reads as the question subsystem's set named `Intent`, and bare `_prompt.question` is simply the
 wildcard over its members.
 
@@ -140,7 +180,7 @@ the primitive being asked for. Same key, same level, both legal strings from the
 the collision is silent. Definitions therefore move down a level into `_definition`:
 
 ```
-?.Intent.action.value            answer   choice → "create"   score → 2   noul → 0.87
+?.Intent.action.value            answer   choice → "create"   score → 0.95   noul → 0.87
 ?.Intent.action.confidence       answer   choice only; absent for noul
 ?.Intent.action.type             answer   "choice" | "score" | "noul"
 ?.Intent.action.probabilities    answer
@@ -258,6 +298,42 @@ the same request. Jev's selection-only design means it cannot be talked into emi
 text, a real structural advantage over guarding with a chat model, but "this content argues it is
 legitimate" remains live against any classifier.
 
+## Executing it
+
+> **Superseded 2026-09-24 by `design/ldm-execute.md`:** an LDM call is an execute like any other — one provider path, one record. The reasoning below is kept as history.
+
+**No abstraction.** One concrete implementation, not a base class. An abstraction needs two
+instances before the shared shape is knowledge rather than guesswork, and there is one LDM
+provider. The existing provider abstraction is independently a bad fit: of `AiProvider`'s five
+abstract methods only `extract_token_usage` and `calculate_costs` apply, because there are no
+messages to convert and no text reply to build.
+
+Registry participation is a separate thing from abstraction participation. Jev still needs a model
+registry entry — that is where pricing and `mode` live, and `get_model()` raises without one — but
+it does not follow that it subclasses `AiProvider`.
+
+**The database holds enough to rebuild a test case.** Stronger than what is recorded today:
+`cost_tracking` keeps aggregates per round trip, which says what a call cost but not what it was.
+Rebuilding needs the request — state as sent, question set with its criteria, model asked for — and
+the response — answers with confidences and probabilities, model that actually served, usage.
+
+A concrete yardstick: *could the trial's `testset_*.json` and `results_*.json` be regenerated purely
+from the database?* Those are the two shapes a trial needs, cases in and answers out. If the schema
+can produce both, it can build test suites. The only thing it cannot supply is the expected label,
+which is human judgement.
+
+This also covers the guard's replay requirement, from the other direction — verdicts must be read
+back, not recomputed, or a stored chat changes behaviour when the model version moves.
+
+Note the namespace holds only the latest answer for a set: `.evaluate ?.Intent` twice and the second
+overwrites the first, the same way `last_response` does. The namespace is a view; the ledger is the
+record. That is fine for prompts, and it is exactly why every call has to be written.
+
+**Conversation output.** `.question` and `.evaluate` are non-message statements, so they never enter
+the message list and a conversation dump would show nothing — while being something that cost money
+and decided which file got included. `msg_no` is the statement index, so `(chat_id, msg_no, 1)` is
+already a unique key.
+
 ## Measured, 2026-09-21 — injection detection
 
 300 cases: 150 real Epicure messages as negatives, and a different 150 of the same messages with one
@@ -295,31 +371,29 @@ carry client names.
 
 ## What has to change
 
-**Parser — the body will not attach.** A line not starting with `.` becomes `.text`, and a `.text`
-merges into the previous statement only when that statement is in the fold list
-`['.assistant', '.system', '.text', '.user']`. `.question` is not in it, so the question definitions
-would become standalone `.text` statements and `StmtText` would append them to the conversation —
-silently sending them to the LLM as message content. This is the same failure mode that made the
-README's obsolete `.llm` lines get sent as literal text, and it is confirmed: parsing the designed
-syntax today yields one `.text` statement swallowing the whole block.
+**Parser — register the statements.** `.question` and `.evaluate` are new entries in
+`StatementTypes`, both with `heredoc_as_value = False`. No change to the fold list is needed: the
+body arrives in a multi-line quote, not as continuation lines.
 
-Adding `.question` to the fold list is the entire change. Note lines are stripped individually, so
-indentation in the body is decorative and cannot nest; blank lines are skipped, so the body runs to
-the next recognised dot-keyword; and continuation lines after a closed multi-line quote fold in
-correctly, which was verified.
+That matters because the continuation rule could not have carried this body anyway. Lines are
+stripped individually, so indentation cannot mean depth — and criteria are two levels deep. It also
+fails loudly in the wrong direction: until the keywords are registered, an unrecognised `.keyword`
+degrades to `.text` and merges into the preceding message, so a `.question` block today parses as
+one `.text` statement swallowing the whole thing and sending it to the LLM as content. Confirmed by
+parsing it. Same failure mode as the README's obsolete `.llm` lines.
 
-**Multi-line quote: the body's home.** Standard heredoc semantics allow a tail after the opener —
-`cat <<EOF > out.txt` keeps parsing the command line — while requiring the terminator alone on its
-line. What shipped in v4.0.0 is stricter: no tail anywhere. Adopting the standard raises a fork that
-is **not yet decided**, and it blocks the head spelling:
+**Multi-line quote: settled and built.** Standard heredoc semantics now apply — the opener does not
+have to end the line (`cat <<EOF > out.txt` keeps parsing the command), while the terminator must
+stand alone. The question of where the body goes was resolved by letting each statement declare it:
 
-- *Body replaces the marker in place* (what is built). `.system <<<S` works because the body becomes
-  the value. But `.question <<<state as intent` would then yield `<pages of text> as intent`, putting
-  the delimiter back inside the expansion — the exact problem the quote was introduced to solve.
-- *Body carried separately from the line* (true to shell, where the body is a separate stream). The
-  statement sees its line with the marker removed, plus a body alongside. `.question` reads its head
-  cleanly. But every statement that currently expects the body *as* its value — `.system`, `.user`,
-  `.set` — has to say so.
+- `heredoc_as_value = True` (the default) splices the body in at the marker, `before + body + tail`.
+  That is what `.system`, `.user` and `.set` want — their operand simply is the text.
+- `heredoc_as_value = False` gives the statement its line with the marker removed and puts the body
+  on `self.heredoc`. `.question` and `.evaluate` take this, so pages of quoted text never touch the
+  line they parse.
+
+`make_statement` and `StmtPrompt.__init__` carry `heredoc` through; it is `None` when no quote was
+used.
 
 **Model registry — Jev cannot be priced.** `_load_all_models()` reads exactly one file,
 `./prompts/functions/model_prices_and_context_window.json`, and keeps only entries whose
@@ -340,7 +414,7 @@ Overlay entries must use LiteLLM's field names, since that is what the loader re
     "input_cost_per_token": 0.0000xx,
     "output_cost_per_token": 0.0,
     "max_input_tokens": 0,
-    "mode": "systemone" } }
+    "mode": "ldm" } }
 ```
 
 Jev prices per input token with output free, so `output_cost_per_token: 0.0` and the existing
@@ -349,6 +423,8 @@ Jev prices per input token with output free, so `output_cost_per_token: 0.0` and
 This is not TypeSafe-specific — any provider outside LiteLLM's coverage (local Ollama, an internal
 endpoint, a private fine-tune) hits the same wall.
 
+> **Superseded 2026-09-24 by `design/ldm-execute.md`:** an LDM call is an execute like any other — one provider path, one record. The paragraph below is kept as history.
+
 **Provider abstraction is a partial fit.** Of `AiProvider`'s five abstract methods,
 `extract_token_usage` and `calculate_costs` work as-is — Jev returns `usage.input_tokens` /
 `output_tokens`. The other three do not: `to_company_messages` has no message list to convert,
@@ -356,8 +432,8 @@ endpoint, a private fine-tune) hits the same wall.
 fights the abstraction; as its own statement it does not.
 
 **`mode` is a free discriminator.** It is loaded into `AiModel` and carried through, but nothing
-branches on it. Tagging Jev `mode: "systemone"` lets `.question` refuse a chat model and `.exec`
-refuse a System One model, using a field that already round-trips.
+branches on it. Tagging Jev `mode: "ldm"` lets `.question` refuse a chat model and `.exec`
+refuse an LDM model, using a field that already round-trips.
 
 ## Measured, 2026-09-20
 
@@ -407,10 +483,14 @@ that needs a constructed function set (today's ~20 vs a projected ~34) with the 
   tokens per call, near-flat regardless of state length — and Jev prices on input. If named sets
   exist, the per-call cost of a guard collapses to the state alone. Decides nothing about the
   language; decides a lot about whether guarding every acquisition is affordable.
-- **Whether the multi-line quote body replaces the marker or is carried separately** — see *What has
-  to change*. Blocks the head spelling, and changes `.system` / `.user` / `.set` if it goes the
-  second way.
-- How the head of `.question` is spelled, and where the destination name sits.
+- **Where the per-call record lives** — a new table, or an extension of `cost_tracking`. It is a
+  migration either way, so it wants settling before the first stab writes rows in a shape that has
+  to be migrated away from.
+- Exact body grammar inside the quote. The shape is settled — question, `instructions:`, then one
+  line per option — but not the details: whether `instructions` is a reserved key among the options,
+  how `score` legends and `noul` (which has no options at all) are spelled, and whether a criterion
+  can run to several lines.
+- Failure behaviour when the API errors, rate-limits or times out.
 - Where `last_response` lives under the new namespace. The two subsystems are otherwise symmetric —
   `_prompt.question.<Set>` holds both mechanism and answers — but the LLM's result currently floats
   at the root. `_prompt.VM.last_response` would restore the symmetry at the cost of breaking every

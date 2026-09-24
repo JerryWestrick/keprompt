@@ -31,7 +31,8 @@ class OutputFormatter:
         'user': 'green',
         'assistant': 'yellow',
         'tool': 'cyan',
-        'tool_result': 'cyan'
+        'tool_result': 'cyan',
+        'ldm': 'magenta'
     }
     
     @classmethod
@@ -222,7 +223,7 @@ class OutputFormatter:
                 
                 # Get model info if available (for assistant messages)
                 model_display = ""
-                if role == "assistant" and msg.get("model_name"):
+                if role in ("assistant", "ldm") and msg.get("model_name"):
                     model_name = msg["model_name"]
                     short_model = model_name.split('/')[-1] if '/' in model_name else model_name
                     provider = msg.get('provider', '').lower()
@@ -239,6 +240,10 @@ class OutputFormatter:
                     elif part_type == "tool":
                         args_str = ', '.join(f"{k}={v}" for k, v in part.get('arguments', {}).items())
                         txt += f"**Call** `{part.get('name', '')}({args_str})` [id={part.get('id', '')}]\n"
+                    elif part_type == "ldm":
+                        answers = part.get("answers")
+                        shown = ", ".join(f"{k}={v.get('value')}" for k, v in answers.items()) if answers else "no answers"
+                        txt += f"**LDM** `{part.get('set', '')}`: {shown}\n"
                     elif part_type == "tool_result":
                         result = str(part.get('content', ''))
                         result_preview = result[:200] + '...' if len(result) > 200 else result
@@ -368,7 +373,7 @@ class OutputFormatter:
             
             # Get model info if available (for assistant messages)
             model_display = ""
-            if role == "assistant" and msg.get("model_name"):
+            if role in ("assistant", "ldm") and msg.get("model_name"):
                 model_name = msg["model_name"]
                 short_model = model_name.split('/')[-1] if '/' in model_name else model_name
                 provider = msg.get('provider', '').lower()
@@ -385,6 +390,10 @@ class OutputFormatter:
                 elif part_type == "tool":
                     args_str = ', '.join(f"{k}={v}" for k, v in part.get('arguments', {}).items())
                     txt += f"**Call** `{part.get('name', '')}({args_str})` [id={part.get('id', '')}]\n"
+                elif part_type == "ldm":
+                    answers = part.get("answers")
+                    shown = ", ".join(f"{k}={v.get('value')}" for k, v in answers.items()) if answers else "no answers"
+                    txt += f"**LDM** `{part.get('set', '')}`: {shown}\n"
                 elif part_type == "tool_result":
                     result = str(part.get('content', ''))
                     result_preview = result[:200] + '...' if len(result) > 200 else result

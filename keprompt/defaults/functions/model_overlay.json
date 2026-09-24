@@ -1,0 +1,127 @@
+{
+  "_comment": [
+    "Models keprompt knows about that LiteLLM does not carry. `keprompt models update` overwrites",
+    "model_prices_and_context_window.json wholesale, so anything declared here survives it.",
+    "Fields use LiteLLM's own names, because that is what the loader reads.",
+    "",
+    "Everything below is mode=ldm: an LDM (decision model), invoked by .evaluate rather",
+    "than .exec. They all speak the same wire protocol -- POST /v1/systemone taking {state, model,",
+    "questions} and returning {model, answers, usage} -- so the only thing that differs between",
+    "them is the base URL and whether auth is required.",
+    "",
+    "max_input_tokens is 0 where the publisher has not stated a limit. Costs are per token."
+  ],
+
+  "typesafe/jev-latest": {
+    "litellm_provider": "typesafe",
+    "mode": "ldm",
+    "input_cost_per_token": 4.2e-08,
+    "output_cost_per_token": 0.0,
+    "max_tokens": 0,
+    "max_input_tokens": 0,
+    "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+    "description": "TypeSafe Jev, floating alias. Hosted, Bearer auth. $0.042/M input, output free."
+  },
+  "typesafe/jev-preview": {
+    "litellm_provider": "typesafe",
+    "mode": "ldm",
+    "input_cost_per_token": 4.2e-08,
+    "output_cost_per_token": 0.0,
+    "max_tokens": 0,
+    "max_input_tokens": 0,
+    "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+    "description": "TypeSafe Jev preview: 'should be better in most ways' than jev-latest."
+  },
+
+  "kev/kev-0.8b": {
+    "litellm_provider": "kev",
+    "mode": "ldm",
+    "input_cost_per_token": 0.0,
+    "output_cost_per_token": 0.0,
+    "max_tokens": 0,
+    "max_input_tokens": 0,
+    "source": "https://github.com/jaredpalmer/kev",
+    "description": "Kev 0.8B, Apache-2.0, Qwen3.5 base. Self-hosted via `kev serve`."
+  },
+  "kev/kev-4b": {
+    "litellm_provider": "kev",
+    "mode": "ldm",
+    "input_cost_per_token": 0.0,
+    "output_cost_per_token": 0.0,
+    "max_tokens": 0,
+    "max_input_tokens": 0,
+    "source": "https://github.com/jaredpalmer/kev",
+    "description": "Kev 4B, Apache-2.0, Qwen3.5 base. Self-hosted via `kev serve`."
+  },
+  "kev/kev-9b": {
+    "litellm_provider": "kev",
+    "mode": "ldm",
+    "input_cost_per_token": 0.0,
+    "output_cost_per_token": 0.0,
+    "max_tokens": 0,
+    "max_input_tokens": 0,
+    "source": "https://huggingface.co/jaredpalmer/kev-9b",
+    "description": "Kev 9B, Apache-2.0. 0.852 on the locked test against Jev's 0.857; Brier 0.237."
+  },
+
+  "decision/kai-0.6b": {
+    "litellm_provider": "decision",
+    "mode": "ldm",
+    "input_cost_per_token": 0.0,
+    "output_cost_per_token": 0.0,
+    "max_tokens": 0,
+    "max_input_tokens": 0,
+    "source": "https://vllm-sr.ai/blog/decision-models/",
+    "description": "Decision 1.0 Kai 0.6B, open weights. Self-hosted, LDM compatible."
+  },
+  "decision/lex-0.6b": {
+    "litellm_provider": "decision",
+    "mode": "ldm",
+    "input_cost_per_token": 0.0,
+    "output_cost_per_token": 0.0,
+    "max_tokens": 0,
+    "max_input_tokens": 0,
+    "source": "https://vllm-sr.ai/blog/decision-models/",
+    "description": "Decision 1.0 Lex 0.6B, open weights. Self-hosted, LDM compatible."
+  },
+  "decision/eos-0.8b": {
+    "litellm_provider": "decision",
+    "mode": "ldm",
+    "input_cost_per_token": 0.0,
+    "output_cost_per_token": 0.0,
+    "max_tokens": 0,
+    "max_input_tokens": 0,
+    "source": "https://vllm-sr.ai/blog/decision-models/",
+    "description": "Decision 1.0 Eos 0.8B, open weights. Self-hosted, LDM compatible."
+  },
+  "decision/sol-2b": {
+    "litellm_provider": "decision",
+    "mode": "ldm",
+    "input_cost_per_token": 0.0,
+    "output_cost_per_token": 0.0,
+    "max_tokens": 0,
+    "max_input_tokens": 0,
+    "source": "https://vllm-sr.ai/blog/decision-models/",
+    "description": "Decision 1.0 Sol 2B, open weights. Self-hosted, LDM compatible."
+  },
+  "decision/nox-4b": {
+    "litellm_provider": "decision",
+    "mode": "ldm",
+    "input_cost_per_token": 0.0,
+    "output_cost_per_token": 0.0,
+    "max_tokens": 0,
+    "max_input_tokens": 0,
+    "source": "https://vllm-sr.ai/blog/decision-models/",
+    "description": "Decision 1.0 Nox 4B, open weights. Self-hosted, LDM compatible."
+  },
+  "decision/lux-9b": {
+    "litellm_provider": "decision",
+    "mode": "ldm",
+    "input_cost_per_token": 0.0,
+    "output_cost_per_token": 0.0,
+    "max_tokens": 0,
+    "max_input_tokens": 0,
+    "source": "https://vllm-sr.ai/blog/decision-models/",
+    "description": "Decision 1.0 Lux 9B, open weights. Self-hosted, LDM compatible."
+  }
+}

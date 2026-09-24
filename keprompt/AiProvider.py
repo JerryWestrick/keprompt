@@ -142,6 +142,14 @@ class AiProvider(abc.ABC):
             console.print(f"[red]Error writing models to {json_path}: {e}[/red]")
             raise
 
+    def select_messages(self) -> List['AiMessage']:
+        """The messages this provider builds its request from. An LLM is sent the conversation."""
+        return self.prompt.llm_messages()
+
+    def request_options(self) -> Dict:
+        """Options merged into every request. An LLM takes `llm_options`."""
+        return self.prompt.vm.vdict['llm_options']
+
     def call_llm(self, label: str) -> List['AiMessage']:
         do_again = True
         responses = []
@@ -170,7 +178,7 @@ class AiProvider(abc.ABC):
             call_count += 1
             do_again = False
 
-            company_messages = self.to_company_messages(self.prompt.messages)
+            company_messages = self.to_company_messages(self.select_messages())
             
             # EXEC DEBUG: When enabled, execution details are automatically saved to conversation
             # for analysis with --view-conversation command
@@ -179,7 +187,7 @@ class AiProvider(abc.ABC):
             self.prompt.vm.logger.log_message_exchange("send", company_messages, call_id)
             
             request = self.prepare_request(company_messages)
-            request.update(self.prompt.vm.vdict['llm_options'])
+            request.update(self.request_options())
 
             # Make API call with formatted label
             call_label = f"Call-{call_count:02d}"
@@ -191,7 +199,10 @@ class AiProvider(abc.ABC):
             )
 
             response_msg = self.to_ai_message(response)
-            self.prompt.messages.append(response_msg)
+            # A provider may complete a message already in the list (an LDM call's answers go into
+            # the message that holds its parameters) rather than returning a new one.
+            if not any(m is response_msg for m in self.prompt.messages):
+                self.prompt.messages.append(response_msg)
             responses.append(response_msg)
             
             # EXEC DEBUG: LLM responses are automatically captured in conversation for analysis
@@ -209,7 +220,7 @@ class AiProvider(abc.ABC):
             else:
                 # No function calls - this is a final text response, show it and log it
                 # Log the entire conversation including the final response
-                all_messages = self.to_company_messages(self.prompt.messages)
+                all_messages = self.to_company_messages(self.select_messages())
                 self.prompt.vm.logger.log_message_exchange("received", all_messages, call_id)
                 self._display_llm_text_response(response_msg, call_label)
                 

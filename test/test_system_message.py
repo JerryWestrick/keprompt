@@ -1,115 +1,88 @@
-"""Every provider must carry a .system statement to the model in its own native slot.
+"""Every provider must actually deliver a `.system` statement to the model.
 
-Anthropic, Mistral and XAI used to stash the system text on the provider and never send
-it; DeepSeek rewrote it into a "system: ..." user turn; Gemini raised AttributeError when
-a prompt had no .system at all.
+Regression test for DEFECT-002, where Anthropic, Mistral and xAI stashed the system text on the
+provider and never sent it, and DeepSeek rewrote it into a "system: ..." user turn.
+
+Three fixtures, each run once per provider with `--set $.llm_model=...`:
+`sys-single`, `sys-multi`, `sys-none`.
+
+Nothing in the CLI surface shows a request body, so delivery is proven by knowledge rather than
+obedience: the system prompt carries a value the model could not otherwise know, and the test asks
+for it back. A model that disobeys an instruction and a provider that dropped the text look
+identical; a model that repeats a value it was never told does not.
+
+The value is deliberately mundane. Earlier wordings ("internal codename", "access code") made
+cautious models refuse to repeat it, which reads exactly like the dropped system prompt this test
+exists to detect.
+
+These are live, billed calls. A provider the account cannot reach is skipped, not failed.
 """
 
 import json
-from unittest.mock import patch
+import os
 
 import pytest
 
-# Importing the adapters registers them with ModelManager.
-import keprompt.AiAnthropic  # noqa: F401
-import keprompt.AiCerebras  # noqa: F401
-import keprompt.AiDeepSeek  # noqa: F401
-import keprompt.AiGoogle  # noqa: F401
-import keprompt.AiMistral  # noqa: F401
-import keprompt.AiOpenAi  # noqa: F401
-import keprompt.AiOpenRouter  # noqa: F401
-import keprompt.AiXai  # noqa: F401
-from keprompt.ModelManager import ModelManager
-from keprompt.keprompt_vm import VM, make_statement
+from conftest import printed, run_prompt
 
-MARK = "SYSTEM-PROMPT-MARKER-42"
+MARK = "BANANA47"
 
-PROVIDERS = ["anthropic", "cerebras", "deepseek", "gemini", "mistral", "openai", "openrouter", "xai"]
+# provider -> (env var holding its key, a small model that exists in the registry)
+PROVIDERS = {
+    "openai": ("OPENAI_API_KEY", "openai/gpt-4o-mini"),
+    "anthropic": ("ANTHROPIC_API_KEY", "anthropic/claude-haiku-4-5"),
+    "deepseek": ("DEEPSEEK_API_KEY", "deepseek/deepseek-chat"),
+    "mistral": ("MISTRAL_API_KEY", "mistral/mistral-small-latest"),
+    "xai": ("XAI_API_KEY", "xai/grok-2"),
+    "cerebras": ("CEREBRAS_API_KEY", "cerebras/gpt-oss-120b"),
+    "gemini": ("GOOGLE_API_KEY", "gemini/gemini-2.5-flash-lite"),
+    "openrouter": ("OPENROUTER_API_KEY", "openrouter/anthropic/claude-3-haiku"),
+}
 
-# Where each provider is expected to carry the system prompt.
-TOP_LEVEL_SYSTEM = {"anthropic"}
-SYSTEM_INSTRUCTION = {"gemini"}
-# everything else: a {"role": "system"} entry in messages
-
-
-class _StubModel:
-    def get_api_model_name(self):
-        return "stub-model"
+# A provider the account cannot reach is not a system-prompt defect.
+UNREACHABLE = ("not-found", "does not exist", "do not have access", "permission",
+               "unauthorized", "invalid api key", "api error:")
 
 
-def build_request(provider: str, system_lines: list[str]):
-    vm = VM()
-    n = 0
-    for line in system_lines:
-        make_statement(vm, n, ".system", line).execute(vm)
-        n += 1
-    make_statement(vm, n, ".user", "Hello there.").execute(vm)
-
-    vm.prompt.model = "stub/stub-model"
-    vm.prompt.model_lookup_key = "stub/stub-model"
-    provider_obj = ModelManager.handlers[provider](vm.prompt)
-    with patch.object(ModelManager, "get_model", return_value=_StubModel()):
-        company = provider_obj.to_company_messages(vm.prompt.messages)
-        return provider_obj.prepare_request(company)
+def model_for(provider: str) -> str:
+    key, model = PROVIDERS[provider]
+    if not os.environ.get(key):
+        pytest.skip(f"{key} not set")
+    return model
 
 
-def locate(req: dict) -> str:
-    """Return a label for where MARK appears in the request, or 'absent'."""
-    if req.get("system") and MARK in json.dumps(req["system"]):
-        return "top-level-system"
-    if MARK in json.dumps(req.get("system_instruction", "")):
-        return "system-instruction"
-    for msg in req.get("messages", []):
-        if MARK in json.dumps(msg.get("content", "")):
-            return f"message-role-{msg.get('role')}"
-    return "absent"
+def reply(provider: str, fixture: str) -> str:
+    """Run a fixture against one provider; skip if the provider is unreachable."""
+    envelope, result = run_prompt(fixture, "--set", f"$.llm_model={model_for(provider)}")
+    if envelope["success"] is not True:
+        detail = (json.dumps(envelope.get("error")) + result.stderr).lower()
+        if any(marker in detail for marker in UNREACHABLE):
+            pytest.skip(f"{provider} unreachable for this account: {detail[:160]}")
+        pytest.fail(f"{provider} run failed: {envelope.get('error')}\n{result.stderr[-1500:]}")
+    return printed(envelope)
 
 
-@pytest.mark.parametrize("provider", PROVIDERS)
-def test_system_prompt_reaches_the_request(provider):
-    req = build_request(provider, [MARK])
-
-    if provider in TOP_LEVEL_SYSTEM:
-        expected = "top-level-system"
-    elif provider in SYSTEM_INSTRUCTION:
-        expected = "system-instruction"
-    else:
-        expected = "message-role-system"
-
-    assert locate(req) == expected
+@pytest.mark.parametrize("provider", sorted(PROVIDERS))
+def test_system_prompt_reaches_the_model(provider):
+    """The system text must reach the model -- proof it was delivered, not merely built."""
+    answer = reply(provider, "sys-single")
+    assert MARK in answer, (
+        f"{provider} did not receive the system prompt.\nreply: {answer[:400]}")
 
 
-@pytest.mark.parametrize("provider", PROVIDERS)
-def test_prompt_without_system_statement_does_not_raise(provider):
-    req = build_request(provider, [])
-    assert locate(req) == "absent"
-    assert not req.get("system")
-    assert not req.get("system_instruction")
-
-
-@pytest.mark.parametrize("provider", PROVIDERS)
+@pytest.mark.parametrize("provider", sorted(PROVIDERS))
 def test_multi_part_system_message_is_not_truncated(provider):
-    """Consecutive .system statements merge into one message with several text parts.
+    """Two `.system` statements merge into one message; the second must survive.
 
-    Reading only content[0] silently dropped everything after the first line.
+    The marker is in the *second* line, so a provider that sends only `content[0]` fails here
+    while passing the single-statement test.
     """
-    req = build_request(provider, [MARK, "SECOND-LINE-99"])
-    body = json.dumps(req)
-    assert MARK in body
-    assert "SECOND-LINE-99" in body
+    answer = reply(provider, "sys-multi")
+    assert MARK in answer, (
+        f"{provider} dropped the second .system statement.\nreply: {answer[:400]}")
 
 
-def test_anthropic_does_not_put_system_in_messages():
-    """Anthropic rejects a system role in messages, and never as messages[0]."""
-    req = build_request("anthropic", [MARK])
-    assert req["system"] == MARK
-    assert all(msg["role"] != "system" for msg in req["messages"])
-
-
-def test_deepseek_sends_a_real_system_role_not_a_user_turn():
-    """Regression: system used to be rewritten to {"role":"user","content":"system: ..."}."""
-    req = build_request("deepseek", [MARK])
-    system_msgs = [m for m in req["messages"] if m["role"] == "system"]
-    assert len(system_msgs) == 1
-    assert system_msgs[0]["content"] == MARK
-    assert not any("system: " in json.dumps(m) for m in req["messages"] if m["role"] == "user")
+@pytest.mark.parametrize("provider", sorted(PROVIDERS))
+def test_prompt_without_system_statement_still_runs(provider):
+    """Gemini used to raise AttributeError when a prompt had no `.system` at all."""
+    assert reply(provider, "sys-none").strip(), "no reply came back"

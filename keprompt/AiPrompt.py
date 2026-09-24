@@ -154,6 +154,63 @@ class AiResult(AiMessagePart):
         return f"Rtn  {self.name}(id={self.id}, content:{replaced})"
 
 
+# The role of a message that records an LDM call. It is part of the conversation's record but not of
+# what an LLM is sent: `AiPrompt.llm_messages()` leaves it out.
+LDM_ROLE = "ldm"
+
+
+class AiLdmPart(AiMessagePart):
+    """One LDM call: the question set and state sent, and the answers that came back.
+
+    The parameters are filled in by `.evaluate` before the call and the answers by the provider
+    after it, so a call that failed still records what was asked.
+    """
+
+    def __init__(self, vm, set_path: str, questions: dict, state: str, model: str,
+                 answers: Optional[dict] = None, model_served: Optional[str] = None,
+                 usage: Optional[dict] = None):
+        super().__init__(vm=vm, part_type="ldm")
+        self.set_path = set_path
+        self.questions = questions
+        self.state = state
+        self.model = model
+        self.answers = answers
+        self.model_served = model_served
+        self.usage = usage
+
+    def __str__(self) -> str:
+        return f"Ldm(set={self.set_path}, model={self.model}, answers={self.answers})"
+
+    def __repr__(self) -> str:
+        return (f"Ldm(set={self.set_path!r}, model={self.model!r}, state={self.state!r}, "
+                f"answers={self.answers!r})")
+
+    def to_json(self) -> dict:
+        return {
+            "type": "ldm",
+            "set": self.set_path,
+            "questions": self.questions,
+            "state": self.state,
+            "model": self.model,
+            "answers": self.answers,
+            "model_served": self.model_served,
+            "usage": self.usage,
+        }
+
+    @classmethod
+    def from_json(cls, vm, data: dict) -> 'AiLdmPart':
+        return cls(vm=vm, set_path=data.get("set", ""), questions=data.get("questions", {}),
+                   state=data.get("state", ""), model=data.get("model", ""),
+                   answers=data.get("answers"), model_served=data.get("model_served"),
+                   usage=data.get("usage"))
+
+    def print_message(self) -> str:
+        if self.answers is None:
+            return f"Ldm  {self.set_path}(no answers)"
+        answers = ", ".join(f"{name}={answer.get('value')}" for name, answer in self.answers.items())
+        return truncate_for_display(f"Ldm  {self.set_path}({answers})", MAX_LINE_LENGTH)
+
+
 class AiMessage:
     def __init__(self, vm, role: str, content=None, model_name: str = None, provider: str = None, stmt_no: int = None):
         if content is None:
@@ -233,6 +290,29 @@ class AiPrompt:
             self.messages[-1].content.extend(content)
         else:
             self.messages.append(AiMessage(vm=self.vm, role=role, content=content))
+
+    def llm_messages(self) -> List[AiMessage]:
+        """The conversation as an LLM is sent it: LDM messages left out.
+
+        Two messages that an LDM message separated are merged back together, exactly as
+        `add_message` would have merged them had the LDM call not been there -- otherwise
+        `.user` / `.evaluate` / `.user` would send two user turns in a row.
+        """
+        result: List[AiMessage] = []
+        removed = False
+        for msg in self.messages:
+            if msg.role == LDM_ROLE:
+                removed = True
+                continue
+            if removed and result and result[-1].role == msg.role:
+                prev = result[-1]
+                result[-1] = AiMessage(vm=self.vm, role=prev.role, content=prev.content + msg.content,
+                                       model_name=prev.model_name, provider=prev.provider,
+                                       stmt_no=prev.stmt_no)
+            else:
+                result.append(msg)
+            removed = False
+        return result
 
     def to_json(self) -> List[dict]:
         """Generate JSON serializable object."""

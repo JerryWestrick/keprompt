@@ -15,6 +15,11 @@ from pathlib import Path
 from .terminal_output import terminal_output
 
 
+# Modes keprompt can actually call. `chat` is a language model, reached by `.exec`; `ldm` is
+# a decision model, reached by `.evaluate`. Everything else in the registry -- image generation,
+# embeddings, moderation, rerank -- has no statement that can invoke it, so it is not loaded.
+CALLABLE_MODES = ("chat", "ldm")
+
 
 @dataclass
 class AiModel:
@@ -222,6 +227,47 @@ class ModelManager:
         # Don't load models during registration - wait until they're needed
 
     @classmethod
+    def _load_overlay(cls, model_data: dict) -> int:
+        """Merge `prompts/functions/model_overlay.json` over the LiteLLM dump.
+
+        `keprompt models update` downloads the LiteLLM file wholesale and overwrites it, so any
+        model LiteLLM does not carry -- an LDM (decision model), a local endpoint, a private
+        fine-tune -- has to live in a separate file that update never touches.
+
+        Entries use LiteLLM's own field names, because that is what the loader reads. Unlike the
+        LiteLLM dump, overlay entries are not filtered by registered provider: the file is the
+        operator's own statement about what exists.
+        """
+        import json
+        from pathlib import Path
+
+        overlay_path = Path("./prompts/functions/model_overlay.json")
+        if not overlay_path.exists():
+            return 0
+
+        try:
+            with open(overlay_path, 'r') as f:
+                entries = json.load(f)
+        except Exception as e:
+            terminal_output.print(f"Warning: could not read {overlay_path}: {e}", markup=False)
+            return 0
+
+        added = 0
+        for model_name, model_info in entries.items():
+            # `_`-prefixed keys are notes for whoever edits the file, not models.
+            if model_name.startswith("_") or not isinstance(model_info, dict):
+                continue
+            if model_info.get("mode", "chat") not in CALLABLE_MODES:
+                continue
+            try:
+                model = AiModel.from_litellm_dict(model_name, model_info)
+                model_data[model.model] = model      # overlay wins on a name collision
+                added += 1
+            except Exception:
+                pass
+        return added
+
+    @classmethod
     def _load_all_models(cls) -> None:
         """Load models from LiteLLM database, filtering by registered provider litellm_provider"""
         import os
@@ -267,9 +313,10 @@ class ModelManager:
                     model_name = f"{litellm_provider}/{model_name}"
 
 
-                # Skip non-chat models (image generation, etc.)
+                # Skip modes keprompt cannot call (image generation, embeddings, ...).
+                # `ldm` is a decision model (LDM), reached by .evaluate rather than .exec.
                 mode = model_info.get("mode", "chat")
-                if mode != "chat":
+                if mode not in CALLABLE_MODES:
                     continue
                     
                 try:
@@ -280,12 +327,15 @@ class ModelManager:
                     # Skip models that fail to parse
                     pass
 
+            overlaid = cls._load_overlay(model_data)
+
             cls.register_models_from_dict(model_data)
             cls._initialized = True
-            
+
             elapsed = time.time() - start_time
             terminal_output.print(
-                f"[ModelManager] Loaded {len(model_data)} models from '{litellm_db_path}' in {elapsed:.4f} seconds",
+                f"[ModelManager] Loaded {len(model_data)} models from '{litellm_db_path}'"
+                f"{f' (+{overlaid} from overlay)' if overlaid else ''} in {elapsed:.4f} seconds",
                 markup=False,
             )
             
@@ -448,6 +498,9 @@ class ModelManager:
 
             table = Table(title=title)
             table.add_column("Model", style="green")
+            # LLM or LDM: a chat model answers .exec, a decision model answers .evaluate, and
+            # pointing a statement at the wrong kind is the mistake worth making visible here.
+            table.add_column("Type", style="cyan", no_wrap=True)
             table.add_column("Max Input", style="magenta", justify="right")
             table.add_column("Max Output", style="magenta", justify="right")
             table.add_column("$/mT In", style="green", justify="right")
@@ -463,6 +516,7 @@ class ModelManager:
 
                 table.add_row(
                     model.model,
+                    "LDM" if model.mode == "ldm" else "LLM",
                     f"{max_in:,}" if max_in else "",
                     f"{max_out:,}" if max_out else "",
                     f"{model.input_cost * 1_000_000:06.4f}",

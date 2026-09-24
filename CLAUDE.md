@@ -43,7 +43,7 @@ The system follows a layered architecture: CLI → JSON API → Managers → VM/
 1. **CLI** (`keprompt.py`) parses `keprompt <object> <verb> [options]` commands using argparse with `rich_argparse`. Auto-detects output format: Rich tables for TTY, JSON when piped.
 2. **JSON API** (`api.py`) routes commands to manager classes (`ChatManager`, `ModelManager`, `PromptManager`, etc.) that return structured JSON.
 3. **Chat Manager** (`chat_manager.py`) handles chat lifecycle (create/reply/get/delete), serializes VM state to the database for multi-turn conversations.
-4. **VM** (`keprompt_vm.py`) executes `.prompt` files statement-by-statement. This is the core engine (~1,700 lines). It manages variables, messages, model selection, and dispatches to AI providers. Statements: `.prompt`, `.functions`, `.exec`, `.user`, `.system`, `.assistant`, `.text`, `.tool_call`, `.tool_result`, `.cmd`, `.set`, `.print`, `.include`, `.image`, `.debug`, `.clear`, `.exit`, `.#`.
+4. **VM** (`keprompt_vm.py`) executes `.prompt` files statement-by-statement. This is the core engine (~1,700 lines). It manages variables, messages, model selection, and dispatches to AI providers. Statements: `.prompt`, `.functions`, `.exec`, `.question`, `.evaluate`, `.user`, `.system`, `.assistant`, `.text`, `.tool_call`, `.tool_result`, `.cmd`, `.set`, `.print`, `.include`, `.image`, `.debug`, `.clear`, `.exit`, `.#`.
 5. **AI Providers** (`AiProvider.py` base, `AiOpenAi.py`, `AiAnthropic.py`, etc.) each implement `prepare_request()`, `to_company_messages()`, `to_ai_message()`, `extract_token_usage()`, and `calculate_costs()`.
 6. **Database** (`database.py`) uses Peewee ORM with SQLite by default. Tables: `Info` (schema version), `Chat` (8-char ID, messages, serialized VM state, aggregates), `CostTracking` (one row per billed API round trip, keyed `(chat_id, msg_no, round_trip)` — a single `.exec` running a tool loop produces several). SQLite schema migrations live in `keprompt/migrations/`, driven by the transition registry in `migrate_sqlite.py`.
 
@@ -56,11 +56,11 @@ The system follows a layered architecture: CLI → JSON API → Managers → VM/
 
 ## Prompt Language (DSL)
 
-`.prompt` files use a line-based syntax with `.` prefixed statements. Variable substitution uses `<<variable>>` syntax. The `.exec` statement triggers an LLM call. The `.functions` statement declares which functions the model can use (no `.functions` = no functions, safe default). VM state is accessible via `<<VM.chat_id>>`, `<<VM.model_name>>`, `<<VM.total_cost>>`, etc. As of v3.0.0, model request options belong in the `llm_options` dict and nowhere else — `temperature`, `max_tokens`, `top_p`, and `top_k` as top-level variables stop execution.
+`.prompt` files use a line-based syntax with `.` prefixed statements. Variable substitution uses `<<variable>>` syntax. The `.exec` statement triggers an LLM call; `.evaluate` triggers an LDM (decision model) call through the same execute path. The models live at `$.llm_model` and `$.ldm_model`; `model` is a deprecated alias for `$.llm_model`. The `.functions` statement declares which functions the model can use (no `.functions` = no functions, safe default). VM state is accessible via `<<VM.chat_id>>`, `<<VM.model_name>>`, `<<VM.total_cost>>`, etc. As of v3.0.0, model request options belong in the `llm_options` dict and nowhere else — `temperature`, `max_tokens`, `top_p`, and `top_k` as top-level variables stop execution.
 
 Example:
 ```
-.prompt "name":"Hello", "version":"1.0.0", "params":{"model":"openai/gpt-4o", "llm_options":{"temperature":0.2}}
+.prompt "name":"Hello", "version":"1.0.0", "params":{"$.llm_model":"openai/gpt-4o", "llm_options":{"temperature":0.2}}
 .system You are a helpful assistant.
 .user Hello <<name>>, what can you help with?
 .exec

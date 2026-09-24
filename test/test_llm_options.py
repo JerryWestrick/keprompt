@@ -1,103 +1,74 @@
-"""Reserved llm_options dict: always present, merged onto the request, old top-level keys stop."""
+"""`llm_options` is the only place for model request options.
 
-from unittest.mock import patch
+Fixtures are `test/prompts/opt-*.prompt`.
 
-import pytest
+One behaviour is not asserted here: that `llm_options` is merged onto the outgoing request.
+Nothing in the CLI surface shows a request body, so proving it would mean a billed call and
+trusting a provider's error text. What the CLI can prove is the contract that matters to a prompt
+author -- the old top-level names are refused, loudly, before any call is made.
+"""
 
-from keprompt.AiPrompt import AiMessage, AiTextPart
-from keprompt.AiProvider import AiProvider
-from keprompt.keprompt_vm import VM, StmtSyntaxError, make_statement
+import json
 
-
-def test_llm_options_always_present():
-    vm = VM()
-    assert vm.vdict["llm_options"] == {}
-
-
-def test_prompt_params_set_llm_options():
-    vm = VM()
-    stmt = make_statement(
-        vm,
-        0,
-        ".prompt",
-        '"name":"T", "version":"1.0.0", "params":{"model":"x", "llm_options":{"reasoning_effort":"none"}}',
-    )
-    stmt.execute(vm)
-    assert vm.vdict["llm_options"] == {"reasoning_effort": "none"}
-    assert vm.vdict["model"] == "x"
+from conftest import fails, ok, printed, run_prompt
 
 
-def test_cli_llm_options_not_overwritten_by_prompt():
-    vm = VM(params={"llm_options": {"temperature": 0.1}})
-    stmt = make_statement(
-        vm,
-        0,
-        ".prompt",
-        '"name":"T", "version":"1.0.0", "params":{"llm_options":{"reasoning_effort":"none"}}',
-    )
-    stmt.execute(vm)
-    assert vm.vdict["llm_options"] == {"temperature": 0.1}
+# --- always present, addressable ------------------------------------------------------------
+
+def test_llm_options_exists_by_default():
+    assert "opts={}" in ok("opt-default")
 
 
-def test_top_level_temperature_stops_exec():
-    vm = VM()
-    vm.vdict["temperature"] = 0.2
-    stmt = make_statement(vm, 0, ".exec", "")
-    with pytest.raises(StmtSyntaxError, match="temperature must be moved into llm_options"):
-        stmt.execute(vm)
+def test_prompt_params_populate_it():
+    assert "effort=none" in ok("opt-from-params")
 
 
-def test_top_level_keys_in_exec_json_stop():
-    vm = VM()
-    stmt = make_statement(vm, 0, ".exec", '{"model":"x", "max_tokens": 10}')
-    with pytest.raises(StmtSyntaxError, match="max_tokens must be moved into llm_options"):
-        stmt.execute(vm)
+def test_cli_set_wins_over_prompt_params():
+    """`--set-from-json` overrides what the prompt declares."""
+    from conftest import TEST_DIR
+    path = TEST_DIR / "opts.json"
+    path.write_text(json.dumps({"llm_options": {"reasoning_effort": "high"}}))
+    assert "effort=high" in ok("opt-from-params", "--set-from-json", str(path))
 
 
-class _FakeProvider(AiProvider):
-    def prepare_request(self, messages):
-        return {"model": "m", "messages": messages}
-
-    def get_api_url(self):
-        return "http://example.invalid"
-
-    def get_headers(self):
-        return {}
-
-    def to_company_messages(self, messages):
-        return [{"role": "user", "content": "hi"}]
-
-    def to_ai_message(self, response):
-        return AiMessage(
-            vm=self.prompt.vm,
-            role="assistant",
-            content=[AiTextPart(vm=self.prompt.vm, text="ok")],
-        )
-
-    def extract_token_usage(self, response):
-        return (0, 0)
-
-    def calculate_costs(self, tokens_in, tokens_out):
-        return (0.0, 0.0)
+def test_the_same_option_inside_llm_options_is_accepted():
+    """The name is not banned -- only its placement."""
+    assert "t=0.2" in ok("opt-temperature-inside")
 
 
-def test_llm_options_merged_onto_request():
-    vm = VM()
-    vm.vdict["llm_options"] = {"reasoning_effort": "none", "temperature": 0.2}
-    captured = {}
+# --- the old top-level names stop the run ------------------------------------------------------
 
-    def fake_api(url, headers, data, label):
-        captured["data"] = data
-        return {}
+def assert_refused(name: str, option: str):
+    text = json.dumps(fails(name))
+    assert option in text and "llm_options" in text, text[:600]
 
-    provider = _FakeProvider(vm.prompt)
-    with (
-        patch.object(provider, "make_api_request", side_effect=fake_api),
-        patch.object(provider, "call_functions", return_value=None),
-        patch.object(provider, "_display_llm_text_response"),
-    ):
-        provider.call_llm(label="00 .exec")
 
-    assert captured["data"]["reasoning_effort"] == "none"
-    assert captured["data"]["temperature"] == 0.2
-    assert captured["data"]["model"] == "m"
+def test_top_level_temperature_is_refused():
+    assert_refused("opt-top-level-temperature", "temperature")
+
+
+def test_top_level_max_tokens_is_refused():
+    assert_refused("opt-exec-json-max-tokens", "max_tokens")
+
+
+def test_top_level_top_p_is_refused():
+    assert_refused("opt-top-level-top-p", "top_p")
+
+
+def test_top_level_top_k_is_refused():
+    assert_refused("opt-top-level-top-k", "top_k")
+
+
+def test_prompt_params_top_level_option_is_refused():
+    assert_refused("opt-params-top-level", "temperature")
+
+
+def test_refusal_stops_execution_without_contacting_a_provider():
+    """`.exec` refuses on the spot: nothing after it runs.
+
+    The run is made with provider keys stripped, so reaching the refusal at all proves it happens
+    before any provider is contacted.
+    """
+    envelope, _ = run_prompt("opt-top-level-temperature", offline=True)
+    assert envelope["success"] is False
+    assert "SHOULD-NOT-APPEAR" not in printed(envelope)

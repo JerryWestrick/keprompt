@@ -182,3 +182,40 @@ produce 12 failures against the pre-fix adapters.
 - **Historical chats.** Any chat run on anthropic, mistral or xai before this fix was executed
   without its system prompt. `messages_json` records the system message that the VM built, so
   saved chats look correct — the omission is not visible in the stored evidence.
+
+---
+
+## DEFECT-003: a chat lookup miss is reported as success, with `data` as the string `"None"`
+
+Found 2026-09-22 while converting the test suite to drive the executable.
+
+`keprompt chats get <unknown-id> --json` returns:
+
+```json
+{"success": true, "data": "None", "error": null, ...}
+```
+
+Two problems in one response. A lookup that found nothing reports `success: true`, so a caller
+checking the documented flag concludes the chat exists. And `data` is the four-character string
+`"None"` rather than JSON `null`, so a caller checking the payload instead gets a truthy value
+that is not a chat.
+
+This matters more than a cosmetic wart because the envelope is the machine-readable contract that
+other programs build on, and there is no way to distinguish "found nothing" from "found a chat"
+without string-matching `"None"`.
+
+Reproduced from a clean workspace:
+
+```
+keprompt chats get nochatid --json
+```
+
+The same response comes back after deleting a chat that did exist, so the delete path is not
+implicated — it is the get path.
+
+Recorded as a strict `xfail` in `test/test_json_envelope.py::test_getting_an_unknown_chat_fails`,
+which asserts the intended contract (`success: false`, non-null `error`) and will start passing —
+and so flag itself — the moment this is fixed.
+
+Not yet investigated: whether other `get` verbs (`prompts get`, `models get`) stringify a miss the
+same way, and where the `str(None)` conversion happens.

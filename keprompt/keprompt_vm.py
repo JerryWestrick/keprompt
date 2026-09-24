@@ -17,7 +17,7 @@ from rich.logging import RichHandler
 from rich.table import Table
 
 from .ModelManager import ModelManager, AiModel
-from .AiPrompt import AiTextPart, AiImagePart, AiPrompt, MAX_LINE_LENGTH
+from .AiPrompt import AiTextPart, AiImagePart, AiPrompt, AiMessage, AiLdmPart, LDM_ROLE, MAX_LINE_LENGTH
 from  .keprompt_util import VERTICAL, RIGHT_TRIANGLE, LEFT_TRIANGLE, HORIZONTAL_LINE, CIRCLE
 from .keprompt_logger import StandardLogger, LogMode
 from .terminal_output import terminal_output
@@ -31,19 +31,46 @@ logging.basicConfig(level="NOTSET", format=FORMAT, datefmt="[%X]",
 
 log = logging.getLogger(__file__)
 
-# Multi-line quote (heredoc). `<<<ID` at end of a statement line opens a block that is consumed
-# verbatim until a line that is exactly `>>>ID`. Fixed literals, resolved entirely at parse time --
-# deliberately NOT bound to the Prefix/Postfix substitution variables, which are runtime state.
+# Multi-line quote (heredoc), standard semantics. `<<<ID` anywhere on a statement line opens a block
+# that is consumed verbatim until a line that is exactly `>>>ID`. As in shell, the opener does not
+# have to end the line -- `cat <<EOF > out.txt` keeps parsing the command -- while the terminator
+# must stand alone. Text following the opener is the statement's "tail" and stays in its value.
+#
+# Fixed literals, resolved entirely at parse time -- deliberately NOT bound to the Prefix/Postfix
+# substitution variables, which are runtime state. Because they resolve at parse time, quoted text is
+# never re-parsed: substituted content containing `>>>ID` cannot close a quote.
+#
 # `<<<'ID'` (quoted identifier) is reserved for a future non-interpolating form and rejected today.
-# The identifier is any run of non-space characters -- hyphens, underscores, digits, punctuation --
-# delimited by whitespace or end of line.
+# The identifier is any run of non-space characters, delimited by whitespace or end of line.
 HEREDOC_OPEN = re.compile(
-    r"<<<(?:(?P<quote>['\"])(?P<qid>\S+?)(?P=quote)|(?P<id>\S+))\s*$")
+    r"<<<(?:(?P<quote>['\"])(?P<qid>\S+?)(?P=quote)|(?P<id>\S+))")
 
 
 def heredoc_terminator(identifier: str) -> str:
     """The line that closes a multi-line quote opened with `<<<identifier`."""
     return f">>>{identifier}"
+
+
+# A leading underscore at the root of the variable dictionary marks a name as keprompt's own.
+# It hides the name from wildcard enumeration, but never from an explicit path and never from
+# serialisation -- internals must survive save/restore or replay breaks.
+RESERVED_PREFIX = '_'
+RESERVED_ROOT = '_prompt'
+QUESTION_SUBSYSTEM = 'question'
+# The registry's `mode` for a decision model: it answers `.evaluate`, where a `chat` model answers
+# `.exec`. Pointing a statement at the wrong kind is refused rather than sent.
+LDM_MODE = 'ldm'
+# Where each execution unit's model lives in memory. The LLM (`.exec`) and the LDM (`.evaluate`) do
+# not share one: a prompt that uses both would otherwise have to re-set it at every switch.
+LLM_MODEL_PATH = f'{RESERVED_ROOT}.llm_model'
+LDM_MODEL_PATH = f'{RESERVED_ROOT}.ldm_model'
+# `model` is the deprecated spelling of `$.llm_model`. Every use is redirected there, with a warning.
+DEPRECATED_MODEL = 'model'
+# Set-level: the model named on a `.question` line, which `.evaluate` uses unless its own line names one.
+SET_MODEL_KEY = '_ldm_model'
+# Reserved inside a question set, so set-level metadata (`_model`, `_usage`) and a question's
+# `_definition` can never be shadowed by a question that happens to share the name.
+DEFINITION_KEY = '_definition'
 
 
 # Global routines
@@ -63,6 +90,36 @@ class VMExecutionError(Exception):
 
 
 _LEGACY_TOP_LEVEL_LLM_OPTIONS = ('temperature', 'max_tokens', 'top_p', 'top_k')
+
+
+def split_line_params(text: str, keyword: str) -> tuple[str, str]:
+    """Split an execute line into its JSON params and whatever follows them.
+
+    `.exec` and `.evaluate` take the same params: a JSON object at the start of the operand. Its
+    closing brace ends it, so text may follow -- `.evaluate`'s inline state does. Returns the params
+    text (empty when there are none) and the rest.
+    """
+    stripped = text.lstrip()
+    if not stripped.startswith('{'):
+        return '', text
+    try:
+        _, end = json.JSONDecoder().raw_decode(stripped)
+    except json.JSONDecodeError as e:
+        raise StmtSyntaxError(f"{keyword} syntax: invalid JSON params '{stripped}': {e}")
+    return stripped[:end], stripped[end:]
+
+
+def parse_line_params(vm, params_text: str, keyword: str, substitute: bool = True) -> dict:
+    """Parse the JSON params split off by `split_line_params`, substituting first unless the
+    caller already has."""
+    try:
+        params = json.loads(vm.substitute(params_text) if substitute else params_text)
+    except json.JSONDecodeError as e:
+        vm.logger.log_error(f"{keyword} params parse error: {e}")
+        raise StmtSyntaxError(f"{keyword} syntax: invalid JSON '{params_text}': {e}")
+    if not isinstance(params, dict):
+        raise StmtSyntaxError(f"{keyword} syntax: params must be a JSON object: '{params_text}'")
+    return params
 
 
 def _reject_legacy_top_level_llm_options(source: dict) -> None:
@@ -96,11 +153,7 @@ class VM:
         
         # Build variables with explicit defaults, then merge caller-provided dicts
         self.vdict = self.default_globals()
-        if global_vars:
-            self.vdict.update(global_vars)
-        if params:
-            self.vdict.update(params)
-        
+
         self.llm: dict[str, any] = dict()
         self.statements: list[StmtPrompt] = []
         self.prompt: AiPrompt = AiPrompt(self)
@@ -116,6 +169,12 @@ class VM:
         # Initialize the new standard logger
         self.logger = StandardLogger(prompt_name=prompt_name, mode=log_mode, log_identifier=log_identifier)
         
+        # Caller-provided values (command line, --set-from-json) go through the same assignment as
+        # `.set`, so `$.` paths and the deprecated `model` behave identically wherever they come from.
+        for source in (global_vars, params):
+            for name, value in (source or {}).items():
+                self.assign(name, value)
+
         # Keep old console for backward compatibility during transition
         self.console = Console(width=terminal_width)  # Console for terminal
         self.file_console = None  # Console for file, initialized in execute
@@ -153,7 +212,45 @@ class VM:
             'Debug': False,
             'Verbose': False,
             'llm_options': {},
+            # `_` at the root is keprompt's. `_prompt.question` holds the LDM subsystem:
+            # one branch per named question set, each carrying its questions' definitions and, once
+            # evaluated, their answers. The rest of the machinery (VM, prefix/suffix) has not been
+            # migrated under `_prompt` yet -- that is a separate breaking change.
+            '_prompt': {'question': {}},
         }
+
+    @staticmethod
+    def expand_sigils(name: str) -> str:
+        """`$` -> `_prompt`, `?` -> `_prompt.question`. Fixed literals, like the quote delimiters."""
+        if name == '$' or name.startswith('$.'):
+            return RESERVED_ROOT + name[1:]
+        if name == '?' or name.startswith('?.'):
+            return f"{RESERVED_ROOT}.{QUESTION_SUBSYSTEM}" + name[1:]
+        return name
+
+    def walk_path(self, path: str, create: bool = False) -> tuple[dict, str]:
+        """Resolve a dotted path to (containing dict, final key). Sigils are expanded first."""
+        keys = self.expand_sigils(path).split('.')
+        node = self.vdict
+        for key in keys[:-1]:
+            if key not in node or not isinstance(node[key], dict):
+                if not create:
+                    raise ValueError(f"'{path}' is not defined")
+                node[key] = {}
+            node = node[key]
+        return node, keys[-1]
+
+    def set_path(self, path: str, value: any) -> None:
+        """Assign through a dotted path, creating intermediate dicts. `.set` cannot do this."""
+        node, key = self.walk_path(path, create=True)
+        node[key] = value
+        self.logger.log_variable_assignment(path, str(value))
+
+    def get_path(self, path: str) -> any:
+        node, key = self.walk_path(path)
+        if key not in node:
+            raise ValueError(f"'{path}' is not defined")
+        return node[key]
 
     def _resolve_prompt_ref(self, prompt_ref: str) -> str:
         """Resolve a logical prompt name to a single .prompt file inside prompts/.
@@ -325,6 +422,28 @@ class VM:
                 table.add_row("Variables", "Empty")
             console.print(table)
 
+    def canonical_name(self, name: str) -> str:
+        """The path a name refers to: sigils expanded, and `model` redirected to `$.llm_model`."""
+        if name == DEPRECATED_MODEL:
+            self.logger.log_warning(f"'{DEPRECATED_MODEL}' is deprecated; it is treated as '$.llm_model'")
+            return LLM_MODEL_PATH
+        return self.expand_sigils(name)
+
+    def assign(self, name: str, value: any) -> None:
+        """Write any memory: a plain name, a dotted path, or a `$.`/`?.` path."""
+        path = self.canonical_name(name)
+        if '.' in path:
+            self.set_path(path, value)
+        else:
+            self.set_variable(path, value)
+
+    def has_path(self, path: str) -> bool:
+        try:
+            self.get_path(path)
+            return True
+        except ValueError:
+            return False
+
     def set_variable(self, key: str, value: any):
         """Set variable with automatic logging."""
         self.vdict[key] = value
@@ -372,8 +491,9 @@ class VM:
                 text = front[:last_begin] + str(value) + back
                 continue
 
-            # Handle regular variables and nested dictionaries
-            keys = variable_name.split('.')
+            # Handle regular variables and nested dictionaries. `$` and `?` are fixed-literal
+            # shorthands for the reserved roots, expanded before the path is walked.
+            keys = self.canonical_name(variable_name).split('.')
             value = self.vdict
             try:
                 for key in keys:
@@ -416,11 +536,12 @@ class VM:
         return vm_properties.get(property_name)
 
 
-    def add_statement(self, keyword=None, value=None):
+    def add_statement(self, keyword=None, value=None, heredoc=None):
         """Add a new statement to the prompt."""
-        self.statements.append(make_statement(self, len(self.statements), keyword=keyword, value=value))
+        self.statements.append(
+            make_statement(self, len(self.statements), keyword=keyword, value=value, heredoc=heredoc))
 
-    def emit_statement(self, keyword: str, value: str, lno: int) -> None:
+    def emit_statement(self, keyword: str, value: str, lno: int, heredoc: str | None = None) -> None:
         """Add a statement, folding a continuation line into the previous message statement."""
         if lno and keyword == '.text' and self.statements:
             last = self.statements[-1]
@@ -428,7 +549,7 @@ class VM:
                 last.value = f"{last.value}\n{value}".strip()
                 return
 
-        self.add_statement(keyword=keyword, value=value)
+        self.add_statement(keyword=keyword, value=value, heredoc=heredoc)
 
     def parse_prompt(self) -> None:
         """Parse the prompt file and create a list of statements.
@@ -462,8 +583,8 @@ class VM:
                         f"Example: .prompt \"name\":\"My Prompt\", \"version\":\"1.0.0\"\n\n")
                 break
 
-        heredoc_id: str | None = None      # identifier of the open multi-line quote, None if closed
-        heredoc_head: tuple[str, str] = ()  # (keyword, value preceding the <<<ID marker)
+        heredoc_id: str | None = None        # identifier of the open quote, None if closed
+        heredoc_head: tuple[str, str, str] = ()  # (keyword, text before the marker, text after it)
         heredoc_body: list[str] = []
         heredoc_lno: int = 0
 
@@ -473,8 +594,16 @@ class VM:
                 # no strip, no blank-line skip and no dot-keyword dispatch, until the terminator.
                 if heredoc_id is not None:
                     if line.rstrip() == heredoc_terminator(heredoc_id):
-                        keyword, value = heredoc_head
-                        self.emit_statement(keyword, value + "\n".join(heredoc_body), heredoc_lno)
+                        keyword, before, tail = heredoc_head
+                        body = "\n".join(heredoc_body)
+                        stmt_class = StatementTypes.get(keyword)
+                        if stmt_class is None or stmt_class.heredoc_as_value:
+                            # The operand simply is the text: splice the body in at the marker.
+                            self.emit_statement(keyword, before + body + tail, heredoc_lno)
+                        else:
+                            # The statement parses its own line: keep the body off it.
+                            self.emit_statement(keyword, (before + tail).strip(), heredoc_lno,
+                                                heredoc=body)
                         heredoc_id, heredoc_head, heredoc_body = None, (), []
                     else:
                         heredoc_body.append(line.rstrip('\r\n'))
@@ -506,7 +635,7 @@ class VM:
                             f"multi-line quote <<<'{opener.group('qid')}' is reserved and not yet "
                             f"supported. Use <<<{opener.group('qid')} instead.[/]\n\n")
                     heredoc_id = opener.group('id')
-                    heredoc_head = (keyword, value[:opener.start()])
+                    heredoc_head = (keyword, value[:opener.start()], value[opener.end():])
                     heredoc_body = []
                     heredoc_lno = lno
                     continue
@@ -555,35 +684,17 @@ class VM:
         if self.file_console:  # Ensure file is open
             self.file_console.print_exception()  # Print to file
 
-    def load_llm(self, params: dict[str, str]) -> None:
-
-        if 'model' not in params:
-            raise StmtSyntaxError(f".llm syntax error: model not defined")
-        self.model_name = params['model']
-
-        # Let get_model() handle the existence check and lazy loading
+    def load_model(self, model_name: str) -> None:
+        """Make `model_name` the model the next execute runs on. The registry is the only authority."""
         try:
-            self.model = ModelManager.get_model(self.model_name)
-        except ValueError as e:
-            raise StmtSyntaxError(f"Not Defined Error: Model {self.model_name} is not defined")
-
-        if self.model.provider == '':
-            raise StmtSyntaxError(f"Bad Model Definition error: provider not defined for model {self.model_name}")
-        self.provider = self.model.provider
-
-        # copy params to vdict
-        for k, v in params.items():
-            self.vdict[k] = v
-
-        # Store simple, JSON-safe metadata for use in prompts and logging
-        self.vdict['provider'] = self.provider
-        self.vdict['filename'] = self.filename
-        # Keep model as the string name (don't overwrite if set by .set or .exec)
-        if 'model' not in self.vdict or not isinstance(self.vdict['model'], str):
-            self.vdict['model'] = self.model_name
-        # Expose full model metadata so prompts can access all fields like <<model_info.max_input_tokens>>
-        from dataclasses import asdict
-        self.vdict['model_info'] = asdict(self.model) if self.model else {}
+            model = ModelManager.get_model(model_name)
+        except ValueError:
+            raise StmtSyntaxError(f"Not Defined Error: Model {model_name} is not defined")
+        if model.provider == '':
+            raise StmtSyntaxError(f"Bad Model Definition error: provider not defined for model {model_name}")
+        self.model_name = model_name
+        self.model = model
+        self.provider = model.provider
 
     def execute(self) -> None:
         """Execute the statements in the prompt file using the new standard logging system."""
@@ -733,10 +844,17 @@ class VM:
 
 class StmtPrompt:
 
-    def __init__(self, vm: VM, msg_no: int, keyword: str, value: str):
+    # Whether a multi-line quote's body becomes part of this statement's value. True for statements
+    # whose operand simply is the text (.system, .user, .set, ...). A statement that parses its own
+    # line -- and so must not have pages of quoted text spliced into it -- sets this False and reads
+    # the body from self.heredoc instead.
+    heredoc_as_value = True
+
+    def __init__(self, vm: VM, msg_no: int, keyword: str, value: str, heredoc: str | None = None):
         self.msg_no = msg_no
         self.keyword = keyword
         self.value = value
+        self.heredoc = heredoc
         self.vm = vm
 
     def console_str(self) -> str:
@@ -1175,56 +1293,27 @@ class StmtExec(StmtPrompt):
     """
 
     def execute(self, vm: VM) -> None:
-        """
-        Sends the current prompt context to the LLM, handles the response, and 
-        logs execution details such as timing and tokens usage.
+        """One execute: resolve the model, call it through its provider, record the round trips.
 
-        Args:
-            vm (VM): The virtual machine context in which the statement is executed.
-
-        Returns:
-            None: The execution modifies the VM's state directly by adding the response to 
-                  the prompt context and logging the chat data.
+        This is the whole execute for every kind of model. `.evaluate` is a subclass that differs
+        only in the hooks below -- which model, which kind of model, and what its content is.
         """
-        # Log the exec statement
         super().execute(vm)
-        
+
         header = f"[bold white]{VERTICAL}[/][white]{self.msg_no:02}[/] [cyan]{self.keyword:<8}[/]"
 
-        _reject_legacy_top_level_llm_options(vm.vdict)
-
-        # Determine model parameters
-        if self.value.strip():
-            # .exec has explicit params - parse and use
-            value = vm.substitute(self.value.strip())
-            try:
-                if value.startswith('{'):
-                    params = json.loads(value)
-                else:
-                    params = {'model': value}
-            except json.JSONDecodeError as e:
-                vm.logger.log_error(f".exec params parse error: {e}")
-                raise StmtSyntaxError(f".exec syntax: invalid JSON '{self.value}': {e}")
-            _reject_legacy_top_level_llm_options(params)
-        else:
-            # No explicit params - get model from vdict
-            if 'model' not in vm.vdict:
-                raise StmtSyntaxError(
-                    f".exec error: No model specified. Set model via:\n"
-                    f"  .prompt \"params\":{{\"model\":\"...\"}}\n"
-                    f"  .set model <model_name>"
-                )
-            params = {'model': vm.vdict['model']}
+        model_name = self.resolve_model(vm)
 
         # Load the model (single point of instantiation)
         try:
-            vm.load_llm(params)
-        except ValueError as e:
-            raise StmtSyntaxError(f".exec error: {e}")
+            vm.load_model(model_name)
         except Exception as e:
-            vm.logger.log_error(f".exec unexpected error: {e}")
-            raise StmtSyntaxError(f".exec error: {e}")
-        
+            vm.logger.log_error(f"{self.keyword} error: {e}")
+            raise StmtSyntaxError(f"{self.keyword} error: {e}")
+
+        self.refuse_wrong_mode(vm)
+        self.model_loaded(vm)
+
         # Get API key for this provider
         config = get_config()
         api_key = config.get_api_key(vm.provider)
@@ -1232,24 +1321,26 @@ class StmtExec(StmtPrompt):
             error_msg = config.get_missing_key_error(vm.provider)
             vm.logger.log_error(error_msg)
             sys.exit(1)
-        
+
         vm.api_key = api_key
-        
-        # Sync prompt object with VM state (THE FIX!)
+
+        # Sync prompt object with VM state
         vm.prompt.api_key = vm.api_key
         vm.prompt.provider = vm.provider
         vm.prompt.model = vm.model.model
         vm.prompt.model_lookup_key = vm.model_name  # Set the lookup key for ModelManager
-        
+
         start_time = time.time()
-        
+
         # Generate unique call identifier using UUID with exec format
         vm.interaction_no += 1
         call_id = f"{vm.prompt_uuid}-exec{vm.interaction_no:03d}"
-        
+
         # Set the prompt ID in the logger for all subsequent log entries
         vm.logger.set_prompt_id(call_id)
-        
+
+        self.before_call(vm)
+
         try:
             responses = vm.prompt.ask(label=header, call_id=call_id)
         except Exception as e:
@@ -1261,38 +1352,15 @@ class StmtExec(StmtPrompt):
             raise
         elapsed_time = time.time() - start_time
 
-        # Extract last response text for variable substitution
-        last_response_text = ""
-        for response in responses:
-            if hasattr(response, 'content') and response.content:
-                for part in response.content:
-                    if isinstance(part, AiTextPart):
-                        last_response_text += part.text
-        
-        # Store last response using centralized method with automatic logging
-        vm.set_variable('last_response', last_response_text)
-
         # Per-round-trip usage recorded by the provider during ask(). One entry per billed
         # API request -- a tool loop produces several. The statement total is their sum;
         # counting only the last one was DEFECT-001.
         round_trips = list(getattr(vm.prompt, 'round_trips', []))
 
+        self.after_call(vm, responses, round_trips)
+
         if round_trips:
             tokens_in, tokens_out, cost_in, cost_out = self._record_round_trips(vm, call_id, round_trips)
-
-            # Context occupancy is a property of the LAST round trip, not of the statement
-            # total: it answers "how full is the context right now", not "what did this cost".
-            last_rt = round_trips[-1]
-            max_in = (vm.model.max_input_tokens or vm.model.max_tokens) if vm.model else 0
-            max_out = (vm.model.max_output_tokens or vm.model.max_tokens) if vm.model else 0
-            vm.vdict['context_usage'] = {
-                'input_pct': round(last_rt['tokens_in'] / max_in * 100, 1) if max_in else 0,
-                'output_pct': round(last_rt['tokens_out'] / max_out * 100, 1) if max_out else 0,
-                'input_tokens': last_rt['tokens_in'],
-                'output_tokens': last_rt['tokens_out'],
-                'max_input': max_in,
-                'max_output': max_out,
-            }
 
             # Log tokens and costs (statement totals)
             vm.logger.log_llm_tokens_and_cost(call_id, tokens_in, tokens_out, cost_in, cost_out)
@@ -1314,6 +1382,86 @@ class StmtExec(StmtPrompt):
 
         # Note: chat logging is now handled incrementally through log_message_exchange
         # No need to log the entire chat again here
+
+    # --- what differs between an LLM (.exec) and an LDM (.evaluate) ---------------------------
+
+    def resolve_model(self, vm: VM) -> str:
+        """The model on the `.exec` line, otherwise `$.llm_model`. A line model is kept in memory."""
+        _reject_legacy_top_level_llm_options(vm.vdict)
+
+        if not self.value.strip():
+            if not vm.has_path(LLM_MODEL_PATH):
+                raise StmtSyntaxError(
+                    f".exec error: No model specified. Set $.llm_model via:\n"
+                    f"  .prompt \"params\":{{\"$.llm_model\":\"...\"}}\n"
+                    f"  .set $.llm_model <model_name>\n"
+                    f"  --set '$.llm_model' <model_name>"
+                )
+            return vm.get_path(LLM_MODEL_PATH)
+
+        # `.exec`'s whole operand may come from a variable, so it is substituted before it is split.
+        value = vm.substitute(self.value.strip())
+        params_text, rest = split_line_params(value, self.keyword)
+        if params_text:
+            if rest.strip():
+                raise StmtSyntaxError(f".exec syntax: unexpected text after params: '{rest.strip()}'")
+            params = parse_line_params(vm, params_text, self.keyword, substitute=False)
+        else:
+            params = {'llm_model': value}
+        _reject_legacy_top_level_llm_options(params)
+
+        # `llm_model` on the line is this unit's model; anything else is ordinary memory.
+        if 'llm_model' in params:
+            vm.set_path(LLM_MODEL_PATH, params.pop('llm_model'))
+        for name, val in params.items():
+            vm.assign(name, val)
+        if not vm.has_path(LLM_MODEL_PATH):
+            raise StmtSyntaxError(f".exec syntax: no model in '{self.value}'")
+        return vm.get_path(LLM_MODEL_PATH)
+
+    def refuse_wrong_mode(self, vm: VM) -> None:
+        # A decision model selects from fixed options and never emits text, so it cannot answer a
+        # conversation. Refusing here is cheaper than a provider error that would not explain why.
+        if getattr(vm.model, 'mode', 'chat') == LDM_MODE:
+            raise StmtSyntaxError(
+                f"{VERTICAL} [red].exec error: '{vm.model.model}' is a decision model (LDM), not a "
+                f"chat model. It answers .evaluate, not .exec.[/]\n\n")
+
+    def model_loaded(self, vm: VM) -> None:
+        """The LLM's registers: simple, JSON-safe metadata prompts can read."""
+        vm.vdict['provider'] = vm.provider
+        vm.vdict['filename'] = vm.filename
+        # Full model metadata so prompts can read fields like <<model_info.max_input_tokens>>
+        from dataclasses import asdict
+        vm.vdict['model_info'] = asdict(vm.model) if vm.model else {}
+
+    def before_call(self, vm: VM) -> None:
+        """An LLM is sent the conversation as it stands; nothing to add."""
+
+    def after_call(self, vm: VM, responses: list, round_trips: list) -> None:
+        """The reply text becomes `last_response`; context occupancy is refreshed."""
+        last_response_text = ""
+        for response in responses:
+            if hasattr(response, 'content') and response.content:
+                for part in response.content:
+                    if isinstance(part, AiTextPart):
+                        last_response_text += part.text
+        vm.set_variable('last_response', last_response_text)
+
+        if round_trips:
+            # Context occupancy is a property of the LAST round trip, not of the statement
+            # total: it answers "how full is the context right now", not "what did this cost".
+            last_rt = round_trips[-1]
+            max_in = (vm.model.max_input_tokens or vm.model.max_tokens) if vm.model else 0
+            max_out = (vm.model.max_output_tokens or vm.model.max_tokens) if vm.model else 0
+            vm.vdict['context_usage'] = {
+                'input_pct': round(last_rt['tokens_in'] / max_in * 100, 1) if max_in else 0,
+                'output_pct': round(last_rt['tokens_out'] / max_out * 100, 1) if max_out else 0,
+                'input_tokens': last_rt['tokens_in'],
+                'output_tokens': last_rt['tokens_out'],
+                'max_input': max_in,
+                'max_output': max_out,
+            }
 
     def _record_round_trips(self, vm: VM, call_id: str, round_trips: list,
                             success: bool = True, error_message: str = None) -> tuple:
@@ -1634,10 +1782,11 @@ class StmtPromptMeta(StmtPrompt):
         # Set variables from params for substitution (only if not already set by command line)
         if "params" in prompt_data:
             for key, value in prompt_data["params"].items():
-                if key not in vm.vdict:
-                    vm.set_variable(key, value)
-                elif key == "llm_options" and vm.vdict[key] == {}:
-                    vm.set_variable(key, value)
+                path = vm.canonical_name(key)
+                if not vm.has_path(path):
+                    vm.assign(path, value)
+                elif path == "llm_options" and vm.vdict[path] == {}:
+                    vm.assign(path, value)
         
         # Log the prompt metadata
         vm.logger.log_info(f"Prompt metadata: {vm.prompt_name} v{vm.prompt_version}")
@@ -1670,6 +1819,243 @@ class StmtFunctions(StmtPrompt):
             raise StmtSyntaxError(f".functions error: {e}")
 
         vm.allowed_functions = resolved
+
+
+class StmtQuestion(StmtPrompt):
+    """Declares a named question set for an LDM.
+
+    Syntax:
+        .question <SetName> [model] <<<ID
+            <question-name>: <choice|score|noul>
+                instructions: what is being asked
+                <option>: what that option means
+        >>>ID
+
+    The body arrives in a multi-line quote rather than as continuation lines, because criteria are
+    two levels deep and the continuation rule strips indentation. Criteria are the substance: both
+    Jev trials turned on them, and they are the bulk of the tokens, so a criterion may run over
+    several lines -- a deeper line that is not `key: value` continues the previous one.
+    """
+
+    heredoc_as_value = False
+
+    PRIMITIVES = ('choice', 'score', 'noul')
+    INSTRUCTIONS_KEY = 'instructions'
+
+    def parse_body(self, body: str) -> dict:
+        """Indented body -> {question-name: {type, instructions, criteria}}."""
+        questions: dict[str, dict] = {}
+        current: dict | None = None
+        current_key: str | None = None
+        question_indent: int | None = None
+
+        for lno, raw in enumerate(body.split('\n'), start=1):
+            if not raw.strip():
+                continue
+            indent = len(raw) - len(raw.lstrip())
+            line = raw.strip()
+
+            if question_indent is None:
+                question_indent = indent
+
+            if indent <= question_indent:
+                name, _, primitive = line.partition(':')
+                name, primitive = name.strip(), primitive.strip()
+                if not name or primitive not in self.PRIMITIVES:
+                    raise StmtSyntaxError(
+                        f"{VERTICAL} [red].question body line {lno}: expected "
+                        f"'<name>: <{'|'.join(self.PRIMITIVES)}>', got '{line}'.[/]\n\n")
+                if name in questions:
+                    raise StmtSyntaxError(
+                        f"{VERTICAL} [red].question body line {lno}: question '{name}' "
+                        f"is defined twice.[/]\n\n")
+                if name.startswith(RESERVED_PREFIX):
+                    raise StmtSyntaxError(
+                        f"{VERTICAL} [red].question body line {lno}: '{name}' is reserved; "
+                        f"a question name may not start with '{RESERVED_PREFIX}'.[/]\n\n")
+                current = {'type': primitive, 'instructions': '', 'criteria': {}}
+                questions[name] = current
+                current_key = None
+                continue
+
+            if current is None:
+                raise StmtSyntaxError(
+                    f"{VERTICAL} [red].question body line {lno}: '{line}' appears before any "
+                    f"question is declared.[/]\n\n")
+
+            key, sep, text = line.partition(':')
+            key, text = key.strip(), text.strip()
+            if not sep or not key:
+                # Continuation of the previous criterion or of the instructions.
+                if current_key is None:
+                    raise StmtSyntaxError(
+                        f"{VERTICAL} [red].question body line {lno}: expected '<key>: <text>', "
+                        f"got '{line}'.[/]\n\n")
+                if current_key == self.INSTRUCTIONS_KEY:
+                    current['instructions'] = f"{current['instructions']} {line}".strip()
+                else:
+                    current['criteria'][current_key] = \
+                        f"{current['criteria'][current_key]} {line}".strip()
+                continue
+
+            if key == self.INSTRUCTIONS_KEY:
+                current['instructions'] = text
+            else:
+                current['criteria'][key] = text
+            current_key = key
+
+        if not questions:
+            raise StmtSyntaxError(f"{VERTICAL} [red].question: no questions defined.[/]\n\n")
+
+        for name, spec in questions.items():
+            # A `score` rubric is an ordered list of levels, not a mapping: the API keys its
+            # probabilities positionally ("0", "1", ...) and returns its own legend, so the author's
+            # keys are labels for reading, not scores. Converted here rather than at send time so
+            # that `_definition` records exactly what was sent.
+            if spec['type'] == 'score':
+                spec['criteria'] = list(spec['criteria'].values())
+            if spec['type'] == 'noul' and spec['criteria']:
+                raise StmtSyntaxError(
+                    f"{VERTICAL} [red].question: '{name}' is a noul and takes no options; it asks "
+                    f"whether its instructions are true of the state.[/]\n\n")
+        return questions
+
+    def execute(self, vm: VM) -> None:
+        super().execute(vm)
+
+        parts = self.value.split()
+        if not parts:
+            raise StmtSyntaxError(
+                f"{VERTICAL} [red].question syntax error: a set name is required.[/]\n\n")
+        set_name, model = parts[0], (parts[1] if len(parts) > 1 else None)
+
+        if set_name.startswith(RESERVED_PREFIX):
+            raise StmtSyntaxError(
+                f"{VERTICAL} [red].question: '{set_name}' is reserved; a set name may not start "
+                f"with '{RESERVED_PREFIX}'.[/]\n\n")
+        if self.heredoc is None:
+            raise StmtSyntaxError(
+                f"{VERTICAL} [red].question '{set_name}': the questions must be given in a "
+                f"multi-line quote, e.g. .question {set_name} <<<END ... >>>END.[/]\n\n")
+
+        questions = self.parse_body(self.heredoc)
+
+        # Definitions live a level down so the definition's `type` (the primitive being asked for)
+        # cannot collide with the answer's `type` (the primitive that answered).
+        question_set = {name: {DEFINITION_KEY: spec} for name, spec in questions.items()}
+        if model:
+            question_set[SET_MODEL_KEY] = model
+        vm.set_path(f"{RESERVED_ROOT}.{QUESTION_SUBSYSTEM}.{set_name}", question_set)
+
+
+class StmtEvaluate(StmtExec):
+    """Runs a declared question set against a state, using an LDM.
+
+    Syntax:
+        .evaluate ?.SetName [{"ldm_model":"..."}] <state>
+        .evaluate ?.SetName [{"ldm_model":"..."}] <<<ID
+        ...state...
+        >>>ID
+
+    The optional params are the same JSON params `.exec` takes; `ldm_model` is the only one.
+
+    An execute like `.exec`, through the same provider path, record and totals. What differs is
+    the content: `.question` has saved the question set in memory, `.evaluate` adds the state and
+    puts both into an LDM message, and the answers come back into that message and into the set,
+    where the prompt reads them: `?.Intent.action.value`.
+
+    The model is, first match wins: `ldm_model` in this line's params, the model on the `.question`
+    line, `$.ldm_model`. It applies to this call only.
+    """
+
+    heredoc_as_value = False
+
+    def resolve_model(self, vm: VM) -> str:
+        path, _, rest = self.value.strip().partition(' ')
+        if not path:
+            raise StmtSyntaxError(
+                f"{VERTICAL} [red].evaluate syntax error: a question set is required, "
+                f"e.g. .evaluate ?.Intent <<<STATE.[/]\n\n")
+
+        params_text, rest = split_line_params(rest, self.keyword)
+        params = parse_line_params(vm, params_text, self.keyword) if params_text else {}
+        unknown = set(params) - {'ldm_model'}
+        if unknown:
+            raise StmtSyntaxError(
+                f".evaluate syntax: unknown params {sorted(unknown)}; the only one is 'ldm_model'")
+        line_model = params.get('ldm_model')
+
+        if self.heredoc is not None:
+            if rest.strip():
+                raise StmtSyntaxError(
+                    f".evaluate syntax: unexpected text '{rest.strip()}' before a quoted state")
+            state = self.heredoc
+        else:
+            state = rest.strip()
+        state = vm.substitute(state)
+        if not state.strip():
+            raise VMExecutionError(f".evaluate {path}: no state to evaluate", self.msg_no,
+                                   ValueError("empty state"))
+
+        try:
+            question_set = vm.get_path(path)
+        except ValueError as e:
+            raise VMExecutionError(
+                f".evaluate: question set '{path}' is not defined; declare it with .question first",
+                self.msg_no, e)
+        if not isinstance(question_set, dict):
+            raise VMExecutionError(f".evaluate: '{path}' is not a question set", self.msg_no,
+                                   TypeError(type(question_set).__name__))
+
+        questions = {name: branch[DEFINITION_KEY]
+                     for name, branch in question_set.items()
+                     if isinstance(branch, dict) and DEFINITION_KEY in branch}
+        if not questions:
+            raise VMExecutionError(f".evaluate: '{path}' defines no questions", self.msg_no,
+                                   ValueError("empty question set"))
+
+        model = line_model or question_set.get(SET_MODEL_KEY)
+        if not model:
+            if not vm.has_path(LDM_MODEL_PATH):
+                raise StmtSyntaxError(
+                    f".evaluate error: No LDM model specified. Name one on the .evaluate or "
+                    f".question line, or set $.ldm_model via:\n"
+                    f"  .prompt \"params\":{{\"$.ldm_model\":\"...\"}}\n"
+                    f"  .set $.ldm_model <model_name>\n"
+                    f"  --set '$.ldm_model' <model_name>"
+                )
+            model = vm.get_path(LDM_MODEL_PATH)
+
+        self.target, self.state, self.questions = vm.expand_sigils(path), state, questions
+        return vm.substitute(model)
+
+    def refuse_wrong_mode(self, vm: VM) -> None:
+        # A chat model generates text instead of selecting; it cannot answer a question set.
+        if getattr(vm.model, 'mode', 'chat') != LDM_MODE:
+            raise StmtSyntaxError(
+                f"{VERTICAL} [red].evaluate error: '{vm.model.model}' is a chat model (LLM), not a "
+                f"decision model. It answers .exec, not .evaluate.[/]\n\n")
+
+    def model_loaded(self, vm: VM) -> None:
+        """The LLM's registers (`provider`, `model_info`) are not the LDM's to overwrite."""
+
+    def before_call(self, vm: VM) -> None:
+        """The content: an LDM message holding the question set and the state."""
+        part = AiLdmPart(vm=vm, set_path=self.target, questions=self.questions,
+                         state=self.state, model=vm.model_name)
+        # Appended, never merged: every LDM call is its own message.
+        vm.prompt.messages.append(AiMessage(vm=vm, role=LDM_ROLE, content=[part],
+                                            model_name=vm.model_name, provider=vm.provider,
+                                            stmt_no=self.msg_no))
+
+    def after_call(self, vm: VM, responses: list, round_trips: list) -> None:
+        """The answers land in the set, where the prompt reads them."""
+        part = next(p for p in responses[-1].content if isinstance(p, AiLdmPart))
+        for name, answer in part.answers.items():
+            for field, val in answer.items():
+                vm.set_path(f"{self.target}.{name}.{field}", val)
+        vm.set_path(f"{self.target}._model", part.model_served)
+        vm.set_path(f"{self.target}._usage", part.usage)
 
 
 class StmtSet(StmtPrompt):
@@ -1711,8 +2097,8 @@ class StmtSet(StmtPrompt):
         # Substitute variables in the value before storing
         substituted_value = vm.substitute(var_value)
         
-        # Store the variable using centralized method with automatic logging
-        vm.set_variable(var_name, substituted_value)
+        # Any memory: a plain name, a dotted path, or a `$.`/`?.` path
+        vm.assign(var_name, substituted_value)
 
 
 
@@ -1724,6 +2110,7 @@ StatementTypes: dict[str, type(StmtPrompt)] = {
     '.clear': StmtClear,
     '.cmd': StmtCmd,
     '.debug': StmtDebug,
+    '.evaluate': StmtEvaluate,
     '.exec': StmtExec,
     '.exit': StmtExit,
     '.functions': StmtFunctions,
@@ -1731,6 +2118,7 @@ StatementTypes: dict[str, type(StmtPrompt)] = {
     '.include': StmtInclude,
     '.print': StmtPrint,
     '.prompt': StmtPromptMeta,
+    '.question': StmtQuestion,
     '.set': StmtSet,
     '.system': StmtSystem,
     '.text': StmtText,
@@ -1741,7 +2129,8 @@ StatementTypes: dict[str, type(StmtPrompt)] = {
 
 keywords = StatementTypes.keys()
 
-def make_statement(vm: VM, msg_no: int, keyword: str, value: str) -> StmtPrompt:
+def make_statement(vm: VM, msg_no: int, keyword: str, value: str,
+                   heredoc: str | None = None) -> StmtPrompt:
     my_class = StatementTypes[keyword]
-    return my_class(vm, msg_no, keyword, value)
+    return my_class(vm, msg_no, keyword, value, heredoc)
 

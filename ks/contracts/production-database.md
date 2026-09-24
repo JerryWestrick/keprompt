@@ -12,11 +12,11 @@ One row per persisted chat.
 - Provenance: `keprompt_version`, `hostname`, `git_commit`.
 - Aggregates: `total_api_calls`, `total_round_trips`, `total_tokens_in`, `total_tokens_out`, `total_cost`, `total_api_time`, `total_tool_time`.
 
-`total_api_calls` counts executed `.exec` statements. `total_round_trips` counts billed model requests, including requests inside tool loops.
+`total_api_calls` counts executed `.exec` and `.evaluate` statements. `total_round_trips` counts billed model requests, including requests inside tool loops.
 
 ## `cost_tracking`
 
-One row per billed model request. Composite key: `(chat_id, msg_no, round_trip)`.
+One row per billed model request — LLM (`.exec`) and LDM (`.evaluate`) alike; an LDM call is one round trip, told apart by `provider`/`model`. Composite key: `(chat_id, msg_no, round_trip)`.
 
 Important fields:
 
@@ -33,7 +33,7 @@ The table also carries `temperature` and `max_tokens` columns that nothing has w
 ## Interpretation
 
 - `statements_json` records what the VM executed.
-- `messages_json` records the actual universal conversation, including model replies, tool calls, and tool results.
+- `messages_json` records the actual universal conversation, including model replies, tool calls, and tool results. Each LDM call is a message with role `ldm` and one part of type `ldm`: `set`, `questions`, `state`, `model` (asked for), `answers` (null if the call failed), `model_served`, `usage`. That part plus its `cost_tracking` row is the whole call.
 - `variables_json` and `vm_state_json` provide inputs and resumable execution state.
 - Aggregate quality cannot be inferred from cost fields. Read the application KS and actual outcomes.
 - Production responses are observations, not guaranteed correct labels.

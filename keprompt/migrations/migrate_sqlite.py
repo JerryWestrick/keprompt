@@ -155,6 +155,15 @@ def migrate_3_1_0_to_4_0_0(conn: sqlite3.Connection, log=print) -> None:
     """No database changes in KePrompt 4.0.0; multi-line quotes are a parser feature."""
 
 
+def migrate_4_0_0_to_4_1_0(conn: sqlite3.Connection, log=print) -> None:
+    """No schema change. An LDM call is an execute: it is billed in `cost_tracking` and its content
+    is an LDM message in the chat's `messages_json`, exactly like an LLM call."""
+
+
+def migrate_4_1_0_to_4_2_0(conn: sqlite3.Connection, log=print) -> None:
+    """No schema change."""
+
+
 Migration = tuple[str, Callable[[sqlite3.Connection, Callable], None]]
 MIGRATIONS: dict[str, Migration] = {
     "2.15.0": ("2.16.0", migrate_2_15_0_to_2_16_0),
@@ -164,6 +173,8 @@ MIGRATIONS: dict[str, Migration] = {
     "3.0.0": ("3.0.1", migrate_3_0_0_to_3_0_1),
     "3.0.1": ("3.1.0", migrate_3_0_1_to_3_1_0),
     "3.1.0": ("4.0.0", migrate_3_1_0_to_4_0_0),
+    "4.0.0": ("4.1.0", migrate_4_0_0_to_4_1_0),
+    "4.1.0": ("4.2.0", migrate_4_1_0_to_4_2_0),
 }
 
 

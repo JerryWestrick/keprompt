@@ -1,80 +1,79 @@
-"""Multi-line quotes: `<<<ID` opens, a line of exactly `>>>ID` closes, content is verbatim."""
+"""Multi-line quotes: `<<<ID` opens, a line of exactly `>>>ID` closes, content is verbatim.
 
-import pytest
+Each case is a real prompt in `test/prompts/quote-*.prompt`. Open one to see exactly what is under
+test, or run it yourself:
 
-from keprompt.keprompt_vm import VM, StmtSyntaxError
+    cd test && python3 -m keprompt chats create quote-opener-tail --json
 
+These need no network: every fixture ends in `.exit`, so no `.exec` is appended.
+"""
 
-def parse(tmp_path, body: str) -> VM:
-    path = tmp_path / "t.prompt"
-    path.write_text('.prompt "name":"T", "version":"1.0.0"\n' + body)
-    return VM(filename=str(path))
+import json
 
-
-def values(vm: VM) -> dict[str, str]:
-    """Last value seen per keyword, ignoring the auto-appended completion statements."""
-    return {s.keyword: s.value for s in vm.statements}
+from conftest import fails, ok
 
 
-def test_content_is_verbatim(tmp_path):
-    vm = parse(tmp_path, ".system <<<SYS\nline one\n\n    indented\n>>>SYS\n")
-    assert values(vm)[".system"] == "line one\n\n    indented"
+# --- content is content, not syntax ----------------------------------------------------------
+
+def test_blank_lines_and_indentation_survive():
+    out = ok("quote-blank-lines")
+    assert "alpha" in out and "indented" in out
 
 
-def test_keywords_inside_quote_are_content(tmp_path):
-    vm = parse(tmp_path, ".system <<<SYS\n.exit\n.user not a statement\n>>>SYS\n.print after\n")
-    assert values(vm)[".system"] == ".exit\n.user not a statement"
-    assert values(vm)[".print"] == "after"
+def test_dot_keywords_inside_the_quote_are_content():
+    """`.exit` in the body must not end the prompt."""
+    assert "got=.exit" in ok("quote-keyword-inside")
 
 
-def test_near_miss_terminator_is_content(tmp_path):
-    vm = parse(tmp_path, ".system <<<SYS\n>>>WRONG\n  >>>SYS\n>>>SYS\n")
-    assert values(vm)[".system"] == ">>>WRONG\n  >>>SYS"
+def test_near_miss_terminator_is_content():
+    assert "got=>>>WRONG" in ok("quote-near-miss-terminator")
 
 
-def test_terminator_tolerates_trailing_space(tmp_path):
-    vm = parse(tmp_path, ".system <<<SYS\nbody\n>>>SYS   \n")
-    assert values(vm)[".system"] == "body"
+def test_terminator_tolerates_trailing_space():
+    assert "got=body" in ok("quote-trailing-space")
 
 
-def test_text_before_marker_is_kept(tmp_path):
-    vm = parse(tmp_path, ".user Hello <<<MSG\nworld\n>>>MSG\n")
-    assert values(vm)[".user"] == "Hello world"
+def test_indented_terminator_does_not_close():
+    """The terminator must start the line."""
+    assert "got=>>>Q" in ok("quote-indented-terminator")
 
 
-def test_set_name_survives_quote(tmp_path):
-    vm = parse(tmp_path, ".set greeting <<<G\nhola\nadios\n>>>G\n")
-    assert values(vm)[".set"] == "greeting hola\nadios"
+# --- how the body joins the statement --------------------------------------------------------
+
+def test_text_before_the_marker_is_kept():
+    assert "hello world" in ok("quote-text-before-marker")
 
 
-def test_variables_are_substituted_at_runtime(tmp_path):
-    vm = parse(tmp_path, ".system <<<SYS\nHello <<who>>.\n>>>SYS\n")
-    vm.set_variable("who", "World")
-    assert vm.substitute(values(vm)[".system"]) == "Hello World."
+def test_opener_line_continues_after_the_marker():
+    """Standard heredoc: the opener does not have to end the line."""
+    assert "one middle two" in ok("quote-opener-tail")
 
 
-def test_identifier_is_author_chosen(tmp_path):
-    vm = parse(tmp_path, ".system <<<ZZZ\n>>>SYS is only text here\n>>>ZZZ\n")
-    assert values(vm)[".system"] == ">>>SYS is only text here"
+def test_identifier_allows_any_non_space_characters():
+    assert "got=body" in ok("quote-identifier-charset")
 
 
-def test_identifier_allows_any_non_space_characters(tmp_path):
-    vm = parse(tmp_path, ".system <<<user-text\nbody\n>>>user-text\n.user <<<msg.2_a!\nmore\n>>>msg.2_a!\n")
-    assert values(vm)[".system"] == "body"
-    assert values(vm)[".user"] == "more"
+def test_identifier_is_author_chosen():
+    """Content colliding with one terminator is handled by choosing another."""
+    assert "got=>>>Q here" in ok("quote-author-chosen-id")
 
 
-def test_unclosed_quote_is_an_error(tmp_path):
-    with pytest.raises(StmtSyntaxError, match="never closed"):
-        parse(tmp_path, ".system <<<SYS\nno terminator\n")
+# --- substitution ------------------------------------------------------------------------------
+
+def test_variables_inside_the_quote_are_substituted():
+    assert "got=Hello World." in ok("quote-substitution")
 
 
-def test_quoted_identifier_is_reserved(tmp_path):
-    with pytest.raises(StmtSyntaxError, match="reserved"):
-        parse(tmp_path, ".system <<<'SYS'\nbody\n>>>SYS\n")
+def test_delimiters_are_not_bound_to_prefix_postfix():
+    """Quote markers are parse-time literals; `Prefix`/`Postfix` are runtime state."""
+    assert "got=body" in ok("quote-delimiters-fixed")
 
 
-def test_delimiters_ignore_prefix_postfix(tmp_path):
-    """Prefix/Postfix are runtime variables; the quote markers are parse-time literals."""
-    vm = parse(tmp_path, ".set Prefix ((\n.set Postfix ))\n.system <<<SYS\nbody\n>>>SYS\n")
-    assert values(vm)[".system"] == "body"
+# --- errors are visible through the envelope ---------------------------------------------------
+
+def test_unclosed_quote_is_an_error():
+    assert "never closed" in json.dumps(fails("quote-unclosed"))
+
+
+def test_quoted_identifier_is_reserved():
+    assert "reserved" in json.dumps(fails("quote-reserved-nowdoc"))
