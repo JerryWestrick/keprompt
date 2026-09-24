@@ -1,0 +1,6 @@
+.prompt "name":"Q", "version":"1.0.0"
+.set v <<<user-text.2_a!
+body
+>>>user-text.2_a!
+.print got=<<v>>
+.exit

@@ -1,0 +1,4 @@
+.prompt "name":"F", "version":"1.0.0"
+.functions nope
+.print ok
+.exit

@@ -1,0 +1,6 @@
+.prompt "name":"Q", "version":"1.0.0"
+.set v <<<Q
+world
+>>>Q
+.print hello <<v>>
+.exit

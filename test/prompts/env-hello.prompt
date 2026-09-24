@@ -1,0 +1,3 @@
+.prompt "name":"P", "version":"1.0.0"
+.print hello
+.exit

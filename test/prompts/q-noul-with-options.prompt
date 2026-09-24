@@ -1,0 +1,7 @@
+.prompt "name":"E", "version":"1.0.0"
+.question Guard <<<END
+    q: noul
+        instructions: is this true
+        yes: should not be allowed
+>>>END
+.exit

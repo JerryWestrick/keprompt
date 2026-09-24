@@ -1,0 +1,6 @@
+.prompt "name":"S", "version":"1.0.0"
+.system The user's session label is BANANA47.
+.user What is my session label? Reply with the label exactly, nothing else.
+.exec
+.print reply=<<last_response>>
+.exit

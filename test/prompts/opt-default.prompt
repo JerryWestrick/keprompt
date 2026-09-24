@@ -1,0 +1,3 @@
+.prompt "name":"L", "version":"1.0.0"
+.print opts=<<llm_options>>
+.exit

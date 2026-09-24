@@ -1,0 +1,9 @@
+.prompt "name":"E", "version":"1.0.0"
+.set $.ldm_model nosuch/ldm-in-memory
+.question Intent <<<END
+    q: choice
+        instructions: pick one
+        a: the first option
+>>>END
+.evaluate ?.Intent some state
+.exit

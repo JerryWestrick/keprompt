@@ -1,0 +1,5 @@
+.prompt "name":"E", "version":"1.0.0"
+.set $.llm_model nosuch/from-set
+.user hello
+.exec
+.exit

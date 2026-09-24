@@ -1,0 +1,10 @@
+.prompt "name":"X", "version":"1.0.0"
+.question Intent typesafe/jev-latest <<<END
+    object: choice
+        instructions: Which entity is the user acting on?
+        Order: an order, or the line items on one
+        Client: a customer of the business
+>>>END
+.evaluate ?.Intent Please create a new order for 3 boxes of lettuce.
+.print object=<<?.Intent.object.value>>
+.exit

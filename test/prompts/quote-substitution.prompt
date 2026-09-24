@@ -1,0 +1,7 @@
+.prompt "name":"Q", "version":"1.0.0"
+.set who World
+.set v <<<Q
+Hello <<who>>.
+>>>Q
+.print got=<<v>>
+.exit

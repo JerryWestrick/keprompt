@@ -1,0 +1,8 @@
+.prompt "name":"Q", "version":"1.0.0"
+.set Prefix ((
+.set Postfix ))
+.set v <<<Q
+body
+>>>Q
+.print got=((v))
+.exit

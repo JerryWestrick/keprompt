@@ -1,0 +1,5 @@
+.prompt "name":"N", "version":"1.0.0"
+.user Reply with exactly one word: OK
+.exec
+.print reply=<<last_response>>
+.exit

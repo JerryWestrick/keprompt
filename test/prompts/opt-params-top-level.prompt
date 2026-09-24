@@ -1,0 +1,2 @@
+.prompt "name":"L", "version":"1.0.0", "params":{"$.llm_model":"openai/gpt-4o","temperature":0.3}
+.exec

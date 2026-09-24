@@ -1,0 +1,3 @@
+.prompt "name":"V", "version":"1.0.0"
+.print who=<<who>>
+.exit

@@ -1,0 +1,8 @@
+.prompt "name":"E", "version":"1.0.0"
+.question Intent <<<END
+    q: choice
+        a: one
+    q: noul
+        instructions: again
+>>>END
+.exit

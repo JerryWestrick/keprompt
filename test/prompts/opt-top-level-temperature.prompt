@@ -1,0 +1,4 @@
+.prompt "name":"L", "version":"1.0.0"
+.set temperature 0.2
+.exec
+.print SHOULD-NOT-APPEAR

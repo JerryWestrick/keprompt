@@ -1,0 +1,8 @@
+.prompt "name":"E", "version":"1.0.0"
+.question Intent <<<END
+    q: choice
+        instructions: pick one
+        a: the first option
+>>>END
+.evaluate ?.Intent {"model":"typesafe/jev-latest"} some state
+.exit

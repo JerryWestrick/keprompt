@@ -1,0 +1,4 @@
+.prompt "name":"X", "version":"1.0.0", "params":{"$.llm_model":"typesafe/jev-latest"}
+.user hello
+.exec
+.exit

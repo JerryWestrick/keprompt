@@ -1,0 +1,10 @@
+.prompt "name":"E", "version":"1.0.0"
+.question Intent openai/gpt-4o-mini <<<END
+    q: choice
+        instructions: pick one
+        a: the first option
+>>>END
+.evaluate ?.Intent {"ldm_model":"nosuch/ldm-on-evaluate"} <<<STATE
+some state
+>>>STATE
+.exit

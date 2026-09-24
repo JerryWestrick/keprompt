@@ -1,0 +1,4 @@
+.prompt "name":"Q", "version":"1.0.0"
+.set v <<<'Q'
+body
+>>>Q

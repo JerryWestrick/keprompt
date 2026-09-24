@@ -1,0 +1,6 @@
+.prompt "name":"E", "version":"1.0.0"
+.question Intent <<<END
+    q: guess
+        instructions: not a primitive
+>>>END
+.exit

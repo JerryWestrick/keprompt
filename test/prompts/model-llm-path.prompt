@@ -1,0 +1,4 @@
+.prompt "name":"E", "version":"1.0.0", "params":{"$.llm_model":"nosuch/new-name"}
+.user hello
+.exec
+.exit

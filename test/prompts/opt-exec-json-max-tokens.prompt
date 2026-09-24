@@ -1,0 +1,2 @@
+.prompt "name":"L", "version":"1.0.0"
+.exec {"llm_model":"openai/gpt-4o", "max_tokens": 10}

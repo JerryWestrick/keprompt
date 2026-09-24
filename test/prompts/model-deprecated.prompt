@@ -1,0 +1,4 @@
+.prompt "name":"E", "version":"1.0.0", "params":{"model":"nosuch/old-name"}
+.user hello
+.exec
+.exit

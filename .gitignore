@@ -54,5 +54,8 @@ prompts/
 
 
 # test suite: database and report are generated, the .prompt fixtures are not
+!test/prompts/
+test/prompts/*
+!test/prompts/*.prompt
 test/prompts/chats.db
 test/report.html
