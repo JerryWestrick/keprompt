@@ -499,7 +499,7 @@ that needs a constructed function set (today's ~20 vs a projected ~34) with the 
   prompt that reads `<<last_response>>`, which is the most-referenced variable in the language.
 - Whether the normaliser synthesises a `confidence` for `noul` answers or leaves it legitimately
   absent. `substitute()` raises on a missing path rather than returning empty, so an author writing
-  `<<?.Set.q.confidence>>` against a `noul` gets an error.
+  `<<?.Intent.action.confidence>>` against a `noul` gets an error.
 - Whether the guard is one predicate per prompt parameterised by channel, or one per channel sharing
   the prompt's scope.
 - The combining rule when a prompt declares several guards.

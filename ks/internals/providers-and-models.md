@@ -12,6 +12,16 @@ Each `AiProvider` adapter implements:
 
 `AiProvider.call_llm()` owns the request/tool-result loop. Each HTTP request appends one entry to `AiPrompt.round_trips`; `StmtExec` folds that ledger into VM totals and pending database rows.
 
+An LDM is reached through the same path: `AiTypeSafe(AiProvider)` differs only in which messages it builds from (`select_messages()`, the last `ldm` message) and which options it takes (`request_options()`, none).
+
+## Model names
+
+A registry key is `provider/model-name`. The name sent to a provider is the bare name: every adapter gets it with `ModelManager.get_model(self.prompt.model).get_api_model_name()`, whether it goes in the body or, for Gemini, in the URL. Sending the registry key made every Gemini call a 404 with an empty body (DEFECT-004).
+
+## The model that answered
+
+`AiProvider.provider_selected_model(response)` is the one place that reads it: the response's `model` field, or `modelVersion` for Gemini (override in `AiGoogle`); the model asked for when absent. `make_api_request()` stores it in each round trip, so it reaches `cost_tracking.provider_selected_model`; `AiTypeSafe` also puts it in the LDM part. An adapter whose provider names it elsewhere overrides the method.
+
 ## The system prompt
 
 A `.system` statement produces a universal message with role `system`. Providers do not agree on how to carry it, so each adapter must place it deliberately:
@@ -33,6 +43,7 @@ When changing a provider:
 3. Verify token and elapsed-time extraction on success and error.
 4. Verify pricing units against the registry.
 5. Verify the system prompt reaches the request, and that a prompt with no `.system` still builds.
-6. Add mocked tests; never require paid API calls in the normal suite.
+6. Verify `provider_selected_model()` reads the field the provider actually returns.
+7. Add mocked tests where possible. The live per-provider tests (`test_system_message.py`, `test_provider_selected_model.py`) run only when the provider's key is in the environment; their skip on `"api error:"` can hide a keprompt defect as an unreachable provider, so read the skip reasons.
 
 Known limitation: token extraction is input/output only. Provider cache creation/read token classes are not separately priced.

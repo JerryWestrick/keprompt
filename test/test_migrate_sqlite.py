@@ -5,6 +5,7 @@ run, so that is what these tests invoke. Assertions look only at the database fi
 the durable result a user is left with.
 """
 
+import json
 import sqlite3
 import subprocess
 import sys
@@ -144,6 +145,48 @@ def test_no_ldm_table_is_created(tmp_path):
     assert version_of(path) == "4.2.0"
     assert not {t for t in tables(path) if "ldm" in t or "system_one" in t}
     assert query(path, "SELECT count(*) FROM cost_tracking") == [(1,)]
+
+
+# --- 4.3.0: provider_selected_model -------------------------------------------------------------
+
+STORED_4_2_0 = {
+    # an LDM part as 4.2.0 wrote it
+    "messages_json": [{"role": "ldm", "content": [{"type": "ldm", "set": "_prompt.question.Intent",
+                                                   "model": "typesafe/jev-latest",
+                                                   "model_served": "jev-1.13.0"}]}],
+    # a question set as 4.2.0 kept it: _ldm_model asked for, _model answered
+    "variables_json": {"_prompt": {"question": {
+        "Intent": {"_ldm_model": "typesafe/jev-latest", "_model": "jev-1.13.0"},
+        "Other": {"_ldm_model": "typesafe/jev-latest"}}}},
+}
+
+
+def test_provider_selected_model_is_added_and_stored_keys_renamed(tmp_path):
+    path = build(tmp_path / "chats.db", LEGACY_SCHEMA)
+    migrate(path, "4.2.0")
+    conn = sqlite3.connect(path)
+    if "variables_json" not in {r[1] for r in conn.execute("PRAGMA table_info(chats)")}:
+        conn.execute("ALTER TABLE chats ADD COLUMN variables_json TEXT")  # as a 4.2.0 database has
+    conn.execute("UPDATE chats SET messages_json = ?, variables_json = ?",
+                 (json.dumps(STORED_4_2_0["messages_json"]), json.dumps(STORED_4_2_0["variables_json"])))
+    conn.commit()
+    conn.close()
+
+    migrate(path, "4.3.0")
+
+    assert version_of(path) == "4.3.0"
+    columns = {r[1] for r in query(path, "PRAGMA table_info(cost_tracking)")}
+    assert "provider_selected_model" in columns
+    assert query(path, "SELECT provider_selected_model FROM cost_tracking") == [(None,)], \
+        "rows written before 4.3.0 have no recorded answering model"
+
+    messages, variables = (json.loads(v) for v in
+                           query(path, "SELECT messages_json, variables_json FROM chats")[0])
+    part = messages[0]["content"][0]
+    assert part["provider_selected_model"] == "jev-1.13.0" and "model_served" not in part
+    sets = variables["_prompt"]["question"]
+    assert sets["Intent"] == {"_model": "typesafe/jev-latest", "_provider_selected_model": "jev-1.13.0"}
+    assert sets["Other"] == {"_model": "typesafe/jev-latest"}
 
 
 # --- refusals ------------------------------------------------------------------------------

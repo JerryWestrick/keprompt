@@ -1,13 +1,13 @@
 # Production Database Contract
 
-Default database: `prompts/chats.db` (current KePrompt/database version 3.1.0). It is operational production evidence. Analyze a copy or use read-only SQLite access. Older databases migrate when opened by current KePrompt; inspect `info.version` before assuming columns exist.
+Default database: `prompts/chats.db` (current KePrompt/database version 4.3.0). It is operational production evidence. Analyze a copy or use read-only SQLite access. Older databases migrate when opened by current KePrompt; inspect `info.version` before assuming columns exist.
 
 ## `chats`
 
 One row per persisted chat.
 
 - Identity: `chat_id`, `created_timestamp`.
-- Prompt: `prompt_name`, `prompt_version`, `prompt_filename`.
+- Prompt: `prompt_name`, `prompt_version`, `prompt_filename`. From 4.3.0 `prompt_name` is the prompt file's basename; rows written before hold the `.prompt` line's `"name"`, so the same prompt can appear under two names across that boundary.
 - Evidence JSON: `messages_json`, `statements_json`, `variables_json`, `vm_state_json`.
 - Provenance: `keprompt_version`, `hostname`, `git_commit`.
 - Aggregates: `total_api_calls`, `total_round_trips`, `total_tokens_in`, `total_tokens_out`, `total_cost`, `total_api_time`, `total_tool_time`.
@@ -25,7 +25,7 @@ Important fields:
 - `tokens_in`, `tokens_out`, `cost_in`, `cost_out`, `estimated_costs`.
 - `elapsed_time`: API response time for this request.
 - `tool_time`: execution time of functions requested by this response.
-- `prompt_semantic_name`, `prompt_version_tracking`, `parameters`, `expected_params`, `environment`.
+- `prompt_semantic_name`, `prompt_version_tracking`, `parameters`, `expected_params`, `environment`. `prompt_semantic_name` is the same value as `chats.prompt_name`, with the same 4.3.0 change.
 
 Join to `chats` on `chat_id`. `parameters` is normally populated only on the first round trip of an `.exec`.
 

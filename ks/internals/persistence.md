@@ -42,4 +42,6 @@ Schema changes require:
 5. Test direct execution, chained migration, fresh database creation, and migration from a copied old database.
 6. Update `contracts/production-database.md`.
 
+A rename carries into stored data. When a stored name changes, its migration rewrites the JSON columns too: 4.3.0 renames the LDM part's `model_served` to `provider_selected_model`, and in stored memory a question set's `_model` to `_provider_selected_model`, then `_ldm_model` to `_model`.
+
 Never infer that a database with historical rows has current metric semantics merely because it was migrated. Migration can reshape old rows but cannot recover usage that was never recorded.

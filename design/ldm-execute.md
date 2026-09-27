@@ -117,7 +117,7 @@ the execution units; each has its own section, like registers, holding only what
 - The `ldm_calls` table is gone. The 4.1.0 and 4.2.0 migrations make no schema change.
 - Choices made in implementing, for Jerry to confirm:
   - (Settled by Jerry, 2026-09-24) `.evaluate` takes the same JSON params as `.exec`:
-    `.evaluate ?.Set {"ldm_model":"..."} <<<STATE`, or with an inline state after the object.
+    `.evaluate ?.Intent {"ldm_model":"..."} <<<STATE`, or with an inline state after the object.
     One shared parser serves both statements.
   - (Superseded 2026-09-27 by "A question set's model is scoped to the set".) The `.question`
     line's model was kept at `?.Intent._ldm_model`, and the `.evaluate` line model was used for that
@@ -136,3 +136,11 @@ the execution units; each has its own section, like registers, holding only what
   one hook that differs is `output_scope`: `$` for `.exec`, the set for `.evaluate`.
 - Migration 4.2.0 → 4.3.0 adds the column and renames stored keys: the LDM part's `model_served`,
   and in stored memory a set's `_model` → `_provider_selected_model`, then `_ldm_model` → `_model`.
+
+## Open, 2026-09-27
+
+- **The fallback form of `provider_selected_model`.** When the provider names no model, the value
+  is the model asked for as the prefixed registry key (`gemini/gemini-2.5-flash-lite`), but
+  providers that do name one report the bare name (`gemini-2.5-flash-lite`). Undecided which form
+  the fallback takes. Code: `AiProvider.provider_selected_model()`.
+- Not covered by a test: the fallback path itself — every provider tested names its model.

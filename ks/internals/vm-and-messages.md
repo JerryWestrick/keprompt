@@ -25,3 +25,13 @@ Only statements and universal state are persisted. Provider formats are generate
 Update the `Stmt*` implementation and `StatementTypes`; preserve substitution, logging, serialization, auto-completion, and reply behavior. Update `contracts/prompt-language.md` and add tests.
 
 Do not confuse `.exec` statements with billed round trips: a tool loop can issue multiple requests.
+
+## One execute, two units
+
+`StmtExec.execute()` is the whole execute for every model. `.evaluate` (`StmtEvaluate`) subclasses it and differs only in hooks: `resolve_model`, `refuse_wrong_mode`, `model_loaded`, `before_call` (the content), `after_call` (where answers go) and `output_scope` (where outputs such as `_provider_selected_model` land: `$` for `.exec`, the question set for `.evaluate`). Before adding anything LDM-specific, look for the slot the LLM path already has. Design record: `design/ldm-execute.md`.
+
+Each unit's model follows one pattern with a different scope: `.exec`'s line model is kept in `$.llm_model` for the prompt; a question set's model (from its `.question` or `.evaluate` line) is kept in `?.<name>._model` for that set, falling back to `$.ldm_model`.
+
+## The prompt's name
+
+`prompt_name_for(filename)` in `keprompt_vm.py` is the only rule: the file's basename, or `chat` with no file. It names `vm.prompt_name`, the log, `chats.prompt_name`, `cost_tracking.prompt_semantic_name` and the prompt listing. A `"name"` on the `.prompt` line is ignored with a warning.
