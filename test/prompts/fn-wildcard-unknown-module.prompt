@@ -1,4 +1,4 @@
-.prompt "name":"F", "version":"1.0.0"
+.prompt "version":"1.0.0"
 .functions nosuch.*
 .print ok
 .exit

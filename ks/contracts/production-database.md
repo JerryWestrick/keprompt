@@ -21,6 +21,7 @@ One row per billed model request — LLM (`.exec`) and LDM (`.evaluate`) alike; 
 Important fields:
 
 - `model`, `provider`, `timestamp`, `success`, `error_message`.
+- `provider_selected_model`: the model that answered — the model asked for, unless the provider identified another (e.g. `gpt-4o` answered by `gpt-4o-2024-08-06`). Null on rows written before 4.3.0.
 - `tokens_in`, `tokens_out`, `cost_in`, `cost_out`, `estimated_costs`.
 - `elapsed_time`: API response time for this request.
 - `tool_time`: execution time of functions requested by this response.
@@ -33,7 +34,7 @@ The table also carries `temperature` and `max_tokens` columns that nothing has w
 ## Interpretation
 
 - `statements_json` records what the VM executed.
-- `messages_json` records the actual universal conversation, including model replies, tool calls, and tool results. Each LDM call is a message with role `ldm` and one part of type `ldm`: `set`, `questions`, `state`, `model` (asked for), `answers` (null if the call failed), `model_served`, `usage`. That part plus its `cost_tracking` row is the whole call.
+- `messages_json` records the actual universal conversation, including model replies, tool calls, and tool results. Each LDM call is a message with role `ldm` and one part of type `ldm`: `set`, `questions`, `state`, `model` (asked for), `answers` (null if the call failed), `provider_selected_model`, `usage`. That part plus its `cost_tracking` row is the whole call.
 - `variables_json` and `vm_state_json` provide inputs and resumable execution state.
 - Aggregate quality cannot be inferred from cost fields. Read the application KS and actual outcomes.
 - Production responses are observations, not guaranteed correct labels.

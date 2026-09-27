@@ -1,4 +1,4 @@
-.prompt "name":"E", "version":"1.0.0", "params":{"$.llm_model":"some/model"}
+.prompt "version":"1.0.0", "params":{"$.llm_model":"some/model"}
 .print m=<<model>>
 .print l=<<$.llm_model>>
 .exit

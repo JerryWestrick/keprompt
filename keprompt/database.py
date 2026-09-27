@@ -119,6 +119,7 @@ class CostTracking(BaseModel):
     # Model information
     model = CharField(max_length=100)
     provider = CharField(max_length=50)
+    provider_selected_model = CharField(max_length=100, null=True)  # the model that answered
     
     # Execution status
     success = BooleanField(default=True)

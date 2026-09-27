@@ -135,7 +135,17 @@ def test_a_run_is_persisted():
     envelope, _ = run_prompt("env-hello", offline=True)
     row = sqlite3.connect(chats_db()).execute(
         "SELECT prompt_name FROM chats WHERE chat_id = ?", (envelope["chat_id"],)).fetchone()
-    assert row == ("P",)
+    assert row == ("env-hello",)
+
+
+def test_a_name_field_is_ignored_with_a_warning():
+    """The prompt is named by its file's basename, whatever `.prompt` says."""
+    envelope, result = run_prompt("name-ignored", offline=True)
+    assert_envelope(envelope)
+    row = sqlite3.connect(chats_db()).execute(
+        "SELECT prompt_name FROM chats WHERE chat_id = ?", (envelope["chat_id"],)).fetchone()
+    assert row == ("name-ignored",)
+    assert "'name' is ignored" in result.stderr
 
 
 def test_listing_respects_a_limit():

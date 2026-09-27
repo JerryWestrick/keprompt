@@ -33,10 +33,15 @@ class AiGoogle(AiProvider):
         return request
 
     def get_api_url(self) -> str:
-        return f"https://generativelanguage.googleapis.com/v1beta/models/{self.prompt.model}:generateContent?key={self.prompt.api_key}"
+        model = ModelManager.get_model(self.prompt.model).get_api_model_name()
+        return f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={self.prompt.api_key}"
 
     def get_headers(self) -> Dict:
         return {"Content-Type": "application/json"}
+
+    def provider_selected_model(self, response: Dict) -> str:
+        """Gemini names the model that answered in `modelVersion`."""
+        return response.get('modelVersion') or self.prompt.model
 
     def to_ai_message(self, response: Dict) -> AiMessage:
         candidates = response.get("candidates", [])

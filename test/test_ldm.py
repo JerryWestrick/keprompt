@@ -124,7 +124,18 @@ def test_message_records_which_model_answered(run):
     for p in ldm_parts(run):
         assert p["usage"]["input_tokens"] > 0
         # asked-for vs actually-answered: a floating alias resolves to a pinned version
-        assert p["model_served"] and p["model_served"] != p["model"]
+        assert p["provider_selected_model"] and p["provider_selected_model"] != p["model"]
+
+
+def test_cost_rows_record_which_model_answered(run):
+    answered = {p["provider_selected_model"] for p in ldm_parts(run)}
+    assert {r["provider_selected_model"] for r in costs(run)} == answered
+
+
+def test_the_set_holds_which_model_answered(run):
+    chat = query("SELECT variables_json FROM chats WHERE chat_id = ?", run["chat_id"])[0]
+    sets = json.loads(chat["variables_json"])["_prompt"]["question"]
+    assert sets["Intent"]["_provider_selected_model"] == part(run, "Intent")["provider_selected_model"]
 
 
 def test_inline_state_is_recorded_too(run):
@@ -137,7 +148,7 @@ def test_no_separate_ldm_table(run):
     assert not {t for t in tables if "ldm" in t}
 
 
-# --- which model .evaluate uses: its line, then .question's line, then $.ldm_model ----------
+# --- which model .evaluate uses: the set's own (its line, or .question's), then $.ldm_model ---
 
 def test_no_ldm_model_anywhere_is_an_error():
     assert "No LDM model" in json.dumps(fails("ldm-no-model"))
@@ -146,6 +157,16 @@ def test_no_ldm_model_anywhere_is_an_error():
 def test_evaluate_line_model_wins_over_question_line():
     """.question names a chat model; .evaluate's own line names another, which is the one used."""
     assert "nosuch/ldm-on-evaluate" in json.dumps(fails("ldm-line-beats-question"))
+
+
+def test_evaluate_line_model_stays_in_its_set_only():
+    """The line writes `?.Intent._model`; `$.ldm_model` and the other set are untouched."""
+    envelope = fails("ldm-line-model-stays")
+    chat = query("SELECT variables_json FROM chats WHERE chat_id = ?", envelope["chat_id"])[0]
+    memory = json.loads(chat["variables_json"])["_prompt"]
+    assert memory["question"]["Intent"]["_model"] == "nosuch/ldm-stays"
+    assert "_model" not in memory["question"]["Other"]
+    assert "ldm_model" not in memory
 
 
 def test_line_params_work_with_an_inline_state():

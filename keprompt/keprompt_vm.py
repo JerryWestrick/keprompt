@@ -66,8 +66,13 @@ LLM_MODEL_PATH = f'{RESERVED_ROOT}.llm_model'
 LDM_MODEL_PATH = f'{RESERVED_ROOT}.ldm_model'
 # `model` is the deprecated spelling of `$.llm_model`. Every use is redirected there, with a warning.
 DEPRECATED_MODEL = 'model'
-# Set-level: the model named on a `.question` line, which `.evaluate` uses unless its own line names one.
-SET_MODEL_KEY = '_ldm_model'
+# Set-level: the question set's model. The `.question` line and the `.evaluate` line both write it, and
+# it stays for later `.evaluate`s of that set, as `.exec`'s line model stays in `$.llm_model`.
+SET_MODEL_KEY = '_model'
+# The model that answered the last call: the model asked for, unless the provider identified another.
+# A temporary output, `$._provider_selected_model` for `.exec` and `?.<name>._provider_selected_model`
+# for `.evaluate`.
+PROVIDER_SELECTED_KEY = '_provider_selected_model'
 # Reserved inside a question set, so set-level metadata (`_model`, `_usage`) and a question's
 # `_definition` can never be shadowed by a question that happens to share the name.
 DEFINITION_KEY = '_definition'
@@ -131,6 +136,13 @@ def _reject_legacy_top_level_llm_options(source: dict) -> None:
         )
 
 
+def prompt_name_for(filename: str | None) -> str:
+    """A prompt is named by its file's basename; a VM with no file is "chat"."""
+    if filename:
+        return os.path.splitext(os.path.basename(filename))[0]
+    return "chat"
+
+
 class VM:
     """Class to hold Prompt Virtual Machine execution state"""
 
@@ -160,14 +172,11 @@ class VM:
         self.header: dict[str, any] = {}
         self.data: str = ''
         
-        # Extract prompt name for logger
-        if self.filename:
-            prompt_name = os.path.splitext(os.path.basename(self.filename))[0]
-        else:
-            prompt_name = "chat"
-        
+        # The prompt's name is its file's basename; it names the log and the chat and cost records
+        self.prompt_name: str = prompt_name_for(self.filename)
+
         # Initialize the new standard logger
-        self.logger = StandardLogger(prompt_name=prompt_name, mode=log_mode, log_identifier=log_identifier)
+        self.logger = StandardLogger(prompt_name=self.prompt_name, mode=log_mode, log_identifier=log_identifier)
         
         # Caller-provided values (command line, --set-from-json) go through the same assignment as
         # `.set`, so `$.` paths and the deprecated `model` behave identically wherever they come from.
@@ -191,7 +200,6 @@ class VM:
         self.interaction_no: int = 0
         
         # Prompt metadata fields for versioning and cost tracking
-        self.prompt_name: str = ""
         self.prompt_version: str = ""
         self.expected_params: dict = {}
         self.pending_costs: list = []
@@ -1358,6 +1366,9 @@ class StmtExec(StmtPrompt):
         round_trips = list(getattr(vm.prompt, 'round_trips', []))
 
         self.after_call(vm, responses, round_trips)
+        if round_trips:
+            vm.set_path(f"{self.output_scope(vm)}.{PROVIDER_SELECTED_KEY}",
+                        round_trips[-1]['provider_selected_model'])
 
         if round_trips:
             tokens_in, tokens_out, cost_in, cost_out = self._record_round_trips(vm, call_id, round_trips)
@@ -1438,6 +1449,10 @@ class StmtExec(StmtPrompt):
     def before_call(self, vm: VM) -> None:
         """An LLM is sent the conversation as it stands; nothing to add."""
 
+    def output_scope(self, vm: VM) -> str:
+        """Where this unit's outputs such as `_provider_selected_model` land: the prompt."""
+        return RESERVED_ROOT
+
     def after_call(self, vm: VM, responses: list, round_trips: list) -> None:
         """The reply text becomes `last_response`; context occupancy is refreshed."""
         last_response_text = ""
@@ -1505,6 +1520,7 @@ class StmtExec(StmtPrompt):
                 'tool_time': float(rt['tool_time']),
                 'model': rt.get('model') or vm.model_name,
                 'provider': rt.get('provider') or vm.provider,
+                'provider_selected_model': rt.get('provider_selected_model'),
                 # These round trips completed and were billed; success reflects whether the
                 # statement they belong to went on to fail.
                 'success': success,
@@ -1740,13 +1756,14 @@ class StmtPromptMeta(StmtPrompt):
     Handles the execution of a prompt metadata statement in the VM.
 
     This class represents a `.prompt` keyword statement in the prompt file. It 
-    defines metadata about the prompt including name, version, and expected parameters.
+    defines metadata about the prompt: version and expected parameters. The prompt is named
+    by its file's basename; a 'name' field is ignored with a warning.
     This statement must be the first statement in a prompt file and version is required.
 
     Attributes:
         msg_no (int): The message number in the execution sequence.
         keyword (str): The keyword associated with the statement (e.g., '.prompt').
-        value (str): JSON-like format: "name":"value", "version":"1.0.0", "params":{...}
+        value (str): JSON-like format: "version":"1.0.0", "params":{...}
 
     Methods:
         execute(vm: VM): Parses prompt metadata and stores it in VM for cost tracking.
@@ -1769,13 +1786,12 @@ class StmtPromptMeta(StmtPrompt):
             raise StmtSyntaxError(f".prompt syntax error: invalid JSON format: {e}")
         
         # Validate required fields
-        if "name" not in prompt_data:
-            raise StmtSyntaxError(f".prompt syntax error: missing required 'name' field")
+        if "name" in prompt_data:
+            vm.logger.log_warning(f".prompt 'name' is ignored; the prompt is named '{vm.prompt_name}' after its file")
         if "version" not in prompt_data:
             raise StmtSyntaxError(f".prompt syntax error: missing required 'version' field")
         
         # Store prompt metadata in VM for cost tracking
-        vm.prompt_name = prompt_data["name"]
         vm.prompt_version = prompt_data["version"]
         vm.expected_params = prompt_data.get("params", {})
         
@@ -1964,8 +1980,8 @@ class StmtEvaluate(StmtExec):
     puts both into an LDM message, and the answers come back into that message and into the set,
     where the prompt reads them: `?.Intent.action.value`.
 
-    The model is, first match wins: `ldm_model` in this line's params, the model on the `.question`
-    line, `$.ldm_model`. It applies to this call only.
+    The model is the set's own, `?.Intent._model`, otherwise `$.ldm_model`. `ldm_model` in this
+    line's params writes the set's model, as the `.question` line does; it stays for later calls.
     """
 
     heredoc_as_value = False
@@ -2014,6 +2030,8 @@ class StmtEvaluate(StmtExec):
             raise VMExecutionError(f".evaluate: '{path}' defines no questions", self.msg_no,
                                    ValueError("empty question set"))
 
+        if line_model:
+            vm.set_path(f"{vm.expand_sigils(path)}.{SET_MODEL_KEY}", line_model)
         model = line_model or question_set.get(SET_MODEL_KEY)
         if not model:
             if not vm.has_path(LDM_MODEL_PATH):
@@ -2054,8 +2072,11 @@ class StmtEvaluate(StmtExec):
         for name, answer in part.answers.items():
             for field, val in answer.items():
                 vm.set_path(f"{self.target}.{name}.{field}", val)
-        vm.set_path(f"{self.target}._model", part.model_served)
         vm.set_path(f"{self.target}._usage", part.usage)
+
+    def output_scope(self, vm: VM) -> str:
+        """An LDM's outputs land in its question set, not in the prompt."""
+        return self.target
 
 
 class StmtSet(StmtPrompt):

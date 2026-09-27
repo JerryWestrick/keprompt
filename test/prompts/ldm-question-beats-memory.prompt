@@ -1,4 +1,4 @@
-.prompt "name":"E", "version":"1.0.0", "params":{"$.ldm_model":"typesafe/jev-latest"}
+.prompt "version":"1.0.0", "params":{"$.ldm_model":"typesafe/jev-latest"}
 .question Intent openai/gpt-4o-mini <<<END
     q: choice
         instructions: pick one

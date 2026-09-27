@@ -33,10 +33,10 @@ PROVIDERS = {
     "anthropic": ("ANTHROPIC_API_KEY", "anthropic/claude-haiku-4-5"),
     "deepseek": ("DEEPSEEK_API_KEY", "deepseek/deepseek-chat"),
     "mistral": ("MISTRAL_API_KEY", "mistral/mistral-small-latest"),
-    "xai": ("XAI_API_KEY", "xai/grok-2"),
+    "xai": ("XAI_API_KEY", "xai/grok-4.20-0309-non-reasoning"),
     "cerebras": ("CEREBRAS_API_KEY", "cerebras/gpt-oss-120b"),
     "gemini": ("GOOGLE_API_KEY", "gemini/gemini-2.5-flash-lite"),
-    "openrouter": ("OPENROUTER_API_KEY", "openrouter/anthropic/claude-3-haiku"),
+    "openrouter": ("OPENROUTER_API_KEY", "openrouter/anthropic/claude-haiku-4.5"),
 }
 
 # A provider the account cannot reach is not a system-prompt defect.

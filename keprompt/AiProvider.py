@@ -150,6 +150,10 @@ class AiProvider(abc.ABC):
         """Options merged into every request. An LLM takes `llm_options`."""
         return self.prompt.vm.vdict['llm_options']
 
+    def provider_selected_model(self, response: Dict) -> str:
+        """The model that answered: the one asked for, unless the provider identified another."""
+        return response.get('model') or self.prompt.model
+
     def call_llm(self, label: str) -> List['AiMessage']:
         do_again = True
         responses = []
@@ -457,6 +461,7 @@ class AiProvider(abc.ABC):
             'tool_time': 0.0,
             'model': self.prompt.model_lookup_key or self.prompt.model,
             'provider': self.prompt.provider,
+            'provider_selected_model': self.provider_selected_model(resp_obj),
         })
 
         return retval

@@ -1,6 +1,7 @@
 # Design: an LDM call is an execute
 
-Status: architecture agreed, 2026-09-23. Not yet compared against the code.
+Status: architecture agreed 2026-09-23; implemented in 4.2.0 (2026-09-24) and 4.3.0 (2026-09-27) —
+see the "Implemented" sections at the end.
 
 Settled with Jerry after the first build of `.evaluate` put LDM calls on a parallel path (their own
 table, save, query and view code), which left LDM rows orphaned when a chat was deleted. The error
@@ -69,6 +70,26 @@ within. Where it conflicts with `design/question.md` (notably "Executing it: No 
   1. the model on the `.evaluate` line
   2. otherwise the model on the `.question` line
   3. otherwise `$.ldm_model`, set by `.set` or a command-line arg
+- **A question set's model is scoped to the set** (settled 2026-09-27, replacing the rule above).
+  It is the `.exec` pattern with a narrower scope: `.exec`'s scope is the prompt, a question set's
+  scope is the set. `.question Intent <model>` and `.evaluate ?.Intent {"ldm_model":"..."}` both
+  write the model into `Intent`'s own model slot, where it stays for later `.evaluate ?.Intent`
+  calls. Neither touches `$.ldm_model` or any other question set. `.evaluate ?.Intent` uses
+  `Intent`'s slot, otherwise `$.ldm_model`. The slot is `?.Intent._model`: `?` is the LDM,
+  `Intent` says which one, `_model` is its model — only LDMs live under `?`, so `_ldm_` would be
+  redundant (settled 2026-09-27).
+- **The model that answered** (settled 2026-09-27) is filled with the model asked for, then
+  overwritten if the provider identifies a different one. It lives at
+  `?.Intent._provider_selected_model`. If model resolution
+  fails before the call, the `.evaluate` is illegal and the prompt stops.
+- **One name everywhere** (settled 2026-09-27): `provider_selected_model`. The `ldm` message's
+  `model_served` field is renamed to it, so the record and `?.Intent._provider_selected_model` agree.
+- **`.exec` captures `provider_selected_model` too** (settled 2026-09-27, by point 10): filled with
+  the model asked for, overwritten if the provider identifies a different one. In memory it is
+  `_provider_selected_model` in both scopes: `$._provider_selected_model` for `.exec`,
+  `?.Intent._provider_selected_model` for `.evaluate ?.Intent`. In both it is a temporary output
+  value, overwritten by each call. In the record it is also stored in `cost_tracking`, on every
+  row, LLM or LDM (settled 2026-09-27). An `ldm` message keeps it as well.
 
 ## The machine: one VM with an LDM coprocessor (2026-09-24)
 
@@ -98,8 +119,20 @@ the execution units; each has its own section, like registers, holding only what
   - (Settled by Jerry, 2026-09-24) `.evaluate` takes the same JSON params as `.exec`:
     `.evaluate ?.Set {"ldm_model":"..."} <<<STATE`, or with an inline state after the object.
     One shared parser serves both statements.
-  - The `.question` line's model is kept at `?.Set._ldm_model`; `?.Set._model` stays "the model
-    that actually answered", as the namespace section defines it.
-  - The `.evaluate` line model is used for that call only; the `.exec` line model is kept in
-    `$.llm_model` for later calls, as `.exec` always did.
+  - (Superseded 2026-09-27 by "A question set's model is scoped to the set".) The `.question`
+    line's model was kept at `?.Intent._ldm_model`, and the `.evaluate` line model was used for that
+    call only. `?.Intent._model` stays "the model that actually answered", as the namespace section
+    defines it.
   - In `.prompt` params and `--set`, the new spelling is the path itself: `"$.llm_model"`.
+
+## Implemented, 2026-09-27 (4.3.0)
+
+- The set's model is `?.Intent._model` (`SET_MODEL_KEY`); the `.evaluate` line writes it, as the
+  `.question` line does.
+- One provider hook, `AiProvider.provider_selected_model(response)`, reads the model that answered
+  from every response: `model`, or `modelVersion` for Gemini; the model asked for if absent. It feeds
+  the round-trip record (so `cost_tracking.provider_selected_model`) and the LDM part.
+- The shared execute writes the last round trip's value to `<scope>._provider_selected_model`; the
+  one hook that differs is `output_scope`: `$` for `.exec`, the set for `.evaluate`.
+- Migration 4.2.0 → 4.3.0 adds the column and renames stored keys: the LDM part's `model_served`,
+  and in stored memory a set's `_model` → `_provider_selected_model`, then `_ldm_model` → `_model`.

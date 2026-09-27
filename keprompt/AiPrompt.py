@@ -167,7 +167,7 @@ class AiLdmPart(AiMessagePart):
     """
 
     def __init__(self, vm, set_path: str, questions: dict, state: str, model: str,
-                 answers: Optional[dict] = None, model_served: Optional[str] = None,
+                 answers: Optional[dict] = None, provider_selected_model: Optional[str] = None,
                  usage: Optional[dict] = None):
         super().__init__(vm=vm, part_type="ldm")
         self.set_path = set_path
@@ -175,7 +175,7 @@ class AiLdmPart(AiMessagePart):
         self.state = state
         self.model = model
         self.answers = answers
-        self.model_served = model_served
+        self.provider_selected_model = provider_selected_model
         self.usage = usage
 
     def __str__(self) -> str:
@@ -193,7 +193,7 @@ class AiLdmPart(AiMessagePart):
             "state": self.state,
             "model": self.model,
             "answers": self.answers,
-            "model_served": self.model_served,
+            "provider_selected_model": self.provider_selected_model,
             "usage": self.usage,
         }
 
@@ -201,7 +201,7 @@ class AiLdmPart(AiMessagePart):
     def from_json(cls, vm, data: dict) -> 'AiLdmPart':
         return cls(vm=vm, set_path=data.get("set", ""), questions=data.get("questions", {}),
                    state=data.get("state", ""), model=data.get("model", ""),
-                   answers=data.get("answers"), model_served=data.get("model_served"),
+                   answers=data.get("answers"), provider_selected_model=data.get("provider_selected_model"),
                    usage=data.get("usage"))
 
     def print_message(self) -> str:

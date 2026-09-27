@@ -24,7 +24,7 @@ from .ModelManager import ModelManager
 from .config import get_config
 from .AiPrompt import AiCall, AiResult, AiMessage, AiLdmPart
 from .keprompt_logger import LogMode, StandardLogger
-from .keprompt_vm import VM, VMExecutionError
+from .keprompt_vm import VM, VMExecutionError, prompt_name_for
 
 
 class ChatManager:
@@ -439,12 +439,7 @@ class ChatManager:
             vm.exec_debug = vm_state["exec_debug"]
 
         # Reinitialize logger with restored log_mode
-        prompt_name = (
-            os.path.splitext(os.path.basename(vm.filename))[0]
-            if vm.filename
-            else "chat"
-        )
-        vm.logger = StandardLogger(prompt_name=prompt_name, mode=vm.log_mode)
+        vm.logger = StandardLogger(prompt_name=prompt_name_for(vm.filename), mode=vm.log_mode)
 
         return vm
 

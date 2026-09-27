@@ -1,0 +1,5 @@
+.prompt "version":"1.0.0"
+.user Reply with the single word OK.
+.exec
+.print psm=<<$._provider_selected_model>>
+.exit

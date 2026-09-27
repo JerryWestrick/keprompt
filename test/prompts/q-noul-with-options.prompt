@@ -1,4 +1,4 @@
-.prompt "name":"E", "version":"1.0.0"
+.prompt "version":"1.0.0"
 .question Guard <<<END
     q: noul
         instructions: is this true

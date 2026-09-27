@@ -73,7 +73,11 @@ known-limitation line about cache token classes. Update them with whatever gets 
 
 ## `.question` — LDM calls from a prompt
 
-Designed 2026-09-20, not built. Full design in [`design/question.md`](design/question.md).
+Built: `.question` and `.evaluate` shipped in 4.2.0 (2026-09-24); the set-scoped model and
+`provider_selected_model` in 4.3.0 (2026-09-27). The architecture is in
+[`design/ldm-execute.md`](design/ldm-execute.md); the original design in
+[`design/question.md`](design/question.md). The rest of this section is kept as the record of what
+was planned.
 
 Adds a non-message statement that sends state plus named typed questions to an LDM model
 (TypeSafe's Jev) and lands the answers in a variable, so a prompt can classify intent cheaply and
@@ -91,6 +95,6 @@ Two things must change before it can work, both covered in the design doc:
    an `AiTypeSafe` handler declaring `litellm_provider` or the entry is filtered out. Not
    TypeSafe-specific — any provider outside LiteLLM hits this.
 
-The design doc also records two adjacent designs settled in the same session and not yet written up
-properly: the prompt-injection guard (`safe=` / `[safe]`, checked at acquisition in `FunctionSpace`)
+Still open: the design doc also records two adjacent designs settled in the same session, not built
+and not yet written up properly: the prompt-injection guard (`safe=` / `[safe]`, checked at acquisition in `FunctionSpace`)
 and conditionals (`.then`/`.else`/`.end-if`, forward jumps only).

@@ -6,7 +6,7 @@
 
 | Statement | Effect |
 |---|---|
-| `.prompt "name":"N", "version":"V", "params":{...}` | Required first statement; metadata and defaults |
+| `.prompt "version":"V", "params":{...}` | Required first statement; metadata and defaults. The prompt is named by its file's basename; a `"name"` field is ignored with a warning |
 | `.functions f1, module.*, module.f2` | Tools allowed during `.exec`; last declaration wins |
 | `.system text` | Add system message |
 | `.user text` | Add user message |
@@ -99,25 +99,31 @@ own name, so all three read alike:
 
 | Path | Holds |
 |---|---|
-| `?.Set.question.value` | `choice` → the option, `score` → 0.0–1.0 position in the rubric, `noul` → 0.0–1.0 |
-| `?.Set.question.type` | which primitive answered |
-| `?.Set.question.confidence` | `choice`/`score` only — a `noul` value *is* its own answer, so this is absent |
-| `?.Set.question.probabilities` | `choice`/`score` only |
-| `?.Set.question._definition` | the question as asked: type, instructions, criteria |
-| `?.Set._model` / `?.Set._usage` | the model that actually answered, and its tokens |
-| `?.Set._ldm_model` | the model named on the `.question` line, if any |
+| `?.Intent.action.value` | `choice` → the option, `score` → 0.0–1.0 position in the rubric, `noul` → 0.0–1.0 |
+| `?.Intent.action.type` | which primitive answered |
+| `?.Intent.action.confidence` | `choice`/`score` only — a `noul` value *is* its own answer, so this is absent |
+| `?.Intent.action.probabilities` | `choice`/`score` only |
+| `?.Intent.action._definition` | the question as asked: type, instructions, criteria |
+| `?.Intent._model` | the set's model: the one named on its `.question` or `.evaluate` line |
+| `?.Intent._provider_selected_model` | the model that answered the last call |
+| `?.Intent._usage` | the last call's tokens |
 
 Re-evaluating a set replaces its answers.
 
-`.evaluate` uses the first model it finds:
+A question set's model belongs to the set, the way `.exec`'s belongs to the prompt. The model on the
+`.question` line, or `ldm_model` in the `.evaluate` line's params, is written to `?.Intent._model`
+and stays for later `.evaluate ?.Intent` calls; neither touches `$.ldm_model` or any other set. The
+params are the same JSON params `.exec` takes: `.evaluate ?.Intent {"ldm_model":"typesafe/jev-latest"} <<<STATE`.
+The object's closing brace ends it, so an inline state can follow. `.evaluate ?.Intent` uses
+`?.Intent._model`, otherwise `$.ldm_model` (from `.set`, `.prompt` params or the command line).
 
-1. `ldm_model` in the `.evaluate` line's params, the same JSON params `.exec` takes:
-   `.evaluate ?.Intent {"ldm_model":"typesafe/jev-latest"} <<<STATE`. The object's closing brace
-   ends it, so an inline state can follow. It applies to that call only.
-2. otherwise the model on the `.question` line
-3. otherwise `$.ldm_model`, from `.set`, `.prompt` params or the command line
+No model anywhere makes the `.evaluate` illegal, and the prompt stops. A chat model is refused, as
+`.exec` refuses an LDM.
 
-No model anywhere is an error. A chat model is refused, as `.exec` refuses an LDM.
+The model that answered is the one asked for, unless the provider identified another (a floating
+alias such as `jev-latest` resolving to a pinned version). It is a temporary output, overwritten by
+each call: `?.Intent._provider_selected_model` for `.evaluate`, `$._provider_selected_model` for
+`.exec`. Every call also stores it in `cost_tracking.provider_selected_model`.
 
 Each call is stored as an `ldm` message in the chat's message list, holding the set, the questions,
 the state, the model asked for, the answers, the model that answered and its usage. An LLM is never

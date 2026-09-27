@@ -1,4 +1,4 @@
-.prompt "name":"analyze_delivery_photo", "version":"1.1", "description":"OCR delivery photo to extract remision and payment status", "params":{"model":"cerebras/qwen-3.8-27b","image_path":"","actor":"unknown"}
+.prompt "version":"1.1", "description":"OCR delivery photo to extract remision and payment status", "params":{"model":"cerebras/qwen-3.8-27b","image_path":"","actor":"unknown"}
 .system You are an OCR assistant for La Epicure delivery receipts (remisiones).
 
 You receive a photo of a signed remisión. Extract the following fields:

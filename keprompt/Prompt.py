@@ -9,6 +9,7 @@ from rich.console import Console
 from rich.table import Table
 
 from keprompt import CustomEncoder
+from keprompt.keprompt_vm import prompt_name_for
 
 console = Console()
 
@@ -92,7 +93,7 @@ class PromptManager:
             source = ''.join(lines)
 
             return Prompt(
-                name=metadata.get("name", os.path.basename(prompt_file)),
+                name=prompt_name_for(prompt_file),
                 path=prompt_file,
                 description=metadata.get("description", ""),
                 parameters=metadata.get("params", {}),
@@ -100,7 +101,7 @@ class PromptManager:
             )
         except Exception as e:
             return Prompt(
-                name=os.path.basename(prompt_file),
+                name=prompt_name_for(prompt_file),
                 path=prompt_file,
                 description=f"Failed to parse file: {str(e)}",
                 parameters={},

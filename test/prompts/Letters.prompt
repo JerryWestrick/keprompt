@@ -1,4 +1,4 @@
-.prompt "name":"Letters", "version":"1.0.0", "params":{"llm":"gpt-4o-mini"}, description:"read images and process them"
+.prompt "version":"1.0.0", "params":{"llm":"gpt-4o-mini"}, description:"read images and process them"
 .# Test send image and function calls.
 .llm "model": <<llm>>
 .system

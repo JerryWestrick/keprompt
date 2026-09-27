@@ -1,4 +1,4 @@
-.prompt "name":"X", "version":"1.0.0"
+.prompt "version":"1.0.0"
 .question Intent typesafe/jev-latest <<<END
     object: choice
         instructions: Which entity is the user acting on?

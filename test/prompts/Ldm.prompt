@@ -1,4 +1,4 @@
-.prompt "name":"Ldm", "version":"1.0.0", "params":{"$.ldm_model":"typesafe/jev-latest"}
+.prompt "version":"1.0.0", "params":{"$.ldm_model":"typesafe/jev-latest"}
 .# Exercises .question and .evaluate end to end. No .exec -- an LDM call is not a chat call.
 .question Intent <<<END
     object: choice

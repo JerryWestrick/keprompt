@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-KePrompt is a CLI tool and framework for prompt engineering across multiple AI providers (OpenAI, Anthropic, Google, DeepSeek, Mistral, XAI, Cerebras, OpenRouter). It features a custom `.prompt` DSL, a virtual machine executor, chat persistence via SQLite, and cost tracking. Version 3.1.0.
+KePrompt is a CLI tool and framework for prompt engineering across multiple AI providers (OpenAI, Anthropic, Google, DeepSeek, Mistral, XAI, Cerebras, OpenRouter). It features a custom `.prompt` DSL, a virtual machine executor, chat persistence via SQLite, and cost tracking. Version 4.3.0.
 
 ## Build & Development Commands
 
@@ -60,7 +60,7 @@ The system follows a layered architecture: CLI → JSON API → Managers → VM/
 
 Example:
 ```
-.prompt "name":"Hello", "version":"1.0.0", "params":{"$.llm_model":"openai/gpt-4o", "llm_options":{"temperature":0.2}}
+.prompt "version":"1.0.0", "params":{"$.llm_model":"openai/gpt-4o", "llm_options":{"temperature":0.2}}
 .system You are a helpful assistant.
 .user Hello <<name>>, what can you help with?
 .exec

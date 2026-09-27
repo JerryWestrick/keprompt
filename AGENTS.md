@@ -60,7 +60,7 @@ The system follows a layered architecture: CLI → JSON API → Managers → VM/
 
 Example:
 ```
-.prompt "name":"Hello", "version":"1.0.0", "params":{"model":"openai/gpt-4o", "llm_options":{"temperature":0.2}}
+.prompt "version":"1.0.0", "params":{"model":"openai/gpt-4o", "llm_options":{"temperature":0.2}}
 .system You are a helpful assistant.
 .user Hello <<name>>, what can you help with?
 .exec

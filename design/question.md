@@ -1,12 +1,13 @@
 # Design: `.question` — LDM calls from a prompt
 
-Status: designed, not built. Dated 2026-09-20, revised 2026-09-21.
+Status: built in 4.2.0 (2026-09-24). Dated 2026-09-20, revised 2026-09-21. Where it conflicts with
+`design/ldm-execute.md`, that document wins — it records the architecture as built.
 
 The 2026-09-21 session settled the namespace, crystallised the guard as the same mechanism as
 `.question`, and shipped the multi-line quote (v4.0.0) that the statement depends on.
 
 Not in `ks/` deliberately — the knowledge store is for current public behaviour and explicitly
-excludes speculative features. This moves into `ks/contracts/prompt-language.md` when it ships.
+excludes speculative features. The shipped behaviour is in `ks/contracts/prompt-language.md`.
 
 ---
 
@@ -185,7 +186,8 @@ the collision is silent. Definitions therefore move down a level into `_definiti
 ?.Intent.action.type             answer   "choice" | "score" | "noul"
 ?.Intent.action.probabilities    answer
 ?.Intent.action._definition.*    the question as asked: type, instructions, criteria
-?.Intent._model                  set-level: the model that actually answered, e.g. jev-1.13.0
+?.Intent._model                  set-level: the set's model, from its .question or .evaluate line
+?.Intent._provider_selected_model  set-level: the model that actually answered, e.g. jev-1.13.0
 ?.Intent._usage                  set-level: input_tokens, output_tokens
 ```
 
@@ -194,7 +196,7 @@ Answers are read constantly and stay short; definitions are read rarely and pay 
 to know which one answered.
 
 The `_` prefix is reserved wholesale inside a set, not just `_definition` — set-level metadata
-already needs `_model` and `_usage`, and reserving the prefix avoids revisiting this. The
+already needs `_model`, `_provider_selected_model` and `_usage`, and reserving the prefix avoids revisiting this. The
 reservation is checked when the set is defined, not when a path is read, or a question named
 `_definition` shadows silently.
 

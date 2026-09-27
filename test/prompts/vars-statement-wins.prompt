@@ -1,4 +1,4 @@
-.prompt "name":"V", "version":"1.0.0"
+.prompt "version":"1.0.0"
 .set who statement
 .print who=<<who>>
 .exit

@@ -1,4 +1,4 @@
-.prompt "name":"X", "version":"1.0.0"
+.prompt "version":"1.0.0"
 .question Intent openai/gpt-4o-mini <<<END
     q: choice
         instructions: pick

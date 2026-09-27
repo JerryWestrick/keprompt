@@ -1,4 +1,4 @@
-.prompt "name":"Q", "version":"1.0.0"
+.prompt "version":"1.0.0"
 .set v <<<ZZZ
 >>>Q here
 >>>ZZZ

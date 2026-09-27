@@ -94,7 +94,7 @@ Let's create something more useful - a file analyzer:
 
 ```bash
 cat > prompts/analyze.prompt << 'EOF'
-.prompt "name":"File Analyzer", "version":"1.0.0", "params":{"$.llm_model":"openai/gpt-4o", "filename":"file_to_analyze"}
+.prompt "version":"1.0.0", "params":{"$.llm_model":"openai/gpt-4o", "filename":"file_to_analyze"}
 .# Analyze any text file
 .system You are an expert text analyst. Provide clear, actionable insights.
 .user Please analyze this file:
@@ -169,7 +169,7 @@ See the [Knowledge Store](ks/README.md) for the full reference.
 ### The Prompt Language
 | Command | Purpose | Example |
 |---------|---------|---------|
-| `.prompt` | **REQUIRED** - Define prompt metadata | `.prompt "name":"My Prompt", "version":"1.0.0"` |
+| `.prompt` | **REQUIRED** - Define prompt metadata | `.prompt "version":"1.0.0"` |
 | `.set` | Set a variable, including the model | `.set $.llm_model openai/gpt-4o` |
 | `.functions` | **Declare allowed functions** (no `.functions` = no functions) | `.functions readfile, writefile` |
 | `.system` | Set system message | `.system You are a helpful assistant` |
@@ -220,7 +220,7 @@ Hello from data.txt
 
 #### End-to-end example (manual reconstruction)
 ```text
-.prompt "name":"Toolcall Example", "version":"1.0.0", "params":{"$.llm_model":"openai/gpt-4o-mini"}
+.prompt "version":"1.0.0", "params":{"$.llm_model":"openai/gpt-4o-mini"}
 .user Please read data.txt and summarize it.
 
 # These two statements represent what the *LLM API* would have produced,
@@ -237,11 +237,12 @@ Hello from data.txt
 **Every prompt file must start with a `.prompt` statement** that defines metadata:
 
 ```bash
-.prompt "name":"My Prompt Name", "version":"1.0.0", "params":{"$.llm_model":"openai/gpt-4o-mini"}
+.prompt "version":"1.0.0", "params":{"$.llm_model":"openai/gpt-4o-mini"}
 ```
 
+The prompt is named by its file's basename (`code-reviewer.prompt` is `code-reviewer`); that name is used in cost tracking. A `name` field is ignored with a warning.
+
 **Required fields:**
-- `name`: Human-readable prompt name (used in cost tracking)
 - `version`: Semantic version for tracking changes
 
 **Optional fields:**
@@ -250,13 +251,13 @@ Hello from data.txt
 **Examples:**
 ```bash
 # Simple prompt
-.prompt "name":"Hello World", "version":"1.0.0"
+.prompt "version":"1.0.0"
 
 # With parameters
-.prompt "name":"Code Reviewer", "version":"2.1.0", "params":{"$.llm_model":"openai/gpt-4o", "language":"python"}
+.prompt "version":"2.1.0", "params":{"$.llm_model":"openai/gpt-4o", "language":"python"}
 
 # Research assistant
-.prompt "name":"Research Assistant", "version":"1.5.0", "params":{"$.llm_model":"anthropic/claude-sonnet-4-20250514", "depth":"comprehensive"}
+.prompt "version":"1.5.0", "params":{"$.llm_model":"anthropic/claude-sonnet-4-20250514", "depth":"comprehensive"}
 ```
 
 ### Variables
@@ -280,7 +281,7 @@ keprompt chats create --prompt greeting --set name "Alice" --set date "Monday"
 By default, **the model has NO access to any functions**. You must explicitly declare which functions the model can use with `.functions`:
 
 ```
-.prompt "name":"Example", "version":"1.0.0", "params":{"$.llm_model":"openai/gpt-4o"}
+.prompt "version":"1.0.0", "params":{"$.llm_model":"openai/gpt-4o"}
 .functions readfile, wwwget
 .system You are a research assistant.
 .user Analyze this file and fetch related info from the web.
@@ -294,7 +295,7 @@ This is a security feature — it prevents models (especially delegated sub-agen
 ### Research Assistant
 ```bash
 cat > prompts/research.prompt << 'EOF'
-.prompt "name":"Research Assistant", "version":"1.0.0", "params":{"$.llm_model":"anthropic/claude-sonnet-4-20250514", "topic":"research_topic"}
+.prompt "version":"1.0.0", "params":{"$.llm_model":"anthropic/claude-sonnet-4-20250514", "topic":"research_topic"}
 .set $.llm_model anthropic/claude-sonnet-4-20250514
 .system You are a research assistant. Provide thorough, well-sourced information.
 .user Research this topic: <<topic>>
@@ -309,7 +310,7 @@ keprompt chats create --prompt research --set topic "Artificial_Intelligence"
 ### Code Review
 ```bash
 cat > prompts/review.prompt << 'EOF'
-.prompt "name":"Code Reviewer", "version":"1.0.0", "params":{"$.llm_model":"openai/gpt-4o", "codefile":"path/to/file"}
+.prompt "version":"1.0.0", "params":{"$.llm_model":"openai/gpt-4o", "codefile":"path/to/file"}
 .set $.llm_model openai/gpt-4o
 .system You are a senior software engineer. Provide constructive code reviews.
 .user Please review this code file:
@@ -439,7 +440,7 @@ chmod +x prompts/functions/weather
 Use in prompts:
 ```bash
 cat > prompts/weather_check.prompt << 'EOF'
-.prompt "name":"Weather Check", "version":"1.0.0", "params":{"city":"default_city"}
+.prompt "version":"1.0.0", "params":{"city":"default_city"}
 .set $.llm_model openai/gpt-4o-mini
 .functions get_weather
 .user What's the weather like in <<city>>? Based on the weather, suggest appropriate clothing.

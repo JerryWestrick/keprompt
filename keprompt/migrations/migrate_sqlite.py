@@ -2,6 +2,7 @@
 """Upgrade a KePrompt SQLite database to a requested KePrompt version."""
 
 import argparse
+import json
 import shutil
 import sqlite3
 import sys
@@ -164,6 +165,73 @@ def migrate_4_1_0_to_4_2_0(conn: sqlite3.Connection, log=print) -> None:
     """No schema change."""
 
 
+def _rename_set_model_keys(value):
+    """In stored memory, each question set's `_model` (the model that answered) becomes
+    `_provider_selected_model`, then `_ldm_model` (the model asked for) becomes `_model`."""
+    if isinstance(value, dict):
+        root = value.get("_prompt")
+        question = root.get("question") if isinstance(root, dict) else None
+        if isinstance(question, dict):
+            for question_set in question.values():
+                if not isinstance(question_set, dict):
+                    continue
+                if "_model" in question_set:
+                    question_set["_provider_selected_model"] = question_set.pop("_model")
+                if "_ldm_model" in question_set:
+                    question_set["_model"] = question_set.pop("_ldm_model")
+        for child in value.values():
+            _rename_set_model_keys(child)
+    elif isinstance(value, list):
+        for child in value:
+            _rename_set_model_keys(child)
+
+
+def _rename_ldm_part_field(value):
+    """In stored messages, an LDM part's `model_served` becomes `provider_selected_model`."""
+    if isinstance(value, dict):
+        if "model_served" in value:
+            value["provider_selected_model"] = value.pop("model_served")
+        for child in value.values():
+            _rename_ldm_part_field(child)
+    elif isinstance(value, list):
+        for child in value:
+            _rename_ldm_part_field(child)
+
+
+def migrate_4_2_0_to_4_3_0(conn: sqlite3.Connection, log=print) -> None:
+    """The model that answered is `provider_selected_model` everywhere: a `cost_tracking` column,
+    the LDM part's field (was `model_served`), and `_provider_selected_model` in a question set
+    (was `_model`, whose name now holds the set's model, was `_ldm_model`)."""
+    tables = _tables(conn)
+    if "cost_tracking" in tables and "provider_selected_model" not in _columns(conn, "cost_tracking"):
+        conn.execute('ALTER TABLE cost_tracking ADD COLUMN "provider_selected_model" VARCHAR(100)')
+
+    if "chats" not in tables:
+        return
+    columns = set(_columns(conn, "chats"))
+    renames = [(column, fix) for column, fix in (("messages_json", _rename_ldm_part_field),
+                                                 ("vm_state_json", _rename_set_model_keys),
+                                                 ("variables_json", _rename_set_model_keys))
+               if column in columns]
+    changed = 0
+    for chat_id, *texts in conn.execute(
+            f'SELECT chat_id, {", ".join(column for column, _ in renames)} FROM chats').fetchall():
+        updates = {}
+        for (column, fix), text in zip(renames, texts):
+            if not text:
+                continue
+            data = json.loads(text)
+            fix(data)
+            if data != json.loads(text):
+                updates[column] = json.dumps(data)
+        if updates:
+            assignments = ", ".join(f'"{column}" = ?' for column in updates)
+            conn.execute(f'UPDATE chats SET {assignments} WHERE chat_id = ?',
+                         (*updates.values(), chat_id))
+            changed += 1
+    log(f"  chats: renamed stored model keys in {changed} chat(s)")
+
+
 Migration = tuple[str, Callable[[sqlite3.Connection, Callable], None]]
 MIGRATIONS: dict[str, Migration] = {
     "2.15.0": ("2.16.0", migrate_2_15_0_to_2_16_0),
@@ -175,6 +243,7 @@ MIGRATIONS: dict[str, Migration] = {
     "3.1.0": ("4.0.0", migrate_3_1_0_to_4_0_0),
     "4.0.0": ("4.1.0", migrate_4_0_0_to_4_1_0),
     "4.1.0": ("4.2.0", migrate_4_1_0_to_4_2_0),
+    "4.2.0": ("4.3.0", migrate_4_2_0_to_4_3_0),
 }
 
 

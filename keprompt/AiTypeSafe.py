@@ -85,7 +85,7 @@ class AiTypeSafe(AiProvider):
             raise ValueError(f"LDM did not answer: {', '.join(sorted(missing))}")
 
         part.answers = {name: normalize_answer(raw) for name, raw in response['answers'].items()}
-        part.model_served = response.get('model', self.prompt.model)
+        part.provider_selected_model = self.provider_selected_model(response)
         part.usage = response.get('usage', {})
         return message
 

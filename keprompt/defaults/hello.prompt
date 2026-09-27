@@ -1,4 +1,4 @@
-.prompt "name":"hello", "version":"1.0.0", "params":{"$.llm_model":"openai/gpt-4o", "question":"what model are you?"}
+.prompt "version":"1.0.0", "params":{"$.llm_model":"openai/gpt-4o", "question":"what model are you?"}
 
 .# Hello World prompt for KePrompt
 .# Usage:

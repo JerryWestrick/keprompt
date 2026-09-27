@@ -219,3 +219,45 @@ and so flag itself — the moment this is fixed.
 
 Not yet investigated: whether other `get` verbs (`prompts get`, `models get`) stringify a miss the
 same way, and where the `str(None)` conversion happens.
+
+---
+
+## DEFECT-004 — every Gemini call went to a URL that does not exist
+
+- **Status:** fixed 2026-09-27, in 4.3.0 (uncommitted at the time of writing)
+- **Discovered:** 2026-09-27, investigating why the live per-provider tests skipped `gemini`
+- **Found in:** keprompt 4.2.0; present since the first commit (`c0d8887`)
+- **Severity:** high — no `gemini/...` model could be called at all
+
+### Summary
+
+`AiGoogle.get_api_url()` built the request URL from `self.prompt.model`, the full registry key,
+so a call to `gemini/gemini-2.5-flash-lite` was sent to
+`.../v1beta/models/gemini/gemini-2.5-flash-lite:generateContent`. Google answers that path with
+HTTP 404 and an empty body. Every other provider strips the `provider/` prefix with
+`ModelManager.get_model(...).get_api_model_name()`; Gemini was the only one that did not.
+
+### Evidence
+
+- The failed chat's `vm_state_json` held `"error": "... gemini::gemini/gemini-2.5-flash-lite API error: "`
+  — nothing after the colon, because the body was empty.
+- A direct call with the same key to `.../models/gemini-2.5-flash-lite:generateContent` returned
+  HTTP 200; the prefixed path returned HTTP 404.
+
+### Why the tests did not catch it
+
+`test/test_system_message.py` treats any error containing `"api error:"` as "provider unreachable
+for this account" and skips. Every keprompt API failure carries that text, so this defect read as
+an account problem, not a failure.
+
+### Fix
+
+`keprompt/AiGoogle.py` `get_api_url()` uses `get_api_model_name()`, like every other provider.
+The live Gemini tests (`sys-single`, `sys-multi`, `sys-none`, `psm-exec`) now pass.
+
+### Still open
+
+- The API error message omits the HTTP status: `AiProvider.py` records only `response.text`, so an
+  empty body leaves `chats.db` with no cause at all.
+- The skip marker `"api error:"` in `test_system_message.py` matches every API failure, so it can
+  still hide a keprompt defect as an unreachable provider.

@@ -1,0 +1,13 @@
+.prompt "version":"1.0.0"
+.question Intent <<<END
+    q: choice
+        instructions: pick one
+        a: the first option
+>>>END
+.question Other <<<END
+    q: choice
+        instructions: pick one
+        a: the first option
+>>>END
+.evaluate ?.Intent {"ldm_model":"nosuch/ldm-stays"} some state
+.exit
