@@ -31,6 +31,6 @@ The shell command is the application boundary, not merely an interactive conveni
 6. Return `ai_response` to the caller and retain `chat_id` when continuation is needed.
 7. Continue with `keprompt chat reply --json <chat_id> <message>`.
 8. Preserve `prompts/chats.db`; it is production evidence for later optimization.
-9. Create an application KS for business intent, architecture, invariants, and the division of responsibility between LLM, tools, and application data.
+9. Create an application KS for business intent, architecture, invariants, and the division of responsibility between LLM, tools, and application data — template: [`../examples/application-ks.md`](../examples/application-ks.md).
 
 Keep channel adapters thin. Prefer one prompt/tool core with channel-specific inputs or included instructions over separate behavior paths.

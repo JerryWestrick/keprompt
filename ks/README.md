@@ -18,6 +18,7 @@ Operational diagnosis belongs to the role owning the failing boundary: applicati
 - `contracts/`: exact public behavior. One authoritative document per contract.
 - `roles/`: task workflow; links to contracts instead of repeating them.
 - `internals/`: implementation architecture for changing KePrompt.
+- `examples/`: worked prompts and the application-KS template, each run as written.
 
 Application-specific business intent and invariants belong in that application's own KS.
 

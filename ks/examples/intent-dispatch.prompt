@@ -1,0 +1,19 @@
+.prompt "version":"1.0.0", "params":{"$.llm_model":"openai/gpt-4o-mini"}
+.# Classify the request with an LDM, then load only the instructions for that intent.
+.# Run:  keprompt chats create intent-dispatch --set message "<the customer's text>" --json
+.# Needs one instruction file per object-action pair, e.g. instructions/Order-create.md.
+.question Intent typesafe/jev-latest <<<END
+    object: choice
+        instructions: Which entity is the user acting on?
+        Order: an order, or the line items on one
+        Client: a customer of the business
+    action: choice
+        instructions: What operation is the user requesting?
+        create: make or place a new one
+        read: look up, list or report on existing ones
+>>>END
+.evaluate ?.Intent <<message>>
+.system You are the order assistant for a produce distributor. Follow these instructions:
+.include instructions/<<?.Intent.object.value>>-<<?.Intent.action.value>>.md
+.user <<message>>
+.exec
