@@ -83,9 +83,9 @@ keprompt chat new --prompt hello
 
 Try it with different models and questions:
 ```bash
-keprompt chat new --prompt hello --model anthropic/claude-sonnet-4-20250514
+keprompt chat new --prompt hello --set '$.llm_model=anthropic/claude-sonnet-4-20250514'
 keprompt chat new --prompt hello --set question 'tell me a joke'
-keprompt chat new --prompt hello --model deepseek/deepseek-chat --set question 'what is 2+2?'
+keprompt chat new --prompt hello --set '$.llm_model=deepseek/deepseek-chat' --set question 'what is 2+2?'
 ```
 
 ## Your First Real Prompt
@@ -159,136 +159,28 @@ keprompt models get --company OpenAI
 
 See the [Knowledge Store](ks/README.md) for the full reference.
 
-## Core Concepts
+## The Prompt Language
 
-### Prompt Files
-- Stored in `prompts/` directory with `.prompt` extension
-- Use simple line-based syntax starting with `.` for commands
-- Support variables, functions, and multi-turn conversations
+A prompt is a file in `prompts/` ending in `.prompt`: one statement per line, each starting with `.`,
+run top to bottom.
 
-### The Prompt Language
-| Command | Purpose | Example |
-|---------|---------|---------|
-| `.prompt` | **REQUIRED** - Define prompt metadata | `.prompt "version":"1.0.0"` |
-| `.set` | Set a variable, including the model | `.set $.llm_model openai/gpt-4o` |
-| `.functions` | **Declare allowed functions** (no `.functions` = no functions) | `.functions readfile, writefile` |
-| `.system` | Set system message | `.system You are a helpful assistant` |
-| `.user` | Add user message | `.user What is the weather like?` |
-| `.tool_call` | **Represent an LLM tool call** (manual/replay/debug) | `.tool_call readfile(filename="data.txt") id=call_abc123` |
-| `.tool_result` | **Represent a tool result** (manual/replay/debug) | `.tool_result id=call_abc123 name=readfile` |
-| `.exec` | Send to AI and get response | `.exec` |
-| `.cmd` | Call a function | `.cmd readfile(filename="data.txt")` |
-| `.print` | Output to console | `.print The result is: <<last_response>>` |
-
-### Representing LLM Tool Calls and Tool Results
-
-KePrompt supports two *statement* types that let you represent **tool calls produced by the LLM API** and the corresponding **tool responses**.
-
-These are most useful for:
-- Replaying/debugging conversations
-- Creating test fixtures / example chats
-- Manually reconstructing a conversation that includes tool use
-
-They are distinct from `.cmd`, which **executes** a local function during prompt execution.
-
-#### `.tool_call` (LLM → tool)
-
-**Syntax**
-```text
-.tool_call function_name(param=value, ...) id=call_id
 ```
-
-**Example**
-```text
-.tool_call readfile(filename="data.txt") id=call_001
-```
-
-#### `.tool_result` (tool → LLM)
-
-**Syntax**
-```text
-.tool_result id=call_id name=function_name
-<result text can be multi-line>
-```
-
-**Example**
-```text
-.tool_result id=call_001 name=readfile
-File contents:
-Hello from data.txt
-```
-
-#### End-to-end example (manual reconstruction)
-```text
 .prompt "version":"1.0.0", "params":{"$.llm_model":"openai/gpt-4o-mini"}
-.user Please read data.txt and summarize it.
-
-# These two statements represent what the *LLM API* would have produced,
-# and the corresponding tool response KePrompt would send back:
-.tool_call readfile(filename="data.txt") id=call_001
-.tool_result id=call_001 name=readfile
-Hello from data.txt
-
-.assistant Summary: The file contains a short greeting.
-```
-
-### Prompt Metadata (Required)
-
-**Every prompt file must start with a `.prompt` statement** that defines metadata:
-
-```bash
-.prompt "version":"1.0.0", "params":{"$.llm_model":"openai/gpt-4o-mini"}
-```
-
-The prompt is named by its file's basename (`code-reviewer.prompt` is `code-reviewer`); that name is used in cost tracking. A `name` field is ignored with a warning.
-
-**Required fields:**
-- `version`: Semantic version for tracking changes
-
-**Optional fields:**
-- `params`: Default parameters and documentation
-
-**Examples:**
-```bash
-# Simple prompt
-.prompt "version":"1.0.0"
-
-# With parameters
-.prompt "version":"2.1.0", "params":{"$.llm_model":"openai/gpt-4o", "language":"python"}
-
-# Research assistant
-.prompt "version":"1.5.0", "params":{"$.llm_model":"anthropic/claude-sonnet-4-20250514", "depth":"comprehensive"}
-```
-
-### Variables
-Use `<<variable>>` syntax for substitution:
-```bash
-# In your prompt file
-.user Hello <<name>>, today is <<date>>
-
-# Run with parameters
-keprompt chats create --prompt greeting --set name "Alice" --set date "Monday"
-```
-
-### Built-in Functions
-- `readfile(filename)` - Read file contents
-- `writefile(filename, content)` - Write to file (with backup)
-- `wwwget(url)` - Fetch web content
-- `execcmd(cmd)` - Execute shell command
-
-### Function Access Control
-
-By default, **the model has NO access to any functions**. You must explicitly declare which functions the model can use with `.functions`:
-
-```
-.prompt "version":"1.0.0", "params":{"$.llm_model":"openai/gpt-4o"}
-.functions readfile, wwwget
-.system You are a research assistant.
-.user Analyze this file and fetch related info from the web.
+.functions readfile
+.system You are a helpful assistant.
+.user Summarize <<filename>> for <<audience>>.
 .exec
 ```
 
-This is a security feature — it prevents models (especially delegated sub-agents) from accessing capabilities they don't need.
+- Build the conversation with `.system`, `.user`, `.assistant`, `.text`; add files and images with
+  `.include` and `.image`; call the LLM with `.exec`.
+- `<<name>>` substitutes a variable; `--set` / `--set-from-json` pass values in.
+- The model gets no functions unless `.functions` grants them; `.cmd` runs one yourself.
+- `.question` / `.evaluate` classify text with a decision model; `.guard` keeps prompt injections in
+  external text out of the conversation.
+
+**The full language, for prompt engineers: [docs/prompt-engineering.md](docs/prompt-engineering.md).**
+Upgrading? [docs/migration.md](docs/migration.md).
 
 ## Common Workflows
 
@@ -327,7 +219,7 @@ keprompt chats create --prompt review --set codefile "src/main.py"
 ### Interactive Chat Session
 ```bash
 # Start a conversation
-CHAT_ID=$(keprompt chats create --prompt hello --json | jq -r '.data.chat_id')
+CHAT_ID=$(keprompt chats create --prompt hello --json | jq -r '.chat_id')
 
 # Continue the conversation
 keprompt chats reply $CHAT_ID "Can you explain that in more detail?"
@@ -395,62 +287,9 @@ keprompt chats delete --count 100
 
 ## Custom Functions
 
-KePrompt supports custom functions written in any language. See the detailed guide at [ks/creating-keprompt-functions.context.md](ks/creating-keprompt-functions.context.md)
-
-### Quick Example
-
-Create an executable in `prompts/functions/`:
-
-```python
-#!/usr/bin/env python3
-import json, sys
-
-def get_weather(city: str) -> str:
-    # Your weather API logic here
-    return f"Weather in {city}: Sunny, 72°F"
-
-FUNCTIONS = [
-    {
-        "name": "get_weather",
-        "description": "Get current weather for a city",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "city": {"type": "string", "description": "City name"}
-            },
-            "required": ["city"],
-            "additionalProperties": False
-        }
-    }
-]
-
-if __name__ == "__main__":
-    if sys.argv[1] == "--list-functions":
-        print(json.dumps(FUNCTIONS))
-    elif sys.argv[1] == "get_weather":
-        args = json.loads(sys.stdin.read())
-        print(get_weather(**args))
-```
-
-Make it executable:
-```bash
-chmod +x prompts/functions/weather
-```
-
-Use in prompts:
-```bash
-cat > prompts/weather_check.prompt << 'EOF'
-.prompt "version":"1.0.0", "params":{"city":"default_city"}
-.set $.llm_model openai/gpt-4o-mini
-.functions get_weather
-.user What's the weather like in <<city>>? Based on the weather, suggest appropriate clothing.
-.exec
-EOF
-
-keprompt chats create --prompt weather_check --set city "San Francisco"
-```
-
-For comprehensive documentation on creating custom functions, see [ks/creating-keprompt-functions.context.md](ks/creating-keprompt-functions.context.md)
+Functions are executables in `prompts/functions/`, in any language — see
+[the guide, section 7](docs/prompt-engineering.md#7-functions) and the full contract in
+[ks/contracts/external-functions.md](ks/contracts/external-functions.md).
 
 ## Conversation Management
 
@@ -549,7 +388,7 @@ keprompt chats get --json
 keprompt chats get --json | jq '.data[] | select(.total_cost > 0.01)'
 
 # Get chat ID programmatically
-CHAT_ID=$(keprompt chats create --prompt hello --json | jq -r '.data.chat_id')
+CHAT_ID=$(keprompt chats create --prompt hello --json | jq -r '.chat_id')
 
 # Extract a value from the JSON output (example: last_response)
 # (Requires jq: https://stedolan.github.io/jq/)
@@ -627,7 +466,13 @@ keprompt chats --help
 
 ## Documentation
 
-The [Knowledge Store](ks/README.md) is the entry point — start there and pick a role.
+For people:
+
+- [Prompt Engineering Guide](docs/prompt-engineering.md) - The whole prompt language
+- [Migration Notes](docs/migration.md) - What changes when you upgrade
+
+For AI coding assistants (Claude Code, Cursor, ...): the [Knowledge Store](ks/README.md) is the entry
+point — start there and pick a role. Worked examples are in [ks/examples/](ks/examples/README.md).
 
 - [Prompt Language](ks/contracts/prompt-language.md) - Writing .prompt files
 - [External Functions](ks/contracts/external-functions.md) - Custom function development

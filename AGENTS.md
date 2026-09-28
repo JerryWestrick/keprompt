@@ -61,10 +61,11 @@ The system follows a layered architecture: CLI → JSON API → Managers → VM/
 Example:
 ```
 .prompt "version":"1.0.0", "params":{"model":"openai/gpt-4o", "llm_options":{"temperature":0.2}}
-.system You are a helpful assistant.
-.user Hello <<name>>, what can you help with?
+.system You triage support tickets for an online store. Reply with the category — billing,
+shipping or other — and one sentence saying why.
+.user <<ticket>>
 .exec
-.print Response: <<last_response>>
+.print Category: <<last_response>>
 ```
 
 The language spec is documented in `ks/contracts/prompt-language.md`.
