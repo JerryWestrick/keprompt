@@ -32,7 +32,8 @@ class OutputFormatter:
         'assistant': 'yellow',
         'tool': 'cyan',
         'tool_result': 'cyan',
-        'ldm': 'magenta'
+        'ldm': 'magenta',
+        'guard': 'red'
     }
     
     @classmethod
@@ -244,6 +245,9 @@ class OutputFormatter:
                         answers = part.get("answers")
                         shown = ", ".join(f"{k}={v.get('value')}" for k, v in answers.items()) if answers else "no answers"
                         txt += f"**LDM** `{part.get('set', '')}`: {shown}\n"
+                    elif part_type == "guard":
+                        verdict = {True: "failed", False: "passed"}.get(part.get("failed"), "no verdict")
+                        txt += f"**Guard** `{part.get('set', '')}` on `{part.get('channel', '')}`: {verdict}\n"
                     elif part_type == "tool_result":
                         result = str(part.get('content', ''))
                         result_preview = result[:200] + '...' if len(result) > 200 else result
@@ -394,6 +398,9 @@ class OutputFormatter:
                     answers = part.get("answers")
                     shown = ", ".join(f"{k}={v.get('value')}" for k, v in answers.items()) if answers else "no answers"
                     txt += f"**LDM** `{part.get('set', '')}`: {shown}\n"
+                elif part_type == "guard":
+                    verdict = {True: "failed", False: "passed"}.get(part.get("failed"), "no verdict")
+                    txt += f"**Guard** `{part.get('set', '')}` on `{part.get('channel', '')}`: {verdict}\n"
                 elif part_type == "tool_result":
                     result = str(part.get('content', ''))
                     result_preview = result[:200] + '...' if len(result) > 200 else result

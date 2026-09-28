@@ -157,6 +157,11 @@ class AiResult(AiMessagePart):
 # The role of a message that records an LDM call. It is part of the conversation's record but not of
 # what an LLM is sent: `AiPrompt.llm_messages()` leaves it out.
 LDM_ROLE = "ldm"
+# The role of a message that records a guard execution: an LDM call the runtime makes on external text
+# before it may enter the context. Like an LDM message, it is never sent to an LLM.
+GUARD_ROLE = "guard"
+# Every role that records an LDM call rather than conversation.
+LDM_CALL_ROLES = (LDM_ROLE, GUARD_ROLE)
 
 
 class AiLdmPart(AiMessagePart):
@@ -209,6 +214,37 @@ class AiLdmPart(AiMessagePart):
             return f"Ldm  {self.set_path}(no answers)"
         answers = ", ".join(f"{name}={answer.get('value')}" for name, answer in self.answers.items())
         return truncate_for_display(f"Ldm  {self.set_path}({answers})", MAX_LINE_LENGTH)
+
+
+class AiGuardPart(AiLdmPart):
+    """One guard execution: an LDM call plus the guard's verdict and the channel the text came by."""
+
+    def __init__(self, vm, set_path: str, questions: dict, state: str, model: str, channel: str,
+                 fail: str, failed: Optional[bool] = None, answers: Optional[dict] = None,
+                 provider_selected_model: Optional[str] = None, usage: Optional[dict] = None):
+        super().__init__(vm=vm, set_path=set_path, questions=questions, state=state, model=model,
+                         answers=answers, provider_selected_model=provider_selected_model, usage=usage)
+        self.type = "guard"
+        self.channel = channel
+        self.fail = fail
+        self.failed = failed
+
+    def to_json(self) -> dict:
+        return {**super().to_json(), "type": "guard", "channel": self.channel, "fail": self.fail,
+                "failed": self.failed}
+
+    @classmethod
+    def from_json(cls, vm, data: dict) -> 'AiGuardPart':
+        return cls(vm=vm, set_path=data.get("set", ""), questions=data.get("questions", {}),
+                   state=data.get("state", ""), model=data.get("model", ""),
+                   channel=data.get("channel", ""), fail=data.get("fail", ""),
+                   failed=data.get("failed"), answers=data.get("answers"),
+                   provider_selected_model=data.get("provider_selected_model"),
+                   usage=data.get("usage"))
+
+    def print_message(self) -> str:
+        verdict = {True: "failed", False: "passed", None: "no verdict"}[self.failed]
+        return truncate_for_display(f"Guard {self.set_path} on {self.channel}: {verdict}", MAX_LINE_LENGTH)
 
 
 class AiMessage:
@@ -291,8 +327,13 @@ class AiPrompt:
         else:
             self.messages.append(AiMessage(vm=self.vm, role=role, content=content))
 
+    def current_message(self) -> Optional[AiMessage]:
+        """The message statements add to: the last one of the conversation. LDM and guard records
+        sit in the list but are not conversation, so text never lands in them."""
+        return next((m for m in reversed(self.messages) if m.role not in LDM_CALL_ROLES), None)
+
     def llm_messages(self) -> List[AiMessage]:
-        """The conversation as an LLM is sent it: LDM messages left out.
+        """The conversation as an LLM is sent it: LDM and guard messages left out.
 
         Two messages that an LDM message separated are merged back together, exactly as
         `add_message` would have merged them had the LDM call not been there -- otherwise
@@ -301,7 +342,7 @@ class AiPrompt:
         result: List[AiMessage] = []
         removed = False
         for msg in self.messages:
-            if msg.role == LDM_ROLE:
+            if msg.role in LDM_CALL_ROLES:
                 removed = True
                 continue
             if removed and result and result[-1].role == msg.role:

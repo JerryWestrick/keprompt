@@ -2,7 +2,7 @@ from typing import Dict, List
 
 from .ModelManager import ModelManager
 from .AiProvider import AiProvider
-from .AiPrompt import AiMessage, AiLdmPart, LDM_ROLE
+from .AiPrompt import AiMessage, AiLdmPart, LDM_CALL_ROLES
 
 # A choice takes at most this many options, per TypeSafe's documentation.
 MAX_CHOICE_OPTIONS = 255
@@ -36,15 +36,15 @@ def normalize_answer(raw: dict) -> dict:
 class AiTypeSafe(AiProvider):
     """TypeSafe's LDMs. An LDM call is an execute like any other; only its content differs.
 
-    It is sent the LDM message `.evaluate` added -- the question set and the state -- rather than
-    the conversation, and its answers are written back into that same message.
+    It is sent the LDM-call message `.evaluate` or a guard added -- the question set and the state --
+    rather than the conversation, and its answers are written back into that same message.
     """
     litellm_provider = "typesafe"
 
     def select_messages(self) -> List[AiMessage]:
-        ldm = [m for m in self.prompt.messages if m.role == LDM_ROLE]
+        ldm = [m for m in self.prompt.messages if m.role in LDM_CALL_ROLES]
         if not ldm:
-            raise ValueError("an LDM call needs the LDM message .evaluate adds; there is none")
+            raise ValueError("an LDM call needs the message .evaluate or a guard adds; there is none")
         return ldm[-1:]
 
     def request_options(self) -> Dict:

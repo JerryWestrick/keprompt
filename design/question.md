@@ -223,15 +223,18 @@ token. Of six segments, four are boilerplate repeated at every use.
 
 ## The guard is the same mechanism
 
+> **Superseded 2026-09-27 by `design/injection-guard.md`** where they conflict (`.guard` statement, fail condition, fatal rejection, no guard means pass). The trial evidence and reasoning below still stand.
+
 Crystallised 2026-09-21. `.question` and the prompt-injection guard are one engine used at two
 sites:
 
 | | invoked by | when | can |
 |---|---|---|---|
 | `.question` | the prompt engineer, from a statement | after text is in the context | observe — put an answer in a variable |
-| guard | the runtime, when a tool returns | before text enters the context | substitute — reject and return an explanation in the result's place |
+| guard | the runtime, when external text arrives | before text enters the context | stop — a rejection is fatal ("prompt injection detected") |
 
-Same questions, same model, same answer shape. The disposition is what makes a guard a guard.
+Same questions, same model, same answer shape. What makes a guard a guard is its fail condition
+(`design/injection-guard.md`).
 
 **Guards cannot be generic, and the trial proved it.** The original idea was automatic guarding. The
 Epicure injection trial killed it: a generic guard asking "does this text contain an instruction
@@ -267,8 +270,8 @@ They do not share a home, which is why the guard is not simply part of `.functio
 - **What is normal for this channel** — a property of the source. A web page legitimately contains
   imperative prose; a customer message legitimately contains imperative commands; a CSV contains no
   instructions at all. The same domain scope produces different baselines per channel.
-- **What is trusted** — a property of the capability grant, and the one that is genuinely
-  `.functions`-shaped: `.functions wwwget safe=localhost,www.my.domain.com`.
+- **What is trusted** — ~~a property of the capability grant: `.functions wwwget safe=...`~~.
+  Superseded 2026-09-27: there is no `safe=`; a channel with no guard declared passes.
 
 Note `.functions` grants capability — request-side. A guard inspects the result — response-side.
 They sit on opposite sides of the call.
@@ -277,11 +280,10 @@ They sit on opposite sides of the call.
 
 - **Define once, call many.** The criteria block is the cost: ~585 input tokens per call, near-flat
   regardless of state length, and Jev prices on input. It is also the invariant part.
-- **Ambient.** The guard fires when a tool returns and no statement is executing, so nothing can
-  hand it arguments. Its definition must already be in force — which the namespace provides, since
-  `_prompt.question.<Set>` is a variable that persists.
-- **Fail in-band.** The model asked for a page and is waiting. Rejection has to come back looking
-  like a result, following the denied-function pattern at `AiProvider.py:239`.
+- **Ambient.** The guard fires when its channel delivers external text and no statement is
+  executing, so nothing can hand it arguments. Its definition must already be in force — which the
+  namespace provides, since `_prompt.guard.<name>` is a variable that persists.
+- ~~**Fail in-band.**~~ Superseded 2026-09-27: a rejection is fatal and stops the whole execution.
 - **Record verdicts, do not recompute them.** Verdicts are probabilistic and model-versioned — we
   asked `jev-latest` and got `jev-1.13.0`. Recomputing on replay lets a stored chat change behaviour.
 - **Failure disposition.** The guard is a third-party dependency in the critical path of every
@@ -292,8 +294,8 @@ They sit on opposite sides of the call.
   or truncation, and both leave a region unexamined.
 - **Threshold is policy, not a constant.** 0.55 gave zero false positives at 0.847 recall; 0.40 gave
   the best F1 with eight false positives. The right line depends on how reversible the action is.
-- **Guards are plural per prompt.** So a guard is a set of questions with a combining rule, and the
-  combining rule is itself a decision.
+- **Guards are plural per prompt** — one per channel (`#._include`, `#.<function>`, …). Within a
+  guard, its questions combine in the single `fail:` expression (settled 2026-09-27).
 
 The guard is also an attack surface — its input is attacker-controlled and the criteria travel in
 the same request. Jev's selection-only design means it cannot be talked into emitting an attacker's
@@ -500,9 +502,10 @@ that needs a constructed function set (today's ~20 vs a projected ~34) with the 
 - Whether the normaliser synthesises a `confidence` for `noul` answers or leaves it legitimately
   absent. `substitute()` raises on a missing path rather than returning empty, so an author writing
   `<<?.Intent.action.confidence>>` against a `noul` gets an error.
-- Whether the guard is one predicate per prompt parameterised by channel, or one per channel sharing
-  the prompt's scope.
-- The combining rule when a prompt declares several guards.
+- ~~Whether the guard is one predicate per prompt parameterised by channel, or one per channel.~~
+  Settled 2026-09-27: one guard per channel.
+- ~~The combining rule when a prompt declares several guards.~~ Settled 2026-09-27: a guard's
+  questions combine in its one `fail:` expression; channels have separate guards.
 - Where `.question` gets its model name from — `.prompt` params, a statement argument, or a default.
 - Whether `.question` registers as a provider under `ModelManager` or sits outside it.
 - API key handling: `TYPESAFE_API_KEY` through `config.py` alongside the others.
@@ -517,12 +520,11 @@ that needs a constructed function set (today's ~20 vs a projected ~34) with the 
 
 ## Related, decided in the same session, not yet written up
 
-**Guard mechanics**, carried forward from 2026-09-20 and still current — the design is now in *The
-guard is the same mechanism* above, but these implementation notes are not yet folded in. Checked at
-acquisition inside `FunctionSpace` so all four context-entry routes share one invariant. Guarded by
-default. Model-invoked calls exempt by set (`.functions wwwget safe=localhost,www.my.domain.com`);
-author-invoked calls exempt per call (`.include [safe] filename`) — the asymmetry follows from who
-writes the arguments. `.image` explicitly out of scope. Enabling refactor: the tool loop calls
+**Guard mechanics**, carried forward from 2026-09-20. Superseded 2026-09-27 by
+`design/injection-guard.md`: not guarded by default (no guard means pass), no `safe=` / `[safe]`
+exemptions, one guard per function whoever runs it, and `.image` is open rather than out of scope.
+Still relevant as implementation notes: checked at acquisition, so text never arrives by any of the
+four context-entry routes (append, mutate, substitute, restore). Enabling refactor: the tool loop calls
 `FunctionSpace.functions.functions[name](**args)` directly, bypassing `.call()`; routing it through
 `.call()` gives a single chokepoint. Note `.cmd` is not bounded by `.functions` at all, so a
 declaration there does not govern author-invoked calls.

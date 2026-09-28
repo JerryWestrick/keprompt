@@ -22,9 +22,9 @@ from .AiPrompt import AiTextPart
 from .database import get_db_manager, Chat, CostTracking
 from .ModelManager import ModelManager
 from .config import get_config
-from .AiPrompt import AiCall, AiResult, AiMessage, AiLdmPart
+from .AiPrompt import AiCall, AiResult, AiMessage, AiLdmPart, AiGuardPart
 from .keprompt_logger import LogMode, StandardLogger
-from .keprompt_vm import VM, VMExecutionError, prompt_name_for
+from .keprompt_vm import VM, VMExecutionError, prompt_name_for, GUARD_USERINPUT
 
 
 class ChatManager:
@@ -394,6 +394,8 @@ class ChatManager:
                     )
                 elif part_type == "ldm":
                     content_parts.append(AiLdmPart.from_json(vm, part_data))
+                elif part_type == "guard":
+                    content_parts.append(AiGuardPart.from_json(vm, part_data))
                 elif part_type == "tool_result":
                     content_parts.append(
                         AiResult(
@@ -781,13 +783,11 @@ class ChatManager:
         if not vm:
             return f"Chat {chat_id} not found or failed to load"
 
-        # JSON file first (native types); --set after so it overrides via .set
-        for var, value in json_params.items():
-            vm.assign(var, value)
-        for var, value in set_pairs:
-            vm.add_statement(keyword=".set", value=f"{var} {value}")
-
-        vm.add_statement(keyword=".user", value=answer)
+        # The reply is external text: its message enters through the `_userinput` guard and its new
+        # values -- JSON file first, --set overriding, as on create -- through `_cmdargs`, if declared.
+        reply = vm.add_statement(keyword=".user", value=answer)
+        reply.channel = GUARD_USERINPUT
+        reply.cmdargs = {**json_params, **dict(set_pairs)}
         vm.add_statement(keyword=".exec", value='')
         
         # Track message count after adding statements but before execution

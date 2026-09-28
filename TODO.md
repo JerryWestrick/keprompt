@@ -95,6 +95,7 @@ Two things must change before it can work, both covered in the design doc:
    an `AiTypeSafe` handler declaring `litellm_provider` or the entry is filtered out. Not
    TypeSafe-specific — any provider outside LiteLLM hits this.
 
-Still open: the design doc also records two adjacent designs settled in the same session, not built
-and not yet written up properly: the prompt-injection guard (`safe=` / `[safe]`, checked at acquisition in `FunctionSpace`)
-and conditionals (`.then`/`.else`/`.end-if`, forward jumps only).
+The prompt-injection guard is built (4.4.0), designed in
+[`design/injection-guard.md`](design/injection-guard.md), whose "Open" section lists what remains.
+Still open, not built: conditionals (`.then`/`.else`/`.end-if`, forward jumps only), recorded in
+`design/question.md` but not yet written up properly.

@@ -4,7 +4,7 @@ This file provides guidance to Cursor when working with code in this repository.
 
 ## Project Overview
 
-KePrompt is a CLI tool and framework for prompt engineering across multiple AI providers (OpenAI, Anthropic, Google, DeepSeek, Mistral, XAI, Cerebras, OpenRouter). It features a custom `.prompt` DSL, a virtual machine executor, chat persistence via SQLite, and cost tracking. Version 4.3.0.
+KePrompt is a CLI tool and framework for prompt engineering across multiple AI providers (OpenAI, Anthropic, Google, DeepSeek, Mistral, XAI, Cerebras, OpenRouter). It features a custom `.prompt` DSL, a virtual machine executor, chat persistence via SQLite, and cost tracking. Version 4.4.0.
 
 ## Build & Development Commands
 

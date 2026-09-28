@@ -6,6 +6,7 @@ import re
 import sys
 import time
 import uuid
+from contextlib import contextmanager
 
 from rich.console import Console
 from rich.markdown import Markdown
@@ -17,7 +18,8 @@ from rich.logging import RichHandler
 from rich.table import Table
 
 from .ModelManager import ModelManager, AiModel
-from .AiPrompt import AiTextPart, AiImagePart, AiPrompt, AiMessage, AiLdmPart, LDM_ROLE, MAX_LINE_LENGTH
+from .AiPrompt import (AiTextPart, AiImagePart, AiPrompt, AiMessage, AiLdmPart, AiGuardPart, LDM_ROLE,
+                       GUARD_ROLE, MAX_LINE_LENGTH)
 from  .keprompt_util import VERTICAL, RIGHT_TRIANGLE, LEFT_TRIANGLE, HORIZONTAL_LINE, CIRCLE
 from .keprompt_logger import StandardLogger, LogMode
 from .terminal_output import terminal_output
@@ -57,6 +59,15 @@ def heredoc_terminator(identifier: str) -> str:
 RESERVED_PREFIX = '_'
 RESERVED_ROOT = '_prompt'
 QUESTION_SUBSYSTEM = 'question'
+# `#` -> `_prompt.guard`: guards, one per channel. `_cmdargs`, `_userinput` and `_include` are the
+# runtime's channels; any other `_` name is user-defined, chosen per call with `guard=`; a name without
+# `_` is a function's.
+GUARD_SUBSYSTEM = 'guard'
+GUARD_CMDARGS = '_cmdargs'
+GUARD_USERINPUT = '_userinput'
+GUARD_INCLUDE = '_include'
+# Set-level in a guard: its fail condition, a Python expression over the guard's answer paths.
+GUARD_FAIL_KEY = '_fail'
 # The registry's `mode` for a decision model: it answers `.evaluate`, where a `chat` model answers
 # `.exec`. Pointing a statement at the wrong kind is refused rather than sent.
 LDM_MODE = 'ldm'
@@ -95,6 +106,15 @@ class VMExecutionError(Exception):
 
 
 _LEGACY_TOP_LEVEL_LLM_OPTIONS = ('temperature', 'max_tokens', 'top_p', 'top_k')
+
+
+def split_guard_param(text: str) -> tuple[str | None, str]:
+    """A leading `guard=<path>` names the guard for this one call: `.include guard=#._intent file`."""
+    text = text.strip()
+    if not text.startswith('guard='):
+        return None, text
+    guard, _, rest = text[len('guard='):].partition(' ')
+    return guard, rest.strip()
 
 
 def split_line_params(text: str, keyword: str) -> tuple[str, str]:
@@ -178,11 +198,8 @@ class VM:
         # Initialize the new standard logger
         self.logger = StandardLogger(prompt_name=self.prompt_name, mode=log_mode, log_identifier=log_identifier)
         
-        # Caller-provided values (command line, --set-from-json) go through the same assignment as
-        # `.set`, so `$.` paths and the deprecated `model` behave identically wherever they come from.
-        for source in (global_vars, params):
-            for name, value in (source or {}).items():
-                self.assign(name, value)
+        # Caller-provided values (command line, --set-from-json) enter memory through one path.
+        self.accept_cmdargs({**(global_vars or {}), **(params or {})})
 
         # Keep old console for backward compatibility during transition
         self.console = Console(width=terminal_width)  # Console for terminal
@@ -205,7 +222,10 @@ class VM:
         self.pending_costs: list = []
         self.api_time: float = 0.0  # Accumulated API request time
         self.tool_time: float = 0.0  # Accumulated function execution time
-        self.round_trip_count: int = 0  # Billed API round trips (interaction_no counts .exec statements)
+        self.round_trip_count: int = 0  # Billed API round trips (interaction_no counts executes)
+        # The last round-trip number used per statement. A statement's billed requests are numbered
+        # from one counter, because a guard can bill requests inside another statement's execute.
+        self.round_trips_used: dict[int, int] = {}
         self.allowed_functions: list[str] | None = None  # None = no .functions statement = no functions (safe default)
 
         # Automatically parse if filename provided
@@ -224,16 +244,18 @@ class VM:
             # one branch per named question set, each carrying its questions' definitions and, once
             # evaluated, their answers. The rest of the machinery (VM, prefix/suffix) has not been
             # migrated under `_prompt` yet -- that is a separate breaking change.
-            '_prompt': {'question': {}},
+            '_prompt': {'question': {}, 'guard': {}},
         }
 
     @staticmethod
     def expand_sigils(name: str) -> str:
-        """`$` -> `_prompt`, `?` -> `_prompt.question`. Fixed literals, like the quote delimiters."""
+        """`$` -> `_prompt`, `?` -> `_prompt.question`, `#` -> `_prompt.guard`. Fixed literals."""
         if name == '$' or name.startswith('$.'):
             return RESERVED_ROOT + name[1:]
         if name == '?' or name.startswith('?.'):
             return f"{RESERVED_ROOT}.{QUESTION_SUBSYSTEM}" + name[1:]
+        if name == '#' or name.startswith('#.'):
+            return f"{RESERVED_ROOT}.{GUARD_SUBSYSTEM}" + name[1:]
         return name
 
     def walk_path(self, path: str, create: bool = False) -> tuple[dict, str]:
@@ -544,10 +566,11 @@ class VM:
         return vm_properties.get(property_name)
 
 
-    def add_statement(self, keyword=None, value=None, heredoc=None):
+    def add_statement(self, keyword=None, value=None, heredoc=None) -> 'StmtPrompt':
         """Add a new statement to the prompt."""
-        self.statements.append(
-            make_statement(self, len(self.statements), keyword=keyword, value=value, heredoc=heredoc))
+        stmt = make_statement(self, len(self.statements), keyword=keyword, value=value, heredoc=heredoc)
+        self.statements.append(stmt)
+        return stmt
 
     def emit_statement(self, keyword: str, value: str, lno: int, heredoc: str | None = None) -> None:
         """Add a statement, folding a continuation line into the previous message statement."""
@@ -691,6 +714,84 @@ class VM:
         self.console.print_exception(show_locals=True, width=terminal_width)  # Print to terminal
         if self.file_console:  # Ensure file is open
             self.file_console.print_exception()  # Print to file
+
+    @property
+    def current_msg_no(self) -> int:
+        """The statement executing now. `StmtPrompt.execute` advances `ip` before the work."""
+        return self.ip - 1
+
+    def next_round_trip(self) -> int:
+        """Number the next billed request of the statement executing now."""
+        msg_no = self.current_msg_no
+        self.round_trips_used[msg_no] = self.round_trips_used.get(msg_no, 0) + 1
+        return self.round_trips_used[msg_no]
+
+    # --- guards --------------------------------------------------------------------------------
+
+    def accept_cmdargs(self, values: dict) -> None:
+        """Caller-provided values (`--set`, `--set-from-json`) entering memory, on create or reply.
+
+        They are kept as they arrived -- the text `#._cmdargs` judges -- and, if that guard is already
+        declared (a reply), judged before any of them enters memory. On create the guard is declared
+        later, and judges them when its `.guard` statement runs. They go through the same assignment
+        as `.set`, so `$.` paths and the deprecated `model` behave identically wherever they come from.
+        """
+        self.cmdargs = dict(values)
+        if self.cmdargs:
+            self.guard(GUARD_CMDARGS, json.dumps(self.cmdargs, ensure_ascii=False, default=str))
+        for name, value in self.cmdargs.items():
+            self.assign(name, value)
+
+    def guard(self, channel: str, text: str, guard: str | None = None) -> None:
+        """Run the guard for external text arriving by `channel`, before it may enter the context.
+
+        `guard` names a guard for this one call (`guard=#._intent`), replacing the channel's. A channel
+        with no guard declared passes. A rejection, or a guard call that fails, stops execution.
+        """
+        if guard:
+            path = self.expand_sigils(guard)
+            if not self.has_path(path):
+                raise StmtSyntaxError(f"guard '{guard}' is not defined; declare it with .guard first")
+        else:
+            path = f"{RESERVED_ROOT}.{GUARD_SUBSYSTEM}.{channel}"
+            if not self.has_path(path):
+                return
+        GuardRun(self, self.current_msg_no, '.guard', path).judge(self, path, channel, text)
+
+    @contextmanager
+    def execute_unit_preserved(self):
+        """Keep the execute in progress intact while a guard runs inside it.
+
+        A guard can fire in the middle of another execute -- on a tool result inside an `.exec`'s
+        tool loop -- and an execute works through `vm.prompt` and the VM's model registers.
+        """
+        prompt = self.prompt
+        saved_vm = (self.model, self.model_name, self.provider, self.api_key)
+        saved_prompt = (prompt.provider, prompt.model, prompt.model_lookup_key, prompt.api_key,
+                        prompt.round_trips, getattr(prompt, '_current_call_id', None))
+        saved_prompt_id = getattr(self.logger, 'prompt_id', None)
+        try:
+            yield
+        finally:
+            self.model, self.model_name, self.provider, self.api_key = saved_vm
+            (prompt.provider, prompt.model, prompt.model_lookup_key, prompt.api_key,
+             prompt.round_trips, prompt._current_call_id) = saved_prompt
+            self.logger.set_prompt_id(saved_prompt_id)
+
+    # A `$.`, `?.` or `#.` path inside an expression. `#` starts a Python comment, so paths are
+    # replaced by their values before the expression is evaluated.
+    _CONDITION_PATH = re.compile(r'(?<![\w.])([$?#])\.([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)')
+
+    def evaluate_condition(self, expression: str) -> bool:
+        """Evaluate a Python condition over memory paths, e.g. a guard's `fail:`."""
+        values: dict[str, any] = {}
+
+        def bind(match: re.Match) -> str:
+            name = f"__v{len(values)}"
+            values[name] = self.get_path(f"{match.group(1)}.{match.group(2)}")
+            return name
+
+        return bool(eval(self._CONDITION_PATH.sub(bind, expression), {'__builtins__': {}}, values))
 
     def load_model(self, model_name: str) -> None:
         """Make `model_name` the model the next execute runs on. The registry is the only authority."""
@@ -1166,7 +1267,7 @@ class StmtCmd(StmtPrompt):
 
         # Check for optional "as variable_name" clause
         variable_name = None
-        value = self.value.strip()
+        guard, value = split_guard_param(self.value)
 
         if ' as ' in value:
             # Split on " as " to separate function call from variable assignment
@@ -1211,6 +1312,8 @@ class StmtCmd(StmtPrompt):
             vm.print(f"Error executing {function_name}({function_args})): {str(err)}")
             raise err
 
+        vm.guard(function_name, text, guard)
+
         # Store in last_response (always)
         vm.set_variable('last_response', text)
 
@@ -1220,8 +1323,8 @@ class StmtCmd(StmtPrompt):
             vm.set_variable(variable_name, text)
         else:
             # Original behavior: append to current message
-            if len(vm.prompt.messages):
-                last_msg = vm.prompt.messages[-1]
+            last_msg = vm.prompt.current_message()
+            if last_msg:
                 last_msg.content.append(AiTextPart(vm=vm, text=text))
 
 
@@ -1307,7 +1410,10 @@ class StmtExec(StmtPrompt):
         only in the hooks below -- which model, which kind of model, and what its content is.
         """
         super().execute(vm)
+        self.run(vm)
 
+    def run(self, vm: VM) -> None:
+        """The execute itself. A guard runs it without being a statement of the program."""
         header = f"[bold white]{VERTICAL}[/][white]{self.msg_no:02}[/] [cyan]{self.keyword:<8}[/]"
 
         model_name = self.resolve_model(vm)
@@ -1535,7 +1641,7 @@ class StmtExec(StmtPrompt):
                 'environment': os.getenv('ENVIRONMENT', 'development'),
                 'context_length': context_length
             }
-            vm.pending_costs.append((self.msg_no, seq, cost_data))
+            vm.pending_costs.append((self.msg_no, rt['round_trip'], cost_data))
 
         return tokens_in, tokens_out, cost_in, cost_out
 
@@ -1589,7 +1695,8 @@ class StmtInclude(StmtPrompt):
 
     def execute(self, vm: VM) -> None:
         super().execute(vm)
-        filename = vm.substitute(self.value)
+        guard, value = split_guard_param(self.value)
+        filename = vm.substitute(value)
 
         # Support glob patterns in .include
         if any(c in filename for c in ('*', '?', '[')):
@@ -1597,13 +1704,12 @@ class StmtInclude(StmtPrompt):
             if not files:
                 vm.logger.log_warning(f".include glob pattern matched no files: {filename}")
                 return
-            for f in files:
-                lines = FunctionSpace.functions.call('readfile', {'filename': f})
-                last_msg = vm.prompt.messages[-1]
-                last_msg.content.append(AiTextPart(vm=vm, text=lines))
         else:
-            lines = FunctionSpace.functions.call('readfile', {'filename': filename})
-            last_msg = vm.prompt.messages[-1]
+            files = [filename]
+        for f in files:
+            lines = FunctionSpace.functions.call('readfile', {'filename': f})
+            vm.guard(GUARD_INCLUDE, lines, guard)
+            last_msg = vm.prompt.current_message()
             last_msg.content.append(AiTextPart(vm=vm, text=lines))
 
 
@@ -1676,8 +1782,9 @@ class StmtText(StmtPrompt):
 
     def execute(self, vm: VM) -> None:
         super().execute(vm)
-        if vm.prompt.messages[-1].role in ['assistant', 'system', 'user']:
-            vm.prompt.messages[-1].content.append(AiTextPart(vm=vm, text=self.value))
+        current = vm.prompt.current_message()
+        if current and current.role in ['assistant', 'system', 'user']:
+            current.content.append(AiTextPart(vm=vm, text=self.value))
         else:
             vm.prompt.add_message(vm=vm, role='user', content=[AiTextPart(vm=vm, text=self.value)])
 
@@ -1700,13 +1807,22 @@ class StmtUser(StmtPrompt):
                          appends it as a new user message if no prior context exists.
     """
 
+    # Set when the text is external: a `chat reply` message arrives by the `_userinput` channel.
+    channel: str | None = None
+    # A reply's `--set` / `--set-from-json` values, which arrive with its message.
+    cmdargs: dict | None = None
+
     def execute(self, vm: VM) -> None:
         super().execute(vm)
+        if self.cmdargs:
+            vm.accept_cmdargs(self.cmdargs)
         if not self.value:
             vm.prompt.add_message(vm=vm, role='user', content=[])
         else:
             # Substitute variables in the user message
             substituted_text = vm.substitute(self.value)
+            if self.channel:
+                vm.guard(self.channel, substituted_text)
             vm.prompt.add_message(vm=vm, role='user', content=[AiTextPart(vm=vm, text=substituted_text)])
 
 
@@ -1955,13 +2071,77 @@ class StmtQuestion(StmtPrompt):
                 f"multi-line quote, e.g. .question {set_name} <<<END ... >>>END.[/]\n\n")
 
         questions = self.parse_body(self.heredoc)
+        vm.set_path(f"{RESERVED_ROOT}.{QUESTION_SUBSYSTEM}.{set_name}",
+                    self.question_set(questions, model))
 
-        # Definitions live a level down so the definition's `type` (the primitive being asked for)
-        # cannot collide with the answer's `type` (the primitive that answered).
+    @staticmethod
+    def question_set(questions: dict, model: str | None) -> dict:
+        """The set as memory holds it. Definitions live a level down so the definition's `type` (the
+        primitive asked for) cannot collide with the answer's `type` (the primitive that answered)."""
         question_set = {name: {DEFINITION_KEY: spec} for name, spec in questions.items()}
         if model:
             question_set[SET_MODEL_KEY] = model
-        vm.set_path(f"{RESERVED_ROOT}.{QUESTION_SUBSYSTEM}.{set_name}", question_set)
+        return question_set
+
+
+class StmtGuard(StmtQuestion):
+    """Declares a guard: a question set with a fail condition, run on external text as it arrives.
+
+    Syntax:
+        .guard <name> <model> <<<ID
+            <question-name>: <choice|score|noul>
+                instructions: what is being asked
+                <option>: what that option means
+            fail: <Python condition over #.<name>.<question>.value / .confidence / ...>
+        >>>ID
+
+    The same as `.question`, with two differences: it has a fail condition, and no `.evaluate` runs
+    it -- the runtime does, when its channel delivers text (`VM.guard`). The model is required, with
+    no fallback. `_cmdargs` guards text that is already in memory, so it runs as soon as it is
+    declared. Stored at `#.<name>`.
+    """
+
+    FAIL_MARKER = 'fail'
+
+    def parse_body(self, body: str) -> dict:
+        """The questions, plus the one top-level `fail:` line, returned under GUARD_FAIL_KEY."""
+        lines = body.split('\n')
+        indents = [len(l) - len(l.lstrip()) for l in lines if l.strip()]
+        top = min(indents) if indents else 0
+        fail_lines = [i for i, l in enumerate(lines)
+                      if l.strip() and len(l) - len(l.lstrip()) == top
+                      and l.strip().partition(':')[0].strip() == self.FAIL_MARKER]
+        if len(fail_lines) != 1:
+            raise StmtSyntaxError(
+                f"{VERTICAL} [red].guard: exactly one top-level '{self.FAIL_MARKER}:' line is "
+                f"required; found {len(fail_lines)}.[/]\n\n")
+        fail = lines[fail_lines[0]].strip().partition(':')[2].strip()
+        if not fail:
+            raise StmtSyntaxError(f"{VERTICAL} [red].guard: '{self.FAIL_MARKER}:' has no condition.[/]\n\n")
+        questions = super().parse_body('\n'.join(l for i, l in enumerate(lines) if i != fail_lines[0]))
+        return {**questions, GUARD_FAIL_KEY: fail}
+
+    def execute(self, vm: VM) -> None:
+        StmtPrompt.execute(self, vm)
+
+        parts = self.value.split()
+        if len(parts) != 2:
+            raise StmtSyntaxError(
+                f"{VERTICAL} [red].guard syntax error: a name and a model are required, e.g. "
+                f".guard _userinput typesafe/jev-latest <<<END ... >>>END.[/]\n\n")
+        name, model = parts
+        if self.heredoc is None:
+            raise StmtSyntaxError(
+                f"{VERTICAL} [red].guard '{name}': the questions must be given in a multi-line "
+                f"quote, e.g. .guard {name} {model} <<<END ... >>>END.[/]\n\n")
+
+        body = self.parse_body(self.heredoc)
+        fail = body.pop(GUARD_FAIL_KEY)
+        guard = {**self.question_set(body, model), GUARD_FAIL_KEY: fail}
+        vm.set_path(f"{RESERVED_ROOT}.{GUARD_SUBSYSTEM}.{name}", guard)
+
+        if name == GUARD_CMDARGS and vm.cmdargs:
+            vm.guard(GUARD_CMDARGS, json.dumps(vm.cmdargs, ensure_ascii=False, default=str))
 
 
 class StmtEvaluate(StmtExec):
@@ -2079,6 +2259,48 @@ class StmtEvaluate(StmtExec):
         return self.target
 
 
+class PromptInjectionDetected(Exception):
+    """A guard's fail condition held: the text it judged never enters the context."""
+
+
+class GuardRun(StmtEvaluate):
+    """One guard execution. An execute like `.evaluate` -- same provider path, record and totals --
+    but started by the runtime when external text arrives, not by a statement. Its record is a
+    `guard` message, never sent to an LLM; its answers land in the guard, `#.<name>`."""
+
+    def judge(self, vm: VM, path: str, channel: str, text: str) -> None:
+        """Run the guard on `text`; raise if its fail condition holds."""
+        self.target, self.channel, self.state = path, channel, text
+        with vm.execute_unit_preserved():
+            self.run(vm)
+        # Evaluated after the execute has recorded its billed request, so an error here loses nothing.
+        try:
+            self.part.failed = vm.evaluate_condition(self.fail)
+        except Exception as e:
+            raise StmtSyntaxError(f"guard '{path}': fail condition '{self.fail}': {e}")
+        if self.part.failed:
+            name = '#' + path[len(f"{RESERVED_ROOT}.{GUARD_SUBSYSTEM}"):]
+            raise PromptInjectionDetected(
+                f"prompt injection detected: guard '{name}' rejected text from '{channel}'")
+
+    def resolve_model(self, vm: VM) -> str:
+        guard = vm.get_path(self.target)
+        self.questions = {name: branch[DEFINITION_KEY] for name, branch in guard.items()
+                          if isinstance(branch, dict) and DEFINITION_KEY in branch}
+        self.fail = guard[GUARD_FAIL_KEY]
+        return guard[SET_MODEL_KEY]
+
+    def before_call(self, vm: VM) -> None:
+        """The content: a guard message holding the questions and the text judged."""
+        self.part = AiGuardPart(vm=vm, set_path=self.target, questions=self.questions,
+                                state=self.state, model=vm.model_name, channel=self.channel,
+                                fail=self.fail)
+        vm.prompt.messages.append(AiMessage(vm=vm, role=GUARD_ROLE, content=[self.part],
+                                            model_name=vm.model_name, provider=vm.provider,
+                                            stmt_no=self.msg_no))
+
+
+
 class StmtSet(StmtPrompt):
     """
     Handles the execution of a set statement in the VM.
@@ -2135,6 +2357,7 @@ StatementTypes: dict[str, type(StmtPrompt)] = {
     '.exec': StmtExec,
     '.exit': StmtExit,
     '.functions': StmtFunctions,
+    '.guard': StmtGuard,
     '.image': StmtImage,
     '.include': StmtInclude,
     '.print': StmtPrint,

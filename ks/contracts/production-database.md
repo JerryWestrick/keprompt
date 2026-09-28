@@ -1,6 +1,6 @@
 # Production Database Contract
 
-Default database: `prompts/chats.db` (current KePrompt/database version 4.3.0). It is operational production evidence. Analyze a copy or use read-only SQLite access. Older databases migrate when opened by current KePrompt; inspect `info.version` before assuming columns exist.
+Default database: `prompts/chats.db` (current KePrompt/database version 4.4.0). It is operational production evidence. Analyze a copy or use read-only SQLite access. Older databases migrate when opened by current KePrompt; inspect `info.version` before assuming columns exist.
 
 ## `chats`
 
@@ -34,7 +34,7 @@ The table also carries `temperature` and `max_tokens` columns that nothing has w
 ## Interpretation
 
 - `statements_json` records what the VM executed.
-- `messages_json` records the actual universal conversation, including model replies, tool calls, and tool results. Each LDM call is a message with role `ldm` and one part of type `ldm`: `set`, `questions`, `state`, `model` (asked for), `answers` (null if the call failed), `provider_selected_model`, `usage`. That part plus its `cost_tracking` row is the whole call.
+- `messages_json` records the actual universal conversation, including model replies, tool calls, and tool results. Each LDM call is a message with role `ldm` and one part of type `ldm`: `set`, `questions`, `state`, `model` (asked for), `answers` (null if the call failed), `provider_selected_model`, `usage`. That part plus its `cost_tracking` row is the whole call. Each guard execution is a message with role `guard` and one part of type `guard`: the `ldm` part's fields — `set` names the guard, `state` is the text judged — plus `channel` (`_cmdargs`, `_userinput`, `_include` or the function name), `fail` (the condition) and `failed` (its result). It is never sent to an LLM, and is written whether the guard passed or failed. All guard executions: `SELECT ... FROM chats c, json_each(c.messages_json) m WHERE json_extract(m.value, '$.role') = 'guard'`.
 - `variables_json` and `vm_state_json` provide inputs and resumable execution state.
 - Aggregate quality cannot be inferred from cost fields. Read the application KS and actual outcomes.
 - Production responses are observations, not guaranteed correct labels.

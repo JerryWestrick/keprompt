@@ -232,6 +232,11 @@ def migrate_4_2_0_to_4_3_0(conn: sqlite3.Connection, log=print) -> None:
     log(f"  chats: renamed stored model keys in {changed} chat(s)")
 
 
+def migrate_4_3_0_to_4_4_0(conn: sqlite3.Connection, log=print) -> None:
+    """No schema change. A guard execution is a `guard` message in `messages_json` plus its
+    `cost_tracking` row, like any other LDM call."""
+
+
 Migration = tuple[str, Callable[[sqlite3.Connection, Callable], None]]
 MIGRATIONS: dict[str, Migration] = {
     "2.15.0": ("2.16.0", migrate_2_15_0_to_2_16_0),
@@ -244,6 +249,7 @@ MIGRATIONS: dict[str, Migration] = {
     "4.0.0": ("4.1.0", migrate_4_0_0_to_4_1_0),
     "4.1.0": ("4.2.0", migrate_4_1_0_to_4_2_0),
     "4.2.0": ("4.3.0", migrate_4_2_0_to_4_3_0),
+    "4.3.0": ("4.4.0", migrate_4_3_0_to_4_4_0),
 }
 
 

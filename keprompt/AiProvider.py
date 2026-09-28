@@ -289,8 +289,6 @@ class AiProvider(abc.ABC):
                     'args': display_args,
                     'elapsed': func_elapsed_time
                 })
-
-                tool_results.append(AiResult(vm=self.prompt.vm, name=part.name, id=part.id or "", result=str(result)))
             except Exception as e:
                 func_elapsed_time = time.time() - func_start_time if 'func_start_time' in locals() else 0
                 error_result = f"Error calling {str(e)}"
@@ -316,6 +314,12 @@ class AiProvider(abc.ABC):
                 })
                 
                 tool_results.append(AiResult(vm=self.prompt.vm, name=part.name, id=part.id or "", result=error_result))
+            else:
+                # Outside the try: a guard's rejection -- or its own failure -- stops execution rather
+                # than being handed back to the model as a function error.
+                text = str(result)
+                self.prompt.vm.guard(part.name, text)
+                tool_results.append(AiResult(vm=self.prompt.vm, name=part.name, id=part.id or "", result=text))
 
         # Persist tool call counter for next call_functions() invocation
         self.prompt.vm.vdict["_tool_index"] = tool_index
@@ -452,6 +456,7 @@ class AiProvider(abc.ABC):
         # tokens, its own cost, its own elapsed time. tool_time is filled in by
         # call_functions() for whatever functions this response asked for.
         self.prompt.round_trips.append({
+            'round_trip': self.prompt.vm.next_round_trip(),
             'label': label,
             'tokens_in': tokens_in,
             'tokens_out': tokens_out,

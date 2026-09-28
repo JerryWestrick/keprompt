@@ -1,0 +1,4 @@
+.prompt "version":"1.0.0"
+.user Here are the clients:
+.include guard/injected.md
+.exit

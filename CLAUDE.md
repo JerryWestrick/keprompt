@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-KePrompt is a CLI tool and framework for prompt engineering across multiple AI providers (OpenAI, Anthropic, Google, DeepSeek, Mistral, XAI, Cerebras, OpenRouter). It features a custom `.prompt` DSL, a virtual machine executor, chat persistence via SQLite, and cost tracking. Version 4.3.0.
+KePrompt is a CLI tool and framework for prompt engineering across multiple AI providers (OpenAI, Anthropic, Google, DeepSeek, Mistral, XAI, Cerebras, OpenRouter). It features a custom `.prompt` DSL, a virtual machine executor, chat persistence via SQLite, and cost tracking. Version 4.4.0.
 
 ## Build & Development Commands
 
@@ -43,7 +43,7 @@ The system follows a layered architecture: CLI → JSON API → Managers → VM/
 1. **CLI** (`keprompt.py`) parses `keprompt <object> <verb> [options]` commands using argparse with `rich_argparse`. Auto-detects output format: Rich tables for TTY, JSON when piped.
 2. **JSON API** (`api.py`) routes commands to manager classes (`ChatManager`, `ModelManager`, `PromptManager`, etc.) that return structured JSON.
 3. **Chat Manager** (`chat_manager.py`) handles chat lifecycle (create/reply/get/delete), serializes VM state to the database for multi-turn conversations.
-4. **VM** (`keprompt_vm.py`) executes `.prompt` files statement-by-statement. This is the core engine (~1,700 lines). It manages variables, messages, model selection, and dispatches to AI providers. Statements: `.prompt`, `.functions`, `.exec`, `.question`, `.evaluate`, `.user`, `.system`, `.assistant`, `.text`, `.tool_call`, `.tool_result`, `.cmd`, `.set`, `.print`, `.include`, `.image`, `.debug`, `.clear`, `.exit`, `.#`.
+4. **VM** (`keprompt_vm.py`) executes `.prompt` files statement-by-statement. This is the core engine (~1,700 lines). It manages variables, messages, model selection, and dispatches to AI providers. Statements: `.prompt`, `.functions`, `.exec`, `.question`, `.evaluate`, `.guard`, `.user`, `.system`, `.assistant`, `.text`, `.tool_call`, `.tool_result`, `.cmd`, `.set`, `.print`, `.include`, `.image`, `.debug`, `.clear`, `.exit`, `.#`.
 5. **AI Providers** (`AiProvider.py` base, `AiOpenAi.py`, `AiAnthropic.py`, etc.) each implement `prepare_request()`, `to_company_messages()`, `to_ai_message()`, `extract_token_usage()`, and `calculate_costs()`.
 6. **Database** (`database.py`) uses Peewee ORM with SQLite by default. Tables: `Info` (schema version), `Chat` (8-char ID, messages, serialized VM state, aggregates), `CostTracking` (one row per billed API round trip, keyed `(chat_id, msg_no, round_trip)` — a single `.exec` running a tool loop produces several). SQLite schema migrations live in `keprompt/migrations/`, driven by the transition registry in `migrate_sqlite.py`.
 

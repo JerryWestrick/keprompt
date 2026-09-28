@@ -19,7 +19,7 @@ keprompt chat create --json --prompt <name> \
 keprompt chat reply --json <chat_id> <message>
 ```
 
-This restores the VM and messages from `prompts/chats.db`, appends the user message and `.exec`, executes, and saves under the same `chat_id`. `--set-from-json` and `--set` may be used on reply as on create.
+This restores the VM and messages from `prompts/chats.db`, appends the user message and `.exec`, executes, and saves under the same `chat_id`. The message is external text: it passes through the prompt's `#._userinput` guard, and the reply's new `--set` / `--set-from-json` values through `#._cmdargs`, if declared. Reply values enter memory exactly as on create (JSON types kept, `--set` wins). `--set-from-json` and `--set` may be used on reply as on create.
 
 ## Inspect history
 
