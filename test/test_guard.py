@@ -112,6 +112,26 @@ def test_include_guard_rejects_and_the_text_never_enters_the_context():
     assert "SYSTEM OVERRIDE" in part["state"], "the rejected text is kept in the guard record"
 
 
+# --- #._sub -----------------------------------------------------------------------------------
+
+def test_sub_guard_passes_ordinary_lines():
+    envelope, _ = run_prompt("guard-sub", "--set", "file", "sub-ordinary.lines")
+    assert envelope["success"] is True
+    assert "from-sub" in printed(envelope) and "ran" in printed(envelope)
+    [part] = guard_parts(envelope["chat_id"])
+    assert part["channel"] == "_sub" and part["failed"] is False
+    assert "LAUREL" in part["state"]
+
+
+def test_sub_guard_rejects_and_the_fragment_does_not_run():
+    envelope, _ = run_prompt("guard-sub", "--set", "file", "sub-injected.lines")
+    assert rejected(envelope)
+    assert "ran" not in printed(envelope)
+    [part] = guard_parts(envelope["chat_id"])
+    assert part["channel"] == "_sub" and part["failed"] is True
+    assert "SYSTEM OVERRIDE" in part["state"]
+
+
 def test_guard_param_replaces_the_channel_guard():
     """`_include` always fails; `guard=#._ok` replaces it for the call, so the include passes."""
     envelope, _ = run_prompt("guard-replace")

@@ -1,0 +1,6 @@
+.prompt "version":"1.0.0", "description":"Date from execcmd, printed as the answer", "params":{"$.llm_model":"cerebras/gpt-oss-120b"}
+.functions execcmd
+.user Get the date and time on my machine using the builtin tool execcmd.
+.exec
+.print <<last_response>>
+.exit

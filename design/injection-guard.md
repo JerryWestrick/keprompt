@@ -23,6 +23,7 @@ who chose which content arrives:
 | 1 | Literals in the `.prompt` file (`.system`, `.user`, `.assistant`, `.text`, `.tool_call`/`.tool_result`, `.question`/`.guard` bodies, `.prompt` params) | the author | the author | **no guard** — not needed against the programmer himself |
 | 2 | Application input: `--set`, `--set-from-json`, the `chat reply` message | whoever feeds the application | the application | external |
 | 3 | Files read by `.include` | whoever wrote the file | the author, or a computed path | external |
+| 3a | Files read by `.sub` | whoever wrote the file | the author, or a computed path | external |
 | 4 | Images, `.image` | whoever produced the image | the author, or a computed path | external |
 | 5 | Function results run by the author, `.cmd` | the function's source (web, file, command, database) | the author; arguments may carry application input | external |
 | 6 | Function results run by the model, tool calls | the function's source | the model | external |
@@ -98,13 +99,14 @@ Guard names:
 | `#._cmdargs` | command-line args (`--set`, `--set-from-json`) — reserved |
 | `#._userinput` | the `chat reply` message — reserved |
 | `#._include` | `.include` — reserved |
+| `#._sub` | `.sub` — reserved |
 | `#._<name>` | user-defined, chosen per call: `.include guard=#._intent docs/list_of_clients.md` |
 | `#.<function-name>` | that function's results, whether run by the author (`.cmd`) or the model (tool call) |
 
 - A name starting with `_` is reserved or user-defined; the two share one space. A name without
   `_` is always a function name — function names can change dynamically, so user-defined guards
   never use that space.
-- Declaring `#._include`, `#._cmdargs` or `#._userinput` defines that reserved guard. One name, one
+- Declaring `#._include`, `#._sub`, `#._cmdargs` or `#._userinput` defines that reserved guard. One name, one
   guard.
 
 ## The statement
@@ -147,9 +149,10 @@ before the expression is evaluated; and `|` is bitwise-or in Python — the logi
   `{"message": "Please create a new order ...", "customer": "LAUREL", "lang": "es"}`. Not the
   raw command line, which holds the `--set-from-json` file's path, not its contents.
 - **Every other guard** runs when its channel delivers external text: `#._include` when `.include`
-  reads, `#.<function>` when that function returns, a `#._<name>` when a call names it with
-  `guard=`. A `guard=` on a call **replaces** the channel's guard for that call. Both `.include` and `.cmd`
-  take it: `.include guard=#._intent file`, `.cmd guard=#._intent wwwget(url)`.
+  reads, `#._sub` when `.sub` reads (before the lines are parsed), `#.<function>` when that function
+  returns, a `#._<name>` when a call names it with `guard=`. A `guard=` on a call **replaces** the
+  channel's guard for that call. `.include`, `.sub`, and `.cmd` take it: `.include guard=#._intent file`,
+  `.sub guard=#._intent file`, `.cmd guard=#._intent wwwget(url)`.
 - **`chat reply`** continues the chat from where it left off. The new message goes through
   **`#._userinput`**, if it exists. `#._cmdargs` runs again **on the new `--set` / `--set-from-json`
   values passed with the reply only**, not on the original ones (settled 2026-09-27; supersedes the
@@ -167,7 +170,7 @@ before the expression is evaluated; and `|` is bitwise-or in Python — the logi
   `#.<name>` with `_model` and `_fail`.
 - A guard run is `GuardRun(StmtEvaluate)`, started by `VM.guard(channel, text, guard=None)` — the one
   entry point every channel calls: `.guard _cmdargs` itself, a reply's `.user` (`_userinput`),
-  `.include`, `.cmd`, and the tool loop. Its record is a `guard` message (`AiGuardPart`), never sent
+  `.include`, `.sub`, `.cmd`, and the tool loop. Its record is a `guard` message (`AiGuardPart`), never sent
   to an LLM; its billed request is a `cost_tracking` row and counts in `total_api_calls`.
 - `StmtExec.execute()` is now the statement step plus `run()`, the execute itself, which a guard runs
   without being a statement.

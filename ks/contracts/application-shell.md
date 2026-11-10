@@ -26,7 +26,11 @@ This restores the VM and messages from `prompts/chats.db`, appends the user mess
 ```bash
 keprompt chat get --json --limit 20
 keprompt chat get --json <chat_id>
+keprompt-chats
+keprompt-chats --port 9000
 ```
+
+`keprompt-chats` is the browser over the same database. See [`production-database.md`](production-database.md).
 
 ## Minimal Python bridge
 

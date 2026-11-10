@@ -8,6 +8,7 @@ shell CLI -> command router -> managers -> VM -> provider / functions -> SQLite
 | Area | Source |
 |---|---|
 | Entry point and JSON envelope | `keprompt/keprompt.py`, `keprompt/__main__.py` |
+| Chat log | `keprompt/keprompt_chats.py` (`keprompt-chats`) |
 | Manager routing | `keprompt/api.py` |
 | Chat create/reply/save/restore | `keprompt/chat_manager.py` |
 | DSL parser, VM, statements | `keprompt/keprompt_vm.py` |

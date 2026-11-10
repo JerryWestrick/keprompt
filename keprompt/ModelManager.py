@@ -302,6 +302,11 @@ class ModelManager:
             for model_name, model_info in litellm_data.items():
                 litellm_provider = model_info.get("litellm_provider", "")
 
+                # LiteLLM's ollama rows are a catalog with no host. Models for this
+                # provider are declared in the overlay, which is read separately.
+                if litellm_provider == "ollama":
+                    continue
+
                 # Only load models for registered providers
                 if litellm_provider not in providers:
                     continue

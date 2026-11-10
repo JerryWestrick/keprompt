@@ -51,6 +51,8 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 pip install keprompt
 ```
 
+That installs two commands: `keprompt` and `keprompt-chats`. From a workspace, `keprompt-chats` opens `prompts/chats.db` in a browser on port 8765. `--port` chooses another port.
+
 To install in developers mode use:
 ```bash
 pip install -e ~/keprompt/ 
@@ -173,7 +175,7 @@ run top to bottom.
 ```
 
 - Build the conversation with `.system`, `.user`, `.assistant`, `.text`; add files and images with
-  `.include` and `.image`; call the LLM with `.exec`.
+  `.include` and `.image`; run a file of statements with `.sub`; call the LLM with `.exec`.
 - `<<name>>` substitutes a variable; `--set` / `--set-from-json` pass values in.
 - The model gets no functions unless `.functions` grants them; `.cmd` runs one yourself.
 - `.question` / `.evaluate` classify text with a decision model; `.guard` keeps prompt injections in
@@ -271,6 +273,10 @@ keprompt chats get <chat-id>
 
 # Get cost summary
 sqlite3 prompts/chats.db "SELECT SUM(total_cost) FROM chats"
+
+# Open the chat log. Each chat expands to its statements, calls, and results.
+keprompt-chats
+keprompt-chats --port 9000
 ```
 
 ### Database Management

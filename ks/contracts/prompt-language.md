@@ -20,6 +20,7 @@
 | `.cmd [guard=#._name] function(args)` | Execute function; append result to current message and set `last_response` |
 | `.cmd [guard=#._name] function(args) as name` | Execute function; store result without appending it |
 | `.include [guard=#._name] path` | Append file content to current message |
+| `.sub [guard=#._name] path` | Run a file of keprompt lines on this VM, then continue |
 | `.image path` | Add image content |
 | `.tool_call ...` / `.tool_result ...` | Manually represent tool examples or replay context |
 | `.print text` | Application output; captured in JSON envelope `stdout` |
@@ -131,6 +132,27 @@ the state, the model asked for, the answers, the model that answered and its usa
 sent `ldm` messages; two messages an `ldm` message separated reach the LLM merged, as if it were not
 there.
 
+## Fragments
+
+`.sub [guard=#._name] path` reads a file of keprompt lines and runs them on this VM, then continues
+with the next line of the caller. The path is substituted, so an `.evaluate` answer can select the
+file. A bare name opens under `prompts/`. A path that already has a directory, or an absolute path,
+is opened as written:
+
+```
+.sub epicure_<<?.Route.kind.value>>.lines
+```
+
+The file is a fragment. It does not start with `.prompt`, and it does not receive the program's
+automatic `.exec` and `.exit`. Its statements share the caller's variables, messages, and function
+grant, so a `.functions` line in the fragment is the grant the caller's `.exec` sees. `.exit` in
+the fragment stops the VM, including the caller.
+
+`.include` appends the file as text. `.sub` executes the file as statements. A `.prompt` line that
+is present in the fragment runs as that statement on the caller. `.sub` does not replace the
+program. The file text is judged on `#._sub` before it is parsed, with the same `guard=` override
+as `.include`.
+
 ## Guards
 
 A guard keeps external text out of the context — never sent to an LLM — when the prompt engineer's
@@ -161,8 +183,9 @@ the runtime runs it when its channel delivers text; no statement does.
 | `#._cmdargs` | the `--set` / `--set-from-json` values, as one JSON text, as soon as the `.guard` statement runs |
 | `#._userinput` | the message of a `chat reply`; the reply's own new `--set` / `--set-from-json` values go through `#._cmdargs` (the original ones are not judged again) |
 | `#._include` | each file `.include` reads |
+| `#._sub` | each file `.sub` reads, before its lines are parsed |
 | `#.<function>` | that function's result, from `.cmd` or from a model's tool call |
-| `#._<name>` | user-defined: text of one call that names it, `.include guard=#._name path` or `.cmd guard=#._name fn(...)` — it replaces the channel's guard for that call |
+| `#._<name>` | user-defined: text of one call that names it, `.include guard=#._name path`, `.sub guard=#._name path`, or `.cmd guard=#._name fn(...)` — it replaces the channel's guard for that call |
 
 Every guard execution, pass or fail, is recorded as a `guard` message and billed like any other call;
 see `contracts/production-database.md`.
@@ -203,6 +226,7 @@ Each execution unit's model lives under `_prompt`: `$.llm_model` for `.exec` and
 - Variables persist for the VM/chat. CLI `--set-from-json FILE` and `--set` override prompt defaults (`--set` wins on matching keys).
 - Substitution delimiters are the VM variables `Prefix` (default `<<`) and `Postfix` (default `>>`). `.set Prefix` / `.set Postfix`, or the same names via CLI `--set` / `--set-from-json`, change the markers for later substitution.
 - Without `.functions`, the model receives no tools. `.cmd` is direct program execution and is not model tool access.
+- A later `.functions` replaces the list. The next `.exec` offers only that list. A call and its result already in the messages stay there. Removing a function from the list works: the model does not call it. Checked 2026-10-30 on `cerebras/gpt-oss-120b`, chat `735f560b`, prompt `test/prompts/test-func-call.prompt`. The first grant was `execcmd`. The model called `execcmd` with `cmd` `date` and got `Fri Oct 30 01:19:22 AM CST 2026`. The second grant was `epicure_tools.*`. The same request was sent again, with that call and its result still in the messages. The model did not call `execcmd`. It called `update_product` with `cmd` `date`, which that function does not take, and then said it has no command tool.
 - If `.exit` is absent, the VM adds completion statements: after `.exec`, print and exit; otherwise execute, print, and exit.
 - `llm_options` is always present as a dict. It is the only place for model request options, including `temperature`, `max_tokens`, `top_p`, and `top_k`. Set it on `.prompt` `params`. Every `.exec` merges it onto the request. Those four names as top-level variables stop execution: move them into `llm_options`.
 

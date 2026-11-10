@@ -1,0 +1,4 @@
+.prompt "version":"1.0.0"
+.sub prompts/<<which>>.lines
+.print marker=<<marker>>
+.exit

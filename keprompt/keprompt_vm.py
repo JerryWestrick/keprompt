@@ -20,7 +20,7 @@ from rich.table import Table
 from .ModelManager import ModelManager, AiModel
 from .AiPrompt import (AiTextPart, AiImagePart, AiPrompt, AiMessage, AiLdmPart, AiGuardPart, LDM_ROLE,
                        GUARD_ROLE, MAX_LINE_LENGTH)
-from  .keprompt_util import VERTICAL, RIGHT_TRIANGLE, LEFT_TRIANGLE, HORIZONTAL_LINE, CIRCLE
+from  .keprompt_util import VERTICAL, RIGHT_TRIANGLE, LEFT_TRIANGLE, HORIZONTAL_LINE, CIRCLE, sub_path
 from .keprompt_logger import StandardLogger, LogMode
 from .terminal_output import terminal_output
 
@@ -59,13 +59,14 @@ def heredoc_terminator(identifier: str) -> str:
 RESERVED_PREFIX = '_'
 RESERVED_ROOT = '_prompt'
 QUESTION_SUBSYSTEM = 'question'
-# `#` -> `_prompt.guard`: guards, one per channel. `_cmdargs`, `_userinput` and `_include` are the
-# runtime's channels; any other `_` name is user-defined, chosen per call with `guard=`; a name without
-# `_` is a function's.
+# `#` -> `_prompt.guard`: guards, one per channel. `_cmdargs`, `_userinput`, `_include` and `_sub` are
+# the runtime's channels; any other `_` name is user-defined, chosen per call with `guard=`; a name
+# without `_` is a function's.
 GUARD_SUBSYSTEM = 'guard'
 GUARD_CMDARGS = '_cmdargs'
 GUARD_USERINPUT = '_userinput'
 GUARD_INCLUDE = '_include'
+GUARD_SUB = '_sub'
 # Set-level in a guard: its fail condition, a Python expression over the guard's answer paths.
 GUARD_FAIL_KEY = '_fail'
 # The registry's `mode` for a decision model: it answers `.evaluate`, where a `chat` model answers
@@ -179,6 +180,9 @@ class VM:
         self.vm_debug = vm_debug
         self.exec_debug = exec_debug
         self.ip: int = 0
+        # `.exit` sets this. The execute loops and a `.sub` fragment all stop on it, so an `.exit`
+        # inside a fragment stops the caller too.
+        self.halted: bool = False
         
         # Generate unique prompt instance UUID
         self.prompt_uuid = str(uuid.uuid4())[:8]  # Use first 8 chars for readability
@@ -227,6 +231,9 @@ class VM:
         # from one counter, because a guard can bill requests inside another statement's execute.
         self.round_trips_used: dict[int, int] = {}
         self.allowed_functions: list[str] | None = None  # None = no .functions statement = no functions (safe default)
+        # A child keprompt started by .cmd has a pipe for stdout, so it would choose JSON
+        # unless this process's format is passed explicitly. Chat create/reply sets the real flag.
+        self.output_flag: str = "--json"
 
         # Automatically parse if filename provided
         if self.filename:
@@ -561,6 +568,7 @@ class VM:
             'prompt_name': self.prompt_name,
             'prompt_version': self.prompt_version,
             'api_key': "***HIDDEN***",  # Never expose actual API key
+            'output_flag': self.output_flag,
         }
         
         return vm_properties.get(property_name)
@@ -572,15 +580,100 @@ class VM:
         self.statements.append(stmt)
         return stmt
 
-    def emit_statement(self, keyword: str, value: str, lno: int, heredoc: str | None = None) -> None:
-        """Add a statement, folding a continuation line into the previous message statement."""
-        if lno and keyword == '.text' and self.statements:
-            last = self.statements[-1]
+    def emit_statement(self, keyword: str, value: str, lno: int, heredoc: str | None = None,
+                       target: list | None = None) -> None:
+        """Add a statement, folding a continuation line into the previous message statement.
+
+        `target` is the list that receives the statement. The program parser uses `vm.statements`;
+        `.sub` uses its own list so a fragment is not appended to the program.
+        """
+        statements = self.statements if target is None else target
+        if lno and keyword == '.text' and statements:
+            last = statements[-1]
             if last.keyword in ['.assistant', '.system', '.text', '.user']:
                 last.value = f"{last.value}\n{value}".strip()
                 return
 
-        self.add_statement(keyword=keyword, value=value, heredoc=heredoc)
+        stmt = make_statement(self, len(statements), keyword=keyword, value=value, heredoc=heredoc)
+        statements.append(stmt)
+
+    def parse_statement_lines(self, lines: list[str], source: str, target: list) -> None:
+        """Parse keprompt lines into `target`.
+
+        The same rules as the program: keywords, continuation lines, multi-line quotes. No `.prompt`
+        header and no automatic `.exec` / `.exit` — a fragment is a list of lines, not a program.
+        """
+        heredoc_id: str | None = None        # identifier of the open quote, None if closed
+        heredoc_head: tuple[str, str, str] = ()  # (keyword, text before the marker, text after it)
+        heredoc_body: list[str] = []
+        heredoc_lno: int = 0
+
+        for lno, line in enumerate(lines):
+            try:
+                # Inside a multi-line quote the line is content, not syntax: consumed verbatim with
+                # no strip, no blank-line skip and no dot-keyword dispatch, until the terminator.
+                if heredoc_id is not None:
+                    if line.rstrip() == heredoc_terminator(heredoc_id):
+                        keyword, before, tail = heredoc_head
+                        body = "\n".join(heredoc_body)
+                        stmt_class = StatementTypes.get(keyword)
+                        if stmt_class is None or stmt_class.heredoc_as_value:
+                            # The operand simply is the text: splice the body in at the marker.
+                            self.emit_statement(keyword, before + body + tail, heredoc_lno,
+                                                target=target)
+                        else:
+                            # The statement parses its own line: keep the body off it.
+                            self.emit_statement(keyword, (before + tail).strip(), heredoc_lno,
+                                                heredoc=body, target=target)
+                        heredoc_id, heredoc_head, heredoc_body = None, (), []
+                    else:
+                        heredoc_body.append(line.rstrip('\r\n'))
+                    continue
+
+                line = line.strip()  # remove trailing blanks
+                if not line: continue  # skip blank lines
+
+                # Get Keyword and Value in all cases.
+
+                if line[0] != '.':  # No Dot in col 1
+                    keyword, value = '.text', line
+                else:
+                    # has '.' in col 1
+                    if ' ' in line:  # has space therefore has .keyword<space>value
+                        keyword, value = line.split(' ', 1)
+                    else:  # No space therefore only .keyword
+                        keyword, value = line, ''
+
+                    if keyword not in keywords:  # last case have .keyword but it is not a valid keyword
+                        keyword, value = '.text', line
+
+                # Multi-line quote opener: <<<ID as the last thing on the line.
+                opener = HEREDOC_OPEN.search(value)
+                if opener:
+                    if opener.group('quote'):
+                        raise StmtSyntaxError(
+                            f"{VERTICAL} [red]Error: {source}:{lno + 1} non-interpolating "
+                            f"multi-line quote <<<'{opener.group('qid')}' is reserved and not yet "
+                            f"supported. Use <<<{opener.group('qid')} instead.[/]\n\n")
+                    heredoc_id = opener.group('id')
+                    heredoc_head = (keyword, value[:opener.start()], value[opener.end():])
+                    heredoc_body = []
+                    heredoc_lno = lno
+                    continue
+
+                self.emit_statement(keyword, value, lno, target=target)
+
+            except StmtSyntaxError:
+                raise
+            except Exception as e:
+                raise StmtSyntaxError(
+                    f"{VERTICAL} [red]Error parsing file {source}:{lno} error: {str(e)}.[/]\n\n")
+
+        if heredoc_id is not None:
+            raise StmtSyntaxError(
+                f"{VERTICAL} [red]Error: {source}:{heredoc_lno + 1} multi-line quote "
+                f"<<<{heredoc_id} is never closed; expected a line containing exactly "
+                f"{heredoc_terminator(heredoc_id)}.[/]\n\n")
 
     def parse_prompt(self) -> None:
         """Parse the prompt file and create a list of statements.
@@ -614,76 +707,7 @@ class VM:
                         f"Example: .prompt \"name\":\"My Prompt\", \"version\":\"1.0.0\"\n\n")
                 break
 
-        heredoc_id: str | None = None        # identifier of the open quote, None if closed
-        heredoc_head: tuple[str, str, str] = ()  # (keyword, text before the marker, text after it)
-        heredoc_body: list[str] = []
-        heredoc_lno: int = 0
-
-        for lno, line in enumerate(lines):
-            try:
-                # Inside a multi-line quote the line is content, not syntax: consumed verbatim with
-                # no strip, no blank-line skip and no dot-keyword dispatch, until the terminator.
-                if heredoc_id is not None:
-                    if line.rstrip() == heredoc_terminator(heredoc_id):
-                        keyword, before, tail = heredoc_head
-                        body = "\n".join(heredoc_body)
-                        stmt_class = StatementTypes.get(keyword)
-                        if stmt_class is None or stmt_class.heredoc_as_value:
-                            # The operand simply is the text: splice the body in at the marker.
-                            self.emit_statement(keyword, before + body + tail, heredoc_lno)
-                        else:
-                            # The statement parses its own line: keep the body off it.
-                            self.emit_statement(keyword, (before + tail).strip(), heredoc_lno,
-                                                heredoc=body)
-                        heredoc_id, heredoc_head, heredoc_body = None, (), []
-                    else:
-                        heredoc_body.append(line.rstrip('\r\n'))
-                    continue
-
-                line = line.strip()  # remove trailing blanks
-                if not line: continue  # skip blank lines
-
-                # Get Keyword and Value in all cases.
-
-                if line[0] != '.':  # No Dot in col 1
-                    keyword, value = '.text', line
-                else:
-                    # has '.' in col 1
-                    if ' ' in line:  # has space therefore has .keyword<space>value
-                        keyword, value = line.split(' ', 1)
-                    else:  # No space therefore only .keyword
-                        keyword, value = line, ''
-
-                    if keyword not in keywords:  # last case have .keyword but it is not a valid keyword
-                        keyword, value = '.text', line
-
-                # Multi-line quote opener: <<<ID as the last thing on the line.
-                opener = HEREDOC_OPEN.search(value)
-                if opener:
-                    if opener.group('quote'):
-                        raise StmtSyntaxError(
-                            f"{VERTICAL} [red]Error: {self.filename}:{lno + 1} non-interpolating "
-                            f"multi-line quote <<<'{opener.group('qid')}' is reserved and not yet "
-                            f"supported. Use <<<{opener.group('qid')} instead.[/]\n\n")
-                    heredoc_id = opener.group('id')
-                    heredoc_head = (keyword, value[:opener.start()], value[opener.end():])
-                    heredoc_body = []
-                    heredoc_lno = lno
-                    continue
-
-                self.emit_statement(keyword, value, lno)
-
-            except StmtSyntaxError:
-                raise
-            except Exception as e:
-                raise StmtSyntaxError(
-                    f"{VERTICAL} [red]Error parsing file {self.filename}:{lno} error: {str(e)}.[/]\n\n")
-
-        if heredoc_id is not None:
-            raise StmtSyntaxError(
-                f"{VERTICAL} [red]Error: {self.filename}:{heredoc_lno + 1} multi-line quote "
-                f"<<<{heredoc_id} is never closed; expected a line containing exactly "
-                f"{heredoc_terminator(heredoc_id)}.[/]\n\n")
+        self.parse_statement_lines(lines, self.filename, self.statements)
 
         # Validate that we have a .prompt statement and it was processed
         if not self.statements or self.statements[0].keyword != '.prompt':
@@ -829,7 +853,10 @@ class VM:
                         print(f"VM-DEBUG   [{i:02d}] {s.keyword} '{s.value[:30]}{'...' if len(s.value) > 30 else ''}'{marker}", file=sys.stderr)
                 
                 stmt.execute(self)
-                
+
+                if self.halted or stmt.keyword == '.exit':
+                    break
+
                 # VM DEBUG: Log after executing statement (only when --vm-debug flag is used)
                 if self.vm_debug:
                     print(f"VM-DEBUG AFTER EXEC: IP={self.ip}, Statement={stmt.keyword} completed", file=sys.stderr)
@@ -845,10 +872,6 @@ class VM:
                     stmt_index=self.ip,
                     original_error=e,
                 )
-
-            if stmt.keyword == '.exit':
-                break
-
 
         # Log chat end and cleanup
         if self.log_mode in [LogMode.LOG, LogMode.DEBUG]:
@@ -927,7 +950,7 @@ class VM:
                     original_error=e,
                 )
 
-            if stmt.keyword == '.exit':
+            if self.halted or stmt.keyword == '.exit':
                 break
 
         # Log chat end and cleanup
@@ -1285,6 +1308,8 @@ class StmtCmd(StmtPrompt):
             
             value = func_part.strip()
 
+        value = vm.substitute(value)
+
         # Parse the function call
         function_name, args = value.split('(', maxsplit=1)
         function_name = function_name.strip()
@@ -1428,15 +1453,15 @@ class StmtExec(StmtPrompt):
         self.refuse_wrong_mode(vm)
         self.model_loaded(vm)
 
-        # Get API key for this provider
+        # Get API key for this provider. Ollama serves with no key.
         config = get_config()
         api_key = config.get_api_key(vm.provider)
-        if not api_key:
+        if not api_key and vm.provider != "ollama":
             error_msg = config.get_missing_key_error(vm.provider)
             vm.logger.log_error(error_msg)
             sys.exit(1)
 
-        vm.api_key = api_key
+        vm.api_key = api_key or ""
 
         # Sync prompt object with VM state
         vm.prompt.api_key = vm.api_key
@@ -1664,7 +1689,8 @@ class StmtExit(StmtPrompt):
 
     def execute(self, vm: VM) -> None:
         super().execute(vm)
-        
+        vm.halted = True
+
         # Log total costs when exiting
         if vm.toks_in > 0 or vm.toks_out > 0:
             wall_time = time.time() - getattr(vm, 'wall_start', time.time())
@@ -1711,6 +1737,44 @@ class StmtInclude(StmtPrompt):
             vm.guard(GUARD_INCLUDE, lines, guard)
             last_msg = vm.prompt.current_message()
             last_msg.content.append(AiTextPart(vm=vm, text=lines))
+
+
+class StmtSub(StmtPrompt):
+    """Run a file of keprompt lines on this VM, then return to the next line of the caller.
+
+    The file is a fragment: no `.prompt` header and no automatic `.exec` / `.exit`. Its statements
+    share the caller's variables, messages, and function grant. `.exit` in the fragment sets
+    `vm.halted`, which stops the caller too. The path is substituted. A bare name opens under
+    `prompts/`; a path with a directory, or an absolute path, is opened as written. The file text
+    is guarded on `#._sub` before it is parsed.
+    """
+
+    def execute(self, vm: VM) -> None:
+        super().execute(vm)
+        guard, value = split_guard_param(self.value)
+        if not value.strip():
+            raise StmtSyntaxError(".sub syntax error: a file path is required")
+        filename = sub_path(vm.substitute(value))
+        text = FunctionSpace.functions.call('readfile', {'filename': filename})
+        vm.guard(GUARD_SUB, text, guard)
+
+        fragment: list = []
+        vm.parse_statement_lines(text.splitlines(keepends=True), filename, fragment)
+
+        # `StmtPrompt.execute` advances `vm.ip`. Point it back at this `.sub` for each fragment
+        # statement so a fragment line does not skip the rest of the caller, and so a billed
+        # request inside the fragment is numbered on this statement. Restore `ip` when the
+        # fragment returns. Nested `.sub` stacks the same save.
+        saved = vm.ip
+        sub_index = saved - 1
+        try:
+            for stmt in fragment:
+                vm.ip = sub_index
+                stmt.execute(vm)
+                if vm.halted:
+                    break
+        finally:
+            vm.ip = saved
 
 
 class StmtImage(StmtPrompt):
@@ -1826,6 +1890,53 @@ class StmtUser(StmtPrompt):
             vm.prompt.add_message(vm=vm, role='user', content=[AiTextPart(vm=vm, text=substituted_text)])
 
 
+_MD_BLOCK_LINE = re.compile(
+    r"^(?:"
+    r"```"
+    r"|#{1,6}(?:\s|$)"
+    r"|>(?:\s|$)"
+    r"|\s*\|"
+    r"|\s*[-*+]\s+"
+    r"|\s*\d+[.)]\s+"
+    r"|\s*([-*_])\1{2,}\s*$"
+    r")"
+)
+
+
+def markdown_keep_breaks(text: str) -> str:
+    """Keep a plain newline when Rich Markdown would turn it into a space.
+
+    A backslash before the newline is a hard break. A blank line, a fence, and a
+    line that opens a block (table, heading, list, quote, rule) stay real newlines
+    so that block still renders.
+    """
+    lines = text.split("\n")
+    if len(lines) < 2:
+        return text
+    in_fence = False
+    parts: list[str] = []
+    for i, line in enumerate(lines):
+        parts.append(line)
+        if i == len(lines) - 1:
+            break
+        if line.lstrip().startswith("```"):
+            in_fence = not in_fence
+            parts.append("\n")
+            continue
+        nxt = lines[i + 1]
+        if (
+            in_fence
+            or not line.strip()
+            or not nxt.strip()
+            or _MD_BLOCK_LINE.match(line)
+            or _MD_BLOCK_LINE.match(nxt)
+        ):
+            parts.append("\n")
+        else:
+            parts.append("\\\n")
+    return "".join(parts)
+
+
 class StmtPrint(StmtPrompt):
     """
     Handles the execution of a print statement in the VM.
@@ -1849,7 +1960,7 @@ class StmtPrint(StmtPrompt):
         
         # Substitute variables and print to STDOUT (production channel)
         output_text = vm.substitute(self.value)
-        md = Markdown(output_text)
+        md = Markdown(markdown_keep_breaks(output_text))
         # Route through the unified terminal output channel so:
         # - pretty mode: this prints normally to stdout
         # - --json mode: this is captured into the JSON envelope's `stdout`
@@ -2364,6 +2475,7 @@ StatementTypes: dict[str, type(StmtPrompt)] = {
     '.prompt': StmtPromptMeta,
     '.question': StmtQuestion,
     '.set': StmtSet,
+    '.sub': StmtSub,
     '.system': StmtSystem,
     '.text': StmtText,
     '.tool_call': StmtToolCall,

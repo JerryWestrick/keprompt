@@ -26,11 +26,15 @@ Update the `Stmt*` implementation and `StatementTypes`; preserve substitution, l
 
 Do not confuse `.exec` statements with billed round trips: a tool loop can issue multiple requests.
 
+## `.sub`
+
+`.sub` substitutes the path, then opens it. A bare name opens under `prompts/`. A path that already has a directory, or an absolute path, is opened as written. It parses that file with `VM.parse_statement_lines`, the same line parser as the program, into its own list. The fragment is not appended to `vm.statements` and does not get completion (the automatic `.exec` / `.exit`). `StmtPrompt.execute` advances `vm.ip`, so `.sub` saves `ip`, points it at the `.sub` statement for each fragment statement — round trips stay on that statement — and restores it when the fragment returns. Nested `.sub` stacks the same save. `.exit` sets `vm.halted`. `VM.execute` and `execute_from` stop when it is set, so an `.exit` in the fragment stops the caller.
+
 ## One execute, two units
 
 `StmtExec.execute()` is the whole execute for every model. `.evaluate` (`StmtEvaluate`) subclasses it and differs only in hooks: `resolve_model`, `refuse_wrong_mode`, `model_loaded`, `before_call` (the content), `after_call` (where answers go) and `output_scope` (where outputs such as `_provider_selected_model` land: `$` for `.exec`, the question set for `.evaluate`). Before adding anything LDM-specific, look for the slot the LLM path already has. Design record: `design/ldm-execute.md`.
 
-A guard run is the same execute again: `GuardRun` subclasses `StmtEvaluate` and is started by `VM.guard(channel, text, guard=None)`, not by a statement. The channels call it — `.guard _cmdargs`, a reply's `.user`, `.include`, `.cmd`, and the tool loop in `AiProvider.call_functions()` (outside its `try`, so a rejection is not handed back to the model as a function error). It can fire inside another execute, so `VM.execute_unit_preserved()` keeps that execute's model registers and `vm.prompt` state. Its request is numbered in the enclosing statement's round trips: `VM.next_round_trip()` is the one counter per statement.
+A guard run is the same execute again: `GuardRun` subclasses `StmtEvaluate` and is started by `VM.guard(channel, text, guard=None)`, not by a statement. The channels call it — `.guard _cmdargs`, a reply's `.user`, `.include`, `.sub`, `.cmd`, and the tool loop in `AiProvider.call_functions()` (outside its `try`, so a rejection is not handed back to the model as a function error). It can fire inside another execute, so `VM.execute_unit_preserved()` keeps that execute's model registers and `vm.prompt` state. Its request is numbered in the enclosing statement's round trips: `VM.next_round_trip()` is the one counter per statement.
 
 Text-adding statements write to `AiPrompt.current_message()` — the last conversation message — never to an `ldm` or `guard` record, which sit in the same list.
 

@@ -1,0 +1,5 @@
+.prompt "version":"1.0.0"
+.sub prompts/sub-set.lines
+.print marker=<<marker>>
+.print after
+.exit

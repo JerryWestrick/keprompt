@@ -690,6 +690,7 @@ class ChatManager:
         # Instantiate VM with internal prompt resolution and default globals
         try:
             vm = VM(prompt_ref=prompt_ref, params=params_dict, log_mode=LogMode.PRODUCTION, vm_debug=False)
+            vm.output_flag = "--pretty" if getattr(self.args, "pretty", False) else "--json"
         except PromptResolutionError as e:
             return fail(str(e))
         except Exception as e:
@@ -782,6 +783,7 @@ class ChatManager:
         vm = self.load_vm(chat_id)
         if not vm:
             return f"Chat {chat_id} not found or failed to load"
+        vm.output_flag = "--pretty" if getattr(self.args, "pretty", False) else "--json"
 
         # The reply is external text: its message enters through the `_userinput` guard and its new
         # values -- JSON file first, --set overriding, as on create -- through `_cmdargs`, if declared.

@@ -273,13 +273,13 @@ class FunctionSpace:
                 cwd=PROJECT_DIR,
                 input=json.dumps(arguments),
                 stdout=subprocess.PIPE,
-                stderr=None,
+                stderr=subprocess.PIPE,
                 text=True,
                 timeout=120,
             )
             if result.returncode == 0:
                 return result.stdout.strip()
-            raise Exception(result.stderr.strip() or "Unknown error")
+            raise Exception((result.stderr or "").strip() or "Unknown error")
         except Exception as e:
             raise Exception(f"Error executing function '{function_name}': {e}")
 

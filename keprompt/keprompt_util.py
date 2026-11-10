@@ -22,6 +22,17 @@ HORIZONTAL_LINE = u"\u2500"
 
 
 
+def sub_path(filename: str) -> str:
+    """Where `.sub` opens a file.
+
+    A bare name opens under `prompts/`. A path that already has a directory, or an absolute
+    path, is opened as written.
+    """
+    if os.path.isabs(filename) or os.path.dirname(filename):
+        return filename
+    return os.path.join("prompts", filename)
+
+
 def backup_file(filepath: str, backup_dir: Optional[str] = None, extension: Optional[str] = None) -> str:
     """Version files with numbered backups.
 

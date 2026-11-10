@@ -1,0 +1,423 @@
+{
+  "name": "KePrompt",
+  "scopeName": "source.keprompt",
+  "uuid": "C4A91E70-2D58-4B6F-9E13-7A0B5D8C1F24",
+  "fileTypes": ["prompt"],
+  "firstLineMatch": "^\\s*\\.prompt\\b",
+  "foldingStartMarker": "<<<[^\\s'\"]\\S*",
+  "foldingStopMarker": "^>>>\\S+$",
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#question-quote" },
+    { "include": "#guard-quote" },
+    { "include": "#evaluate-quote" },
+    { "include": "#set-quote" },
+    { "include": "#statement-quote" },
+    { "include": "#prompt-statement" },
+    { "include": "#functions-statement" },
+    { "include": "#exec-statement" },
+    { "include": "#evaluate-statement" },
+    { "include": "#set-statement" },
+    { "include": "#cmd-statement" },
+    { "include": "#include-statement" },
+    { "include": "#question-statement" },
+    { "include": "#guard-statement" },
+    { "include": "#message-statement" },
+    { "include": "#interpolation" }
+  ],
+  "repository": {
+    "comment": {
+      "name": "comment.line.number-sign.keprompt",
+      "match": "^[ \\t]*\\.#.*$"
+    },
+    "interpolation": {
+      "patterns": [
+        {
+          "match": "(<<)([$?#])(\\.[A-Za-z_][\\w.]*)(>>)",
+          "captures": {
+            "1": { "name": "punctuation.definition.variable.begin.keprompt" },
+            "2": { "name": "variable.language.keprompt" },
+            "3": { "name": "variable.other.keprompt" },
+            "4": { "name": "punctuation.definition.variable.end.keprompt" }
+          }
+        },
+        {
+          "match": "(<<)([A-Za-z_][\\w.]*)(>>)",
+          "captures": {
+            "1": { "name": "punctuation.definition.variable.begin.keprompt" },
+            "2": { "name": "variable.other.keprompt" },
+            "3": { "name": "punctuation.definition.variable.end.keprompt" }
+          }
+        }
+      ]
+    },
+    "reserved-quote": {
+      "patterns": [
+        {
+          "name": "invalid.illegal.reserved-quote.keprompt",
+          "match": "<<<['\"]\\S*"
+        },
+        {
+          "name": "invalid.illegal.reserved-quote.keprompt",
+          "match": "<<<(?=\\s|$)"
+        }
+      ]
+    },
+    "sigil-path": {
+      "match": "(?<![\\w.<])([$?#])(\\.[A-Za-z_][\\w.]*)",
+      "captures": {
+        "1": { "name": "variable.language.keprompt" },
+        "2": { "name": "variable.other.keprompt" }
+      }
+    },
+    "double-quote": {
+      "name": "string.quoted.double.keprompt",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        { "name": "constant.character.escape.keprompt", "match": "\\\\." },
+        { "include": "#interpolation" }
+      ]
+    },
+    "single-quote": {
+      "name": "string.quoted.single.keprompt",
+      "match": "'[^']*'"
+    },
+    "json-punctuation": {
+      "name": "punctuation.separator.keprompt",
+      "match": "[:,]"
+    },
+    "json-constant": {
+      "name": "constant.language.keprompt",
+      "match": "\\b(?:true|false|null)\\b"
+    },
+    "number": {
+      "name": "constant.numeric.keprompt",
+      "match": "-?\\d+(?:\\.\\d+)?"
+    },
+    "json-object": {
+      "begin": "\\{",
+      "end": "\\}",
+      "beginCaptures": { "0": { "name": "punctuation.definition.dict.begin.keprompt" } },
+      "endCaptures": { "0": { "name": "punctuation.definition.dict.end.keprompt" } },
+      "patterns": [
+        { "include": "#json-object" },
+        { "include": "#double-quote" },
+        { "include": "#json-punctuation" },
+        { "include": "#json-constant" },
+        { "include": "#number" }
+      ]
+    },
+    "guard-arg": {
+      "match": "\\b(guard)(\\s*=\\s*)(#)(\\.[A-Za-z_][\\w.]*)",
+      "captures": {
+        "1": { "name": "entity.other.attribute-name.keprompt" },
+        "2": { "name": "keyword.operator.assignment.keprompt" },
+        "3": { "name": "variable.language.keprompt" },
+        "4": { "name": "variable.other.keprompt" }
+      }
+    },
+    "quote-marker": {
+      "match": "(<<<)([^\\s'\"]\\S*)",
+      "captures": {
+        "1": { "name": "punctuation.definition.quote.begin.keprompt" },
+        "2": { "name": "constant.other.quote-id.keprompt" }
+      }
+    },
+    "fail-operator": {
+      "name": "keyword.operator.keprompt",
+      "match": "==|!=|>=|<=|>|<|\\b(?:or|and|not)\\b"
+    },
+    "question-line": {
+      "begin": "^[ \\t]*([A-Za-z_][\\w]*)[ \\t]*(:)[ \\t]*(choice|score|noul)\\b",
+      "beginCaptures": {
+        "1": { "name": "entity.name.tag.keprompt" },
+        "2": { "name": "punctuation.separator.key-value.keprompt" },
+        "3": { "name": "support.type.keprompt" }
+      },
+      "end": "$",
+      "patterns": [{ "include": "#interpolation" }]
+    },
+    "instructions-line": {
+      "begin": "^[ \\t]*(instructions)[ \\t]*(:)",
+      "beginCaptures": {
+        "1": { "name": "entity.other.attribute-name.keprompt" },
+        "2": { "name": "punctuation.separator.key-value.keprompt" }
+      },
+      "end": "$",
+      "contentName": "string.unquoted.keprompt",
+      "patterns": [{ "include": "#interpolation" }]
+    },
+    "option-line": {
+      "begin": "^[ \\t]*([A-Za-z_][\\w]*)[ \\t]*(:)(?![ \\t]*(?:choice|score|noul)\\b)",
+      "beginCaptures": {
+        "1": { "name": "entity.other.attribute-name.keprompt" },
+        "2": { "name": "punctuation.separator.key-value.keprompt" }
+      },
+      "end": "$",
+      "contentName": "string.unquoted.keprompt",
+      "patterns": [{ "include": "#interpolation" }]
+    },
+    "fail-line": {
+      "begin": "^[ \\t]*(fail)[ \\t]*(:)",
+      "beginCaptures": {
+        "1": { "name": "keyword.control.keprompt" },
+        "2": { "name": "punctuation.separator.key-value.keprompt" }
+      },
+      "end": "$",
+      "patterns": [
+        { "include": "#single-quote" },
+        { "include": "#double-quote" },
+        { "include": "#sigil-path" },
+        { "include": "#fail-operator" },
+        { "include": "#number" },
+        { "include": "#interpolation" }
+      ]
+    },
+    "question-body": {
+      "patterns": [
+        { "include": "#fail-line" },
+        { "include": "#instructions-line" },
+        { "include": "#question-line" },
+        { "include": "#option-line" },
+        { "include": "#interpolation" }
+      ]
+    },
+    "question-quote": {
+      "name": "meta.quote.question.keprompt",
+      "begin": "^[ \\t]*(\\.question)\\b[ \\t]+(\\S+)(?:[ \\t]+(?!<<<)(\\S+))?[ \\t]*(<<<)([^\\s'\"]\\S*)(.*)$",
+      "beginCaptures": {
+        "1": { "name": "keyword.control.keprompt" },
+        "2": { "name": "entity.name.tag.keprompt" },
+        "3": { "name": "support.class.keprompt" },
+        "4": { "name": "punctuation.definition.quote.begin.keprompt" },
+        "5": { "name": "constant.other.quote-id.keprompt" },
+        "6": { "name": "meta.statement.tail.keprompt" }
+      },
+      "end": "^>>>\\5$",
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.quote.end.keprompt" }
+      },
+      "patterns": [{ "include": "#question-body" }]
+    },
+    "guard-quote": {
+      "name": "meta.quote.guard.keprompt",
+      "begin": "^[ \\t]*(\\.guard)\\b[ \\t]+(\\S+)[ \\t]+(\\S+)[ \\t]*(<<<)([^\\s'\"]\\S*)(.*)$",
+      "beginCaptures": {
+        "1": { "name": "keyword.control.keprompt" },
+        "2": { "name": "entity.name.tag.keprompt" },
+        "3": { "name": "support.class.keprompt" },
+        "4": { "name": "punctuation.definition.quote.begin.keprompt" },
+        "5": { "name": "constant.other.quote-id.keprompt" },
+        "6": { "name": "meta.statement.tail.keprompt" }
+      },
+      "end": "^>>>\\5$",
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.quote.end.keprompt" }
+      },
+      "patterns": [{ "include": "#question-body" }]
+    },
+    "evaluate-quote": {
+      "name": "meta.quote.keprompt",
+      "begin": "(?=^[ \\t]*\\.evaluate\\b.*?<<<([^\\s'\"]\\S*))",
+      "end": "^>>>\\1$",
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.quote.end.keprompt" }
+      },
+      "patterns": [
+        { "include": "#evaluate-statement" },
+        { "include": "#evaluate-body" }
+      ]
+    },
+    "evaluate-body": {
+      "begin": "^(?![ \\t]*\\.evaluate\\b)",
+      "end": "$",
+      "contentName": "string.unquoted.heredoc.keprompt",
+      "patterns": [{ "include": "#interpolation" }]
+    },
+    "set-quote": {
+      "name": "meta.quote.keprompt",
+      "contentName": "string.unquoted.heredoc.keprompt",
+      "begin": "^[ \\t]*(\\.set)\\b[ \\t]+((?:[$?#]\\.)?[A-Za-z_][\\w.]*)(.*?)(<<<)([^\\s'\"]\\S*)(.*)$",
+      "beginCaptures": {
+        "1": { "name": "keyword.control.keprompt" },
+        "2": { "name": "variable.other.keprompt" },
+        "3": { "name": "meta.statement.keprompt" },
+        "4": { "name": "punctuation.definition.quote.begin.keprompt" },
+        "5": { "name": "constant.other.quote-id.keprompt" },
+        "6": { "name": "meta.statement.tail.keprompt" }
+      },
+      "end": "^>>>\\5$",
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.quote.end.keprompt" }
+      },
+      "patterns": [{ "include": "#interpolation" }]
+    },
+    "statement-quote": {
+      "name": "meta.quote.keprompt",
+      "contentName": "string.unquoted.heredoc.keprompt",
+      "begin": "^[ \\t]*(\\.(?:prompt|functions|system|user|assistant|text|exec|cmd|include|image|tool_call|tool_result|print|debug|clear|exit))\\b(.*?)(<<<)([^\\s'\"]\\S*)(.*)$",
+      "beginCaptures": {
+        "1": { "name": "keyword.control.keprompt" },
+        "2": { "name": "meta.statement.keprompt" },
+        "3": { "name": "punctuation.definition.quote.begin.keprompt" },
+        "4": { "name": "constant.other.quote-id.keprompt" },
+        "5": { "name": "meta.statement.tail.keprompt" }
+      },
+      "end": "^>>>\\4$",
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.quote.end.keprompt" }
+      },
+      "patterns": [{ "include": "#interpolation" }]
+    },
+    "prompt-statement": {
+      "name": "meta.statement.keprompt",
+      "begin": "^[ \\t]*(\\.prompt)\\b",
+      "beginCaptures": { "1": { "name": "keyword.control.keprompt" } },
+      "end": "$",
+      "patterns": [
+        { "include": "#json-object" },
+        { "include": "#double-quote" },
+        { "include": "#json-punctuation" },
+        { "include": "#reserved-quote" },
+        { "include": "#interpolation" }
+      ]
+    },
+    "functions-statement": {
+      "name": "meta.statement.keprompt",
+      "begin": "^[ \\t]*(\\.functions)\\b",
+      "beginCaptures": { "1": { "name": "keyword.control.keprompt" } },
+      "end": "$",
+      "patterns": [
+        { "name": "entity.name.function.keprompt", "match": "\\b[A-Za-z_]\\w*\\.\\*" },
+        { "name": "entity.name.function.keprompt", "match": "\\b[A-Za-z_]\\w*\\.[A-Za-z_]\\w*" },
+        { "name": "entity.name.function.keprompt", "match": "\\b[A-Za-z_]\\w*" },
+        { "name": "punctuation.separator.keprompt", "match": "," },
+        { "include": "#reserved-quote" },
+        { "include": "#interpolation" }
+      ]
+    },
+    "exec-statement": {
+      "name": "meta.statement.keprompt",
+      "begin": "^[ \\t]*(\\.exec)\\b",
+      "beginCaptures": { "1": { "name": "keyword.control.keprompt" } },
+      "end": "$",
+      "patterns": [
+        { "include": "#json-object" },
+        { "name": "support.class.keprompt", "match": "(?<![\\w./])[A-Za-z_][\\w.-]*(?:/[A-Za-z_][\\w.-]*)+" },
+        { "include": "#reserved-quote" },
+        { "include": "#interpolation" }
+      ]
+    },
+    "evaluate-statement": {
+      "name": "meta.statement.keprompt",
+      "begin": "^[ \\t]*(\\.evaluate)\\b",
+      "beginCaptures": { "1": { "name": "keyword.control.keprompt" } },
+      "end": "$",
+      "patterns": [
+        {
+          "begin": "\\G[ \\t]+(\\?)(\\.[A-Za-z_][\\w.]*)[ \\t]*(\\{)",
+          "beginCaptures": {
+            "1": { "name": "variable.language.keprompt" },
+            "2": { "name": "variable.other.keprompt" },
+            "3": { "name": "punctuation.definition.dict.begin.keprompt" }
+          },
+          "end": "\\}",
+          "endCaptures": { "0": { "name": "punctuation.definition.dict.end.keprompt" } },
+          "patterns": [
+            { "include": "#json-object" },
+            { "include": "#double-quote" },
+            { "include": "#json-punctuation" },
+            { "include": "#json-constant" },
+            { "include": "#number" }
+          ]
+        },
+        {
+          "match": "\\G[ \\t]+(\\?)(\\.[A-Za-z_][\\w.]*)",
+          "captures": {
+            "1": { "name": "variable.language.keprompt" },
+            "2": { "name": "variable.other.keprompt" }
+          }
+        },
+        { "include": "#quote-marker" },
+        { "include": "#interpolation" },
+        { "include": "#reserved-quote" }
+      ]
+    },
+    "set-statement": {
+      "name": "meta.statement.keprompt",
+      "begin": "^[ \\t]*(\\.set)\\b[ \\t]+((?:[$?#]\\.)?[A-Za-z_][\\w.]*)",
+      "beginCaptures": {
+        "1": { "name": "keyword.control.keprompt" },
+        "2": { "name": "variable.other.keprompt" }
+      },
+      "end": "$",
+      "patterns": [
+        { "include": "#interpolation" },
+        { "include": "#reserved-quote" }
+      ]
+    },
+    "cmd-statement": {
+      "name": "meta.statement.keprompt",
+      "begin": "^[ \\t]*(\\.cmd)\\b",
+      "beginCaptures": { "1": { "name": "keyword.control.keprompt" } },
+      "end": "$",
+      "patterns": [
+        { "include": "#guard-arg" },
+        {
+          "match": "\\b(as)\\b[ \\t]+([A-Za-z_]\\w*)",
+          "captures": {
+            "1": { "name": "keyword.control.keprompt" },
+            "2": { "name": "variable.other.keprompt" }
+          }
+        },
+        { "name": "entity.name.function.keprompt", "match": "\\b[A-Za-z_]\\w*(?=\\s*\\()" },
+        { "include": "#double-quote" },
+        { "include": "#single-quote" },
+        { "include": "#interpolation" },
+        { "include": "#reserved-quote" }
+      ]
+    },
+    "include-statement": {
+      "name": "meta.statement.keprompt",
+      "begin": "^[ \\t]*(\\.include)\\b",
+      "beginCaptures": { "1": { "name": "keyword.control.keprompt" } },
+      "end": "$",
+      "patterns": [
+        { "include": "#guard-arg" },
+        { "include": "#interpolation" },
+        { "include": "#reserved-quote" }
+      ]
+    },
+    "question-statement": {
+      "name": "meta.statement.keprompt",
+      "begin": "^[ \\t]*(\\.question)\\b",
+      "beginCaptures": { "1": { "name": "keyword.control.keprompt" } },
+      "end": "$",
+      "patterns": [
+        { "include": "#reserved-quote" },
+        { "include": "#interpolation" }
+      ]
+    },
+    "guard-statement": {
+      "name": "meta.statement.keprompt",
+      "begin": "^[ \\t]*(\\.guard)\\b",
+      "beginCaptures": { "1": { "name": "keyword.control.keprompt" } },
+      "end": "$",
+      "patterns": [
+        { "include": "#reserved-quote" },
+        { "include": "#interpolation" }
+      ]
+    },
+    "message-statement": {
+      "name": "meta.statement.keprompt",
+      "begin": "^[ \\t]*(\\.(?:assistant|text|user|system|image|print|debug|clear|exit|tool_call|tool_result))\\b",
+      "beginCaptures": { "1": { "name": "keyword.control.keprompt" } },
+      "end": "$",
+      "patterns": [
+        { "include": "#interpolation" },
+        { "include": "#reserved-quote" }
+      ]
+    }
+  }
+}

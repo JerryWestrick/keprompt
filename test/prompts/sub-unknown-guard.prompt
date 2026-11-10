@@ -1,0 +1,4 @@
+.prompt "version":"1.0.0"
+.sub guard=#._missing prompts/sub-print.lines
+.print ran
+.exit

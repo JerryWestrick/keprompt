@@ -1,6 +1,6 @@
 # Production Database Contract
 
-Default database: `prompts/chats.db` (current KePrompt/database version 4.4.0). It is operational production evidence. Analyze a copy or use read-only SQLite access. Older databases migrate when opened by current KePrompt; inspect `info.version` before assuming columns exist.
+Default database: `prompts/chats.db` (current KePrompt/database version 5.0). It is operational production evidence. Analyze a copy or use read-only SQLite access. Older databases migrate when opened by current KePrompt; inspect `info.version` before assuming columns exist.
 
 ## `chats`
 
@@ -56,3 +56,9 @@ ORDER BY c.created_timestamp;
 ```
 
 Do not replay side-effecting production interactions without an application-approved test environment or fixtures.
+
+## Chat log
+
+`keprompt-chats` is installed with the package. Run it from the workspace whose database you want to read. It serves every row in that database at `http://127.0.0.1:8765/`. `--port` chooses another port. The process listens on localhost only.
+
+The database is the configured URL, default `prompts/chats.db`. The page lists each chat. Opening a chat walks `statements_json` in order, with the question and other variables first. Opening an `.exec` lists each model call and each tool result from `messages_json`, in the order they ran. A reply with no call, and a routine result that begins with an error, are separate rows. Round-trip cost on a call comes from `cost_tracking`.

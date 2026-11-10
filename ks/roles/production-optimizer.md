@@ -13,7 +13,7 @@ This is an LLM-driven engineering workflow using existing KePrompt files, shell 
 
 ## Workflow
 
-1. Work from a copy of production `prompts/chats.db`; do not mutate the supplied evidence.
+1. Work from a copy of production `prompts/chats.db`; do not mutate the supplied evidence. `keprompt-chats`, run from that copy's workspace, walks each chat's statements and the calls inside `.exec`.
 2. Identify the prompt names, versions, models, time range, intents, failures, costs, and latency relevant to the goal.
 3. Extract representative production inputs and outcomes. Include common, difficult, ambiguous, failed, and expensive cases. `messages_json` includes the actual tool calls, arguments, and returned tool results; use them to reconstruct the database facts visible to the model and simulate the production state for replay.
 4. Define effectiveness from the application KS and requested goal. The old response is evidence, not automatically truth.

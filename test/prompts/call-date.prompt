@@ -1,0 +1,4 @@
+.prompt "version":"1.0.0", "description":"Call keprompt for the date and keep only stdout"
+.cmd execcmd(cmd=keprompt chats create date-answer --json) as answer
+.print <<answer>>
+.exit

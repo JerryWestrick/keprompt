@@ -1,0 +1,4 @@
+.prompt "version":"1.0.0"
+.sub prompts/sub-functions.lines
+.print after
+.exit

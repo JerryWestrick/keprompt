@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Release script for keprompt."""
+"""Release script for keprompt.
+
+pip install ships the console scripts declared in pyproject.toml:
+keprompt and keprompt-chats.
+"""
 import os
 import re
 import subprocess

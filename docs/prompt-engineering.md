@@ -223,11 +223,18 @@ Hello from data.txt
 ```
 .include instructions/<<topic>>.md    # appends the file's text to the current message
 .include docs/*.md                    # a glob includes every match, in order
+.sub epicure_<<?.Route.kind.value>>.lines   # runs that file's statements, then continues
 .image photos/receipt.jpg             # adds the image to a user message
 ```
 
 The path is substituted first, so a variable can choose the file — that is how dispatch works in
-section 9.
+section 9. A bare name opens under `prompts/`. A path that already has a directory, or an absolute
+path, is opened as written.
+
+`.sub` runs a file of keprompt lines on this prompt and then continues with the next line. Use it
+when a classification should change which statements run, such as a different `.functions` grant.
+The file does not start with `.prompt` and does not get an automatic `.exec`. `.exit` inside it
+stops the whole prompt. `.include` only pastes text. The file is guarded on `_sub`.
 
 ## 9. Classifying with an LDM: `.question` and `.evaluate`
 
@@ -335,6 +342,7 @@ no guard passes.
 | `_cmdargs` | the `--set` / `--set-from-json` values, as one JSON text, when the `.guard` runs |
 | `_userinput` | the message of a `chat reply` |
 | `_include` | each file `.include` reads |
+| `_sub` | each file `.sub` reads, before its lines run |
 | `<function>` (e.g. `wwwget`) | that function's result — whether you called it with `.cmd` or the model did |
 | `_<name>` (your own) | the text of a single call that names it: `.include guard=#._clients file`, `.cmd guard=#._clients fn(...)`. It replaces the channel's guard for that call |
 
@@ -398,6 +406,7 @@ keprompt chats get <chat_id>       # one chat
 | `.functions f1, module.*` | Functions the model may call |
 | `.cmd [guard=#._name] fn(args) [as name]` | Run a function now |
 | `.include [guard=#._name] path` | Add a file's text |
+| `.sub [guard=#._name] path` | Run a file of keprompt lines, then continue |
 | `.image path` | Add an image |
 | `.question Name [model] <<<ID … >>>ID` | Declare an LDM question set |
 | `.evaluate ?.Name [{"ldm_model":"..."}] state` | Run it on a state |

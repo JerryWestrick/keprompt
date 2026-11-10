@@ -1,0 +1,5 @@
+.prompt "version":"1.0.0"
+.sub prompts/sub-nested.lines
+.print marker=<<marker>>
+.print parent
+.exit
