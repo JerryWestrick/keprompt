@@ -5,6 +5,38 @@ Databases migrate automatically the first time a new KePrompt opens them, after 
 
 ---
 
+## 5.0 — Ready for Prod: `.sub`, local models, the chat log
+
+**New:**
+
+- **`.sub [guard=#._name] path`** runs a file of keprompt lines on this prompt, then continues with
+  the next line. The path is substituted, so an `.evaluate` answer can pick the file. A bare name opens
+  under `prompts/`; a path with a directory, or an absolute path, opens as written. The file does not
+  start with `.prompt` and gets no automatic `.exec`. It shares the caller's variables, messages and
+  function grant, so a `.functions` line in it is the grant the caller's next `.exec` sees. See
+  [the guide, section 8](prompt-engineering.md#8-files-and-images). Its text is judged on the new **`#._sub`** guard
+  channel before it runs.
+- **`<<VM.output_flag>>`** is `--json` or `--pretty`, matching how this keprompt was run. Pass it to a
+  child keprompt started through `.cmd`; otherwise the child sees a pipe and answers in JSON.
+- **Local OpenAI-compatible servers** (provider `ollama`). Declare each model in
+  `prompts/functions/model_overlay.json` with `"litellm_provider": "ollama"` and `"source"` set to the
+  server's base URL including `/v1`; requests go to `<source>/chat/completions`.
+- **`keprompt-chats`**, a second command installed with the package, opens `prompts/chats.db` in a
+  browser on port 8765 (`--port` chooses another). Each chat expands to its statements, calls and
+  results.
+
+**Changed:**
+
+- **`.exit` inside a `.sub` file stops the whole prompt**, the caller included.
+- **`.print` keeps plain line breaks.** Before, Rich Markdown joined lines separated by a single
+  newline into one paragraph. Tables, headings, lists, quotes and code fences render as before.
+- **An external function's stderr** now comes back as the error text when the function fails. Before,
+  it went to the terminal and the error was a Python `'NoneType' object has no attribute 'strip'`.
+- **`ollama/...` rows in LiteLLM's model file are ignored.** They name no server; only models declared
+  in the overlay are loaded for this provider.
+
+**Database:** no schema change.
+
 ## 4.4.0 — `.guard`
 
 **New:** `.guard` keeps injected external text out of the conversation. See
